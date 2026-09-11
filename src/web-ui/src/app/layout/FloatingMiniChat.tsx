@@ -42,7 +42,6 @@ import {
 } from './floatingMiniChatIsolation';
 import {
   ConversationModeSurface,
-  ConversationVoiceModeIcon,
 } from '@/flow_chat/components/voice/ConversationModeSurface';
 import { useRealtimeVoiceCall } from '@/flow_chat/components/voice/RealtimeVoiceCallContext';
 import type { VoiceMiniAppCallTarget } from '@/flow_chat/components/voice/voiceClientContext';
@@ -623,10 +622,8 @@ export const FloatingMiniChat: React.FC = () => {
         {/* Header — normal chat keeps the shared SessionMenu. An isolated
             Agentic MiniApp replaces that switcher with app identity, including
             during claim/session bootstrap, so normal chats are never exposed. */}
-        <div className="openbitfun-fmc__header" data-openbitfun-component="floating-mini-chat" data-openbitfun-part="header">
-          {isVoiceMode ? (
-            <ConversationVoiceModeIcon />
-          ) : isMiniAppBubbleIsolated ? (
+        {!isVoiceMode && <div className="openbitfun-fmc__header" data-openbitfun-component="floating-mini-chat" data-openbitfun-part="header">
+          {isMiniAppBubbleIsolated ? (
             <div
               className="openbitfun-fmc__miniapp-session-icon"
               data-openbitfun-component="floating-mini-chat"
@@ -659,7 +656,7 @@ export const FloatingMiniChat: React.FC = () => {
               aria-label={t('session.close')}
             />
           </Tooltip>
-        </div>
+        </div>}
 
         {/* Main window session surface, reused as-is. Only mounted while the
             panel is open to avoid running a second VirtualMessageList and store
@@ -670,6 +667,7 @@ export const FloatingMiniChat: React.FC = () => {
           data-openbitfun-part="body"
         >
           <ConversationModeSurface
+            onCloseVoice={handleClose}
             voiceTarget={miniAppVoiceTarget}
             voiceStartDisabled={isMiniAppBubbleIsolated && !miniAppVoiceTarget}
             switchTestId="hello-realtime-voice-mode-switch"

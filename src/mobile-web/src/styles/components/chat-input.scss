@@ -357,10 +357,6 @@
     box-shadow: var(--openbitfun-shadow-sm);
   }
 
-  &:active:not(:disabled) {
-    transform: scale(0.92);
-  }
-
   &:disabled {
     background: var(--openbitfun-color-action-neutral-surface);
     border-color: var(--openbitfun-color-border-subtle);
@@ -380,10 +376,7 @@
     &:hover:not(:disabled) {
       background: var(--openbitfun-color-action-primary-hover) !important;
       box-shadow: var(--openbitfun-shadow-base);
-      transform: scale(1.05);
     }
-
-    &:active { transform: scale(0.92); }
 
     &:disabled {
       background: var(--openbitfun-color-action-primary-background) !important;

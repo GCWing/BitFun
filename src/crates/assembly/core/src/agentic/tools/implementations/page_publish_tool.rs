@@ -34,7 +34,7 @@ impl Tool for PagePublishTool {
         Ok(
             r#"Publish a OpenBitFun Page to the account relay: upload content, freeze an immutable version, and optionally deploy it to production.
 
-Requires a logged-in OpenBitFun account. This tool is only available after account login. Published Pages can be reviewed and managed later from the Pages scene.
+Requires a logged-in GitHub account. This tool is only available after account login. Published Pages can be reviewed and managed later from the Pages scene.
 
 When you produce self-contained publishable web content (landing page, docs site, or a Page with server/worker.js) and the user is logged in, proactively ask whether they want it published to OpenBitFun Page (suggest a slug and visibility). If they already said publish/deploy/上线, proceed with permission confirmation.
 
@@ -173,7 +173,7 @@ Use PageDeploy only to switch an already-saved version_id (rollback / promote a 
     ) -> OpenBitFunResult<Vec<ToolResult>> {
         if !account_login_available() {
             return Err(OpenBitFunError::tool(
-                "PagePublish requires a logged-in OpenBitFun account".to_string(),
+                "PagePublish requires a logged-in GitHub account".to_string(),
             ));
         }
 

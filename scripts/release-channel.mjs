@@ -1,20 +1,20 @@
 const CHANNELS = {
   stable: {
     primaryUpdaterEndpoint:
-      'https://github.com/GCWing/OpenBitFun/releases/latest/download/latest.json',
-    fallbackUpdaterEndpoint: 'https://openbitfun.com/release/latest.json',
+      'https://github.com/GCWing/OpenBitFun/releases/latest/download/latest-v1.json',
+    fallbackUpdaterEndpoint: 'https://openbitfun.com/release/latest-v1.json',
     githubChannelTag: null,
   },
   beta: {
     primaryUpdaterEndpoint:
-      'https://github.com/GCWing/OpenBitFun/releases/download/channel-beta/latest.json',
-    fallbackUpdaterEndpoint: 'https://openbitfun.com/release/beta/latest.json',
-    githubChannelTag: 'channel-beta',
+      'https://github.com/GCWing/OpenBitFun/releases/download/channel-v1-beta/latest-v1.json',
+    fallbackUpdaterEndpoint: 'https://openbitfun.com/release/beta/latest-v1.json',
+    githubChannelTag: 'channel-v1-beta',
   },
   nightly: {
     primaryUpdaterEndpoint:
-      'https://github.com/GCWing/OpenBitFun/releases/download/nightly/latest.json',
-    fallbackUpdaterEndpoint: 'https://openbitfun.com/release/nightly/latest.json',
+      'https://github.com/GCWing/OpenBitFun/releases/download/nightly/latest-v1.json',
+    fallbackUpdaterEndpoint: 'https://openbitfun.com/release/nightly/latest-v1.json',
     githubChannelTag: 'nightly',
   },
 };
@@ -38,8 +38,10 @@ export function validateReleaseVersion(channelValue, versionValue) {
     /^([1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-beta\.([1-9]\d*)$/;
   const nightlyPattern =
     /^([1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-nightly\.\d{8}$/;
+  // The 1.0 launch keeps its beta spelling but is a public Latest release.
+  // Numbered beta candidates still require the prerelease channel.
   const valid = channel === 'stable'
-    ? stablePattern.test(version)
+    ? (stablePattern.test(version) || version === '1.0.0-beta')
     : channel === 'beta'
       ? betaPattern.test(version)
       : nightlyPattern.test(version);
@@ -71,12 +73,12 @@ export function compareReleaseVersions(leftValue, rightValue) {
 }
 
 function parseComparableVersion(value) {
-  const match = /^(\d+)\.(\d+)\.(\d+)(?:-beta\.([1-9]\d*))?$/.exec(String(value));
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:-beta(?:\.([1-9]\d*))?)?$/.exec(String(value));
   if (!match) {
     throw new Error(`Unsupported channel version: ${value}`);
   }
   return {
     core: match.slice(1, 4).map(Number),
-    beta: match[4] === undefined ? null : Number(match[4]),
+    beta: String(value).includes('-beta') ? Number(match[4] || 0) : null,
   };
 }

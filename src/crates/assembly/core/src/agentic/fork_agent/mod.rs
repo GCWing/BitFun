@@ -86,7 +86,7 @@ mod tests {
             max_turns: 42,
             ..SessionConfig::default()
         };
-        Session::new("Parent".to_string(), "agentic".to_string(), config)
+        Session::new("Parent".to_string(), "Standard".to_string(), config)
     }
 
     #[test]
@@ -149,7 +149,7 @@ mod tests {
     #[test]
     fn snapshot_retains_parent_agent_type_state() {
         let mut parent = parent_session();
-        parent.last_user_dialog_agent_type = Some("agentic".to_string());
+        parent.last_user_dialog_agent_type = Some("Standard".to_string());
         parent.last_submitted_agent_type = Some("Cowork".to_string());
 
         let snapshot =
@@ -157,7 +157,7 @@ mod tests {
 
         assert_eq!(
             snapshot.last_user_dialog_agent_type.as_deref(),
-            Some("agentic")
+            Some("Standard")
         );
         assert_eq!(
             snapshot.last_submitted_agent_type.as_deref(),

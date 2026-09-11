@@ -1951,6 +1951,81 @@ async fn mcp_oauth_credential_vault_uses_injected_data_dir_and_roundtrips_creden
 }
 
 #[test]
+fn mcp_cursor_oauth_policy_survives_validation_and_roundtrip() {
+    for (options, expected) in [
+        (serde_json::json!({}), None),
+        (serde_json::json!({ "oauth": false }), Some(false)),
+        (serde_json::json!({ "oauth": true }), Some(true)),
+        (serde_json::json!({ "oauthEnabled": false }), Some(false)),
+        (serde_json::json!({ "oauth": { "scopes": ["read"] } }), None),
+        (
+            serde_json::json!({ "oauth": { "scopes": ["read"] }, "oauthEnabled": false }),
+            Some(false),
+        ),
+    ] {
+        let mut server = serde_json::json!({ "url": "https://example.test/mcp" });
+        server
+            .as_object_mut()
+            .unwrap()
+            .extend(options.as_object().unwrap().clone());
+        let input = serde_json::json!({ "mcpServers": { "test": server } });
+        validate_mcp_json_config(&input).unwrap();
+        let parsed = parse_cursor_format(&input);
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].oauth_enabled, expected);
+        assert_eq!(parsed[0].remote_oauth_enabled(), expected.unwrap_or(true));
+
+        let exported = config_to_cursor_format(&parsed[0]);
+        if options.get("oauth") == Some(&serde_json::json!(false)) {
+            assert_eq!(exported["oauth"], false);
+        }
+        let saved = serde_json::json!({ "mcpServers": { "test": exported } });
+        validate_mcp_json_config(&saved).unwrap();
+        let reparsed = parse_cursor_format(&saved);
+        assert_eq!(reparsed[0].oauth_enabled, expected);
+        assert_eq!(
+            serde_json::to_value(&reparsed[0].oauth).unwrap(),
+            serde_json::to_value(&parsed[0].oauth).unwrap()
+        );
+    }
+}
+
+#[test]
+fn mcp_cursor_oauth_validation_rejects_invalid_or_conflicting_policy() {
+    for options in [
+        serde_json::json!({ "oauth": "false" }),
+        serde_json::json!({ "oauth": [] }),
+        serde_json::json!({ "oauthEnabled": "false" }),
+        serde_json::json!({ "oauth": false, "oauthEnabled": true }),
+        serde_json::json!({ "oauth": true, "oauthEnabled": false }),
+    ] {
+        let mut server = serde_json::json!({ "url": "https://example.test/mcp" });
+        server
+            .as_object_mut()
+            .unwrap()
+            .extend(options.as_object().unwrap().clone());
+        assert!(
+            validate_mcp_json_config(&serde_json::json!({ "mcpServers": { "test": server } }))
+                .is_err()
+        );
+    }
+}
+
+#[test]
+fn mcp_cursor_oauth_policy_is_part_of_config_identity() {
+    let disabled = parse_cursor_format(&serde_json::json!({
+        "mcpServers": { "disabled": { "url": "https://example.test/mcp", "oauth": false } }
+    }));
+    let legacy = parse_cursor_format(&serde_json::json!({
+        "mcpServers": { "legacy": { "url": "https://example.test/mcp" } }
+    }));
+    let merged = merge_mcp_server_config_sources([disabled, legacy]);
+    assert_eq!(merged.len(), 2);
+    assert!(!merged[0].remote_oauth_enabled());
+    assert!(merged[1].remote_oauth_enabled());
+}
+
+#[test]
 fn mcp_cursor_format_helpers_preserve_cursor_compatibility_contract() {
     let remote = MCPServerConfig {
         id: "remote-sse".to_string(),

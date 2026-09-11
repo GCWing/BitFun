@@ -225,9 +225,6 @@ impl ChatMode {
                     anyhow!("Account management is unavailable for this TUI Host")
                 })?;
                 account.logout().await?;
-                account
-                    .mark_sync_cancelled(format!("tui-account-{}", uuid::Uuid::new_v4()))
-                    .await;
                 Ok::<_, anyhow::Error>(crate::account::account_snapshot_projection(
                     account.snapshot().await,
                 ))

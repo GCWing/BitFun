@@ -10,11 +10,11 @@ package com.openbitfun.mobile.core.transport
  * [RelayFailure] into text.
  */
 public sealed interface RelayFailure {
-    /** The relay accepted the request but the desktop refused to pair. 401 / 403. */
-    public data object PairRejected : RelayFailure
+    /** The account session is missing, expired or no longer authorized. */
+    public data object AuthenticationRequired : RelayFailure
 
-    /** No such room, usually a stale or already-consumed pairing URL. 404. */
-    public data object RoomNotFound : RelayFailure
+    /** The selected device is absent from the authenticated directory. */
+    public data object DeviceNotFound : RelayFailure
 
     /** The desktop did not answer in time. 408 / 504, or a client-side timeout. */
     public data object Timeout : RelayFailure
@@ -49,12 +49,3 @@ public class RelayTransportException(
     public val failure: RelayFailure,
     cause: Throwable? = null,
 ) : Exception(failure.toString(), cause)
-
-internal fun httpFailureFor(statusCode: Int): RelayFailure = when {
-    statusCode == 401 || statusCode == 403 -> RelayFailure.PairRejected
-    statusCode == 404 -> RelayFailure.RoomNotFound
-    statusCode == 408 || statusCode == 504 -> RelayFailure.Timeout
-    statusCode == 429 -> RelayFailure.RateLimited
-    statusCode >= 500 -> RelayFailure.RelayUnavailable(statusCode)
-    else -> RelayFailure.UnexpectedStatus(statusCode)
-}

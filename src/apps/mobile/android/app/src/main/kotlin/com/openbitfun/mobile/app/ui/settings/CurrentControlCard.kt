@@ -134,7 +134,6 @@ internal fun CurrentControlCard(
 }
 
 private fun RemoteControlSource.sourceLabelRes(): Int = when (this) {
-    RemoteControlSource.QR_PAIRING -> R.string.remote_settings_source_qr
     RemoteControlSource.ACCOUNT_DEVICE -> R.string.remote_settings_source_account_device
     RemoteControlSource.NONE -> R.string.remote_settings_source_none
 }

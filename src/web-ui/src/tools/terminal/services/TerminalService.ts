@@ -6,6 +6,7 @@ import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { createLogger } from '@/shared/utils/logger';
 import {
   getActiveSurfaceScope,
+  getActiveSurfaceId,
   type SurfaceScope,
 } from '@/infrastructure/peer-device/deviceSurface';
 import type {
@@ -201,7 +202,7 @@ export class TerminalService {
     if (isSessionDestroyed && sessionId) {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
-          new CustomEvent('terminal-session-destroyed', { detail: { sessionId } })
+          new CustomEvent('terminal-session-destroyed', { detail: { sessionId, surfaceId: getActiveSurfaceId() } })
         );
       }
       this.eventListeners.delete(sessionId);

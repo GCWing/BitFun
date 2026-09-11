@@ -14,8 +14,8 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { AlertTriangle, Camera, Github, History, Loader2, PackageOpen, Send } from 'lucide-react';
 import { GalleryEmpty, GalleryLayout, GalleryPageHeader } from '@/app/components';
 import { useI18n } from '@/infrastructure/i18n';
-import { MarketAccountControls } from '@/features/market-account';
-import { useMarketAccount } from '@/infrastructure/market-account';
+import { AccountIdentityControls } from '@/features/market-account';
+import { useAccountIdentity } from '@/infrastructure/account-identity';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import {
   miniAppMarketAPI,
@@ -69,7 +69,7 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
   const notification = useNotification();
   const { workspace } = useCurrentWorkspace();
   const { openScene, activateScene, openTabs } = useSceneManager();
-  const { me, resolved: authResolved } = useMarketAccount();
+  const { me, resolved: authResolved } = useAccountIdentity();
   const [apps, setApps] = useState<MiniAppMeta[]>([]);
   const [submissions, setSubmissions] = useState<MarketSubmission[]>([]);
   const [selectedAppId, setSelectedAppId] = useState('');
@@ -266,7 +266,7 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
         <GalleryEmpty
           icon={{ glyph: Github }}
           message={t('market.submissions.signInRequired')}
-          action={<MarketAccountControls />}
+          action={<AccountIdentityControls />}
         />
       </GalleryLayout>
     );
@@ -283,7 +283,7 @@ const MiniAppSubmissionsView: React.FC<MiniAppSubmissionsViewProps> = ({ tabs })
 
               {t('market.submissions.refresh')}
             </Button>
-            <MarketAccountControls />
+            <AccountIdentityControls />
           </div>
         )}
       />

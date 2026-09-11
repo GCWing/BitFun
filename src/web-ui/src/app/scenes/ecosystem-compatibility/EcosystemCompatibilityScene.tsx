@@ -5,7 +5,6 @@ import {
   NavigationPanel,
   NavigationPanelBody,
   NavigationPanelContent,
-  NavigationPanelFooter,
   NavigationPanelHeader,
   NavigationPanelItem,
   NavigationPanelSection,
@@ -811,18 +810,6 @@ const EcosystemCompatibilityScene: React.FC = () => {
               }}
             />
           </div>
-          <Button
-            className="ecosystem-compatibility__host-card"
-            size="sm"
-            variant="text"
-            leadingIcon={<Icon glyph={Server} />}
-            trailingIcon={<Icon name="chevron-down" />}
-            aria-label={`${t('host.switchLabel')} · ${currentHost}`}
-            title={`${t('host.label')} · ${currentHost}`}
-            onClick={() => showDevelopmentNotice(t('host.switchAction'))}
-          >
-            {currentHost}
-          </Button>
         </NavigationPanelHeader>
 
         <NavigationPanelBody>
@@ -868,11 +855,6 @@ const EcosystemCompatibilityScene: React.FC = () => {
             </NavigationPanelContent>
           </div>
         </NavigationPanelBody>
-
-        <NavigationPanelFooter className="ecosystem-compatibility__sidebar-footer">
-          <Icon name="info" size="sm" aria-hidden="true" />
-          <span>{t('sidebar.hint')}</span>
-        </NavigationPanelFooter>
       </NavigationPanel>
 
       <main

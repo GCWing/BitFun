@@ -44,6 +44,7 @@ use super::config::{
     AcpClientRequirementProbe, AcpClientStatus, RemoteAcpClientRequirementSnapshot,
 };
 use super::dsh_profile::{ensure_bundled_profile, ensure_bundled_profile_remote};
+use super::prompt::AcpPrompt;
 use super::remote_capability_store::RemoteAcpCapabilityStore;
 use super::remote_session::{preferred_resume_strategies, AcpRemoteSessionStrategy};
 use super::remote_shell::{remote_user_shell_command, render_remote_env_assignments, shell_escape};
@@ -63,6 +64,7 @@ use super::stream::{
     AcpToolCallTracker,
 };
 use super::tool::AcpAgentTool;
+use super::transport::{handle_transport_closed, AcpTransport};
 
 const CONFIG_PATH: &str = "acp_clients";
 const CLIENT_STARTUP_TIMEOUT_SECS: u64 = 60;
@@ -641,6 +643,7 @@ impl AcpClientService {
                 return Err(error);
             }
         };
+        let transport = AcpTransport::new(transport);
         *connection.child.lock().await = child;
         let service = self.clone();
         let connection_for_task = connection.clone();
@@ -652,6 +655,10 @@ impl AcpClientService {
             let result = Client
                 .builder()
                 .name("openbitfun-acp-client")
+                .on_receive_notification(
+                    handle_transport_closed,
+                    agent_client_protocol::on_receive_notification!(),
+                )
                 .on_receive_request(
                     {
                         let service = service.clone();
@@ -1184,8 +1191,8 @@ impl AcpClientService {
                 .active
                 .as_mut()
                 .ok_or_else(|| OpenBitFunError::service("ACP session was not initialized"))?;
-            active.send_prompt(prompt).map_err(protocol_error)?;
-            read_turn_to_string(&mut session).await
+            let mut prompt = AcpPrompt::start(active, prompt);
+            read_turn_to_string(&mut session, &mut prompt).await
         };
 
         if let Some(seconds) = timeout_seconds.filter(|seconds| *seconds > 0) {
@@ -1235,13 +1242,13 @@ impl AcpClientService {
             .await?;
 
             discard_pending_session_updates_if_needed(&mut session).await;
-            {
+            let mut prompt = {
                 let active = session
                     .active
                     .as_mut()
                     .ok_or_else(|| OpenBitFunError::service("ACP session was not initialized"))?;
-                active.send_prompt(prompt).map_err(protocol_error)?;
-            }
+                AcpPrompt::start(active, prompt)
+            };
             let mut round_tracker = AcpStreamRoundTracker::new();
             let mut tool_call_tracker = AcpToolCallTracker::new();
 
@@ -1250,7 +1257,7 @@ impl AcpClientService {
                     let active = session.active.as_mut().ok_or_else(|| {
                         OpenBitFunError::service("ACP session was not initialized")
                     })?;
-                    active.read_update().await.map_err(protocol_error)?
+                    prompt.read_update(active).await.map_err(protocol_error)?
                 };
 
                 match message {
@@ -2343,7 +2350,10 @@ where
     Ok(())
 }
 
-async fn read_turn_to_string(session: &mut AcpRemoteSession) -> OpenBitFunResult<String> {
+async fn read_turn_to_string(
+    session: &mut AcpRemoteSession,
+    prompt: &mut AcpPrompt,
+) -> OpenBitFunResult<String> {
     let mut output = String::new();
     let mut tool_call_tracker = AcpToolCallTracker::new();
     loop {
@@ -2352,7 +2362,7 @@ async fn read_turn_to_string(session: &mut AcpRemoteSession) -> OpenBitFunResult
                 .active
                 .as_mut()
                 .ok_or_else(|| OpenBitFunError::service("ACP session was not initialized"))?;
-            active.read_update().await.map_err(protocol_error)?
+            prompt.read_update(active).await.map_err(protocol_error)?
         };
 
         match message {

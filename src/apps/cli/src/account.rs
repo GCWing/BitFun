@@ -1,6 +1,6 @@
 //! CLI adapter for account-backed device routing.
 //!
-//! Shared account identity, persistence, synchronization, and transitions are
+//! Shared account identity, persistence and transitions are
 //! owned by [`AccountRuntime`]. This module contains only CLI Host effects:
 //! daemon retirement, Relay routing, and Peer Device Mode fan-out fencing.
 
@@ -9,18 +9,13 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use openbitfun_product_domains::account::{
-    AccountDevice, AccountInfo, AccountSnapshotProjection, SettingsSyncProgress, SettingsSyncStatus,
-};
+use openbitfun_product_domains::account::{AccountDevice, AccountInfo, AccountSnapshotProjection};
 use tokio::sync::RwLock;
 
-use openbitfun_core::product_runtime::CoreAgentRuntimeCompatibility;
-use openbitfun_core::service::remote_connect::account::{
-    ensure_relay_session_history_exportable, AccountSession,
-};
+use openbitfun_core::service::remote_connect::account::AccountSession;
 use openbitfun_core::service::remote_connect::account_runtime::{
-    build_session_backup, AccountRoutingStartRequest, AccountRuntime, AccountRuntimeHost,
-    AccountSessionBackup, AccountSessionBackupPort, BackgroundRoutingOwnerRetirementError,
+    AccountRoutingStartRequest, AccountRuntime, AccountRuntimeHost,
+    BackgroundRoutingOwnerRetirementError,
 };
 use openbitfun_core::service::remote_connect::{
     self, encryption, relay_client::RelayClient, relay_client::RelayEvent, session_store,
@@ -32,14 +27,15 @@ pub(crate) struct CliAccountRuntimeParts {
     pub(crate) routing: Arc<CliAccountRoutingHost>,
 }
 
-pub(crate) fn build_account_runtime(
-    compatibility: CoreAgentRuntimeCompatibility,
-) -> CliAccountRuntimeParts {
-    build_account_runtime_with_backup(Arc::new(CliAccountSessionBackupPort { compatibility }))
+pub(crate) fn build_account_runtime() -> CliAccountRuntimeParts {
+    let routing = CliAccountRoutingHost::new();
+    let runtime = AccountRuntime::new(routing.clone());
+    routing.bind_runtime(Arc::downgrade(&runtime));
+    CliAccountRuntimeParts { runtime, routing }
 }
 
 pub(crate) fn build_management_account_runtime() -> Arc<AccountRuntime> {
-    build_account_runtime_with_backup(Arc::new(UnavailableSessionBackup)).runtime
+    build_account_runtime().runtime
 }
 
 pub(crate) fn account_snapshot_projection(
@@ -47,7 +43,6 @@ pub(crate) fn account_snapshot_projection(
 ) -> AccountSnapshotProjection {
     AccountSnapshotProjection {
         logged_in: snapshot.logged_in,
-        pending_sync_choice: snapshot.pending_sync_choice,
         info: snapshot.info.map(|info| AccountInfo {
             user_id: info.user_id,
             relay_url: info.relay_url,
@@ -63,58 +58,12 @@ pub(crate) fn account_snapshot_projection(
                 online: device.online,
             })
             .collect(),
-        sync: settings_sync_progress(snapshot.sync),
-    }
-}
-
-pub(crate) fn settings_sync_progress(
-    progress: openbitfun_core::service::remote_connect::account_runtime::AccountSyncProgress,
-) -> SettingsSyncProgress {
-    settings_sync_progress_from_core(progress)
-}
-
-fn settings_sync_progress_from_core(
-    progress: openbitfun_core::service::remote_connect::account_runtime::AccountSyncProgress,
-) -> SettingsSyncProgress {
-    SettingsSyncProgress {
-        operation_id: progress.operation_id,
-        status: match progress.status {
-            openbitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Idle => {
-                SettingsSyncStatus::Idle
-            }
-            openbitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Syncing => {
-                SettingsSyncStatus::Syncing
-            }
-            openbitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Done => {
-                SettingsSyncStatus::Done
-            }
-            openbitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Failed => {
-                SettingsSyncStatus::Failed
-            }
-            openbitfun_core::service::remote_connect::account_runtime::AccountSyncStatus::Cancelled => {
-                SettingsSyncStatus::Cancelled
-            }
-        },
-        phase: progress.phase,
-        percent: progress.percent,
-        current: progress.current,
-        total: progress.total,
-        detail: progress.detail,
-        error: progress.error,
-        settings_synced: progress.settings_synced,
-        sessions_exported: progress.sessions_exported,
     }
 }
 
 pub(crate) fn account_login_status_message(
     result: &openbitfun_core::service::remote_connect::account_runtime::AccountLoginResult,
 ) -> String {
-    if result.has_cloud_settings {
-        return format!(
-            "Authenticated as user {} on {}. Choose cloud or local settings to finish login.",
-            result.user_id, result.relay_url
-        );
-    }
     if result.routing_connected {
         format!(
             "Logged in as user {} on {}. Device routing connected.",
@@ -151,61 +100,6 @@ fn bounded_account_error(message: &str) -> String {
         .filter(|character| !character.is_control())
         .take(500)
         .collect()
-}
-
-fn build_account_runtime_with_backup(
-    backup: Arc<dyn AccountSessionBackupPort>,
-) -> CliAccountRuntimeParts {
-    let routing = CliAccountRoutingHost::new();
-    let runtime = AccountRuntime::new(routing.clone(), backup);
-    routing.bind_runtime(Arc::downgrade(&runtime));
-    CliAccountRuntimeParts { runtime, routing }
-}
-
-struct UnavailableSessionBackup;
-
-#[async_trait]
-impl AccountSessionBackupPort for UnavailableSessionBackup {
-    async fn list_session_backups(
-        &self,
-        _workspace_path: &std::path::Path,
-    ) -> Result<Vec<AccountSessionBackup>> {
-        Err(anyhow!(
-            "Session backup is unavailable in a short-lived management command"
-        ))
-    }
-}
-
-struct CliAccountSessionBackupPort {
-    compatibility: CoreAgentRuntimeCompatibility,
-}
-
-#[async_trait]
-impl AccountSessionBackupPort for CliAccountSessionBackupPort {
-    async fn list_session_backups(
-        &self,
-        workspace_path: &std::path::Path,
-    ) -> Result<Vec<AccountSessionBackup>> {
-        let metadata = self
-            .compatibility
-            .list_persisted_sessions(workspace_path)
-            .await
-            .map_err(|error| anyhow!("list sessions: {error}"))?;
-        let mut backups = Vec::new();
-        for item in &metadata {
-            if let Err(error) = ensure_relay_session_history_exportable(item) {
-                tracing::debug!("Skipping CLI account session export: {error}");
-                continue;
-            }
-            let turns = self
-                .compatibility
-                .load_persisted_session_turns(workspace_path, &item.session_id, None)
-                .await
-                .map_err(|error| anyhow!("load turns: {error}"))?;
-            backups.push(build_session_backup(item, &turns)?);
-        }
-        Ok(backups)
-    }
 }
 
 /// CLI-owned routing effects injected into the shared Account Runtime.
@@ -432,6 +326,12 @@ impl CliAccountRoutingHost {
                 }
             }
             RelayEvent::DevicePresence { devices } => {
+                if let Ok((session, _)) = runtime
+                    .read_account_context_for_generation(account_generation)
+                    .await
+                {
+                    session.clear_peer_keys().await;
+                }
                 tracing::info!("Device presence updated: {} online", devices.len());
                 if !self
                     .routing_loop_is_current(account_generation, relay_client)
@@ -450,7 +350,7 @@ impl CliAccountRoutingHost {
                 encrypted_data,
                 nonce,
             } => {
-                let Ok((session, _)) = runtime
+                let Ok((session, relay_url)) = runtime
                     .read_account_context_for_generation(account_generation)
                     .await
                 else {
@@ -463,11 +363,10 @@ impl CliAccountRoutingHost {
                 {
                     return;
                 }
-                let plaintext = match encryption::decrypt_from_base64(
-                    &session.master_key,
-                    &encrypted_data,
-                    &nonce,
-                ) {
+                let plaintext = match session
+                    .decrypt_from_peer(&relay_url, &source_device_id, &encrypted_data, &nonce)
+                    .await
+                {
                     Ok(plaintext) => plaintext,
                     Err(error) => {
                         tracing::warn!("Failed to decrypt device message: {error}");
@@ -485,6 +384,16 @@ impl CliAccountRoutingHost {
                 tracing::info!(
                     "Device command from {source_device_id}: {command:?} corr={correlation_id}"
                 );
+                let peer_key = match session
+                    .peer_message_key(&relay_url, &source_device_id)
+                    .await
+                {
+                    Ok(key) => key,
+                    Err(error) => {
+                        tracing::warn!("Failed to resolve peer message key: {error}");
+                        return;
+                    }
+                };
                 let response = match &command {
                     RemoteCommand::HostInvoke { command, args } => {
                         crate::peer_host::handle_host_invoke(command, args.clone()).await
@@ -492,7 +401,7 @@ impl CliAccountRoutingHost {
                     RemoteCommand::DeviceEvent { .. } => {
                         crate::peer_host::handle_device_event_command()
                     }
-                    other => RemoteServer::new(session.master_key).dispatch(other).await,
+                    other => RemoteServer::new(peer_key).dispatch(other).await,
                 };
                 if !self
                     .routing_loop_is_current(account_generation, relay_client)
@@ -509,7 +418,7 @@ impl CliAccountRoutingHost {
                     })
                 });
                 let Ok((encrypted_response, response_nonce)) =
-                    encryption::encrypt_to_base64(&session.master_key, &response_json)
+                    encryption::encrypt_to_base64(&peer_key, &response_json)
                 else {
                     tracing::warn!("Failed to encrypt RPC response");
                     return;
@@ -646,10 +555,6 @@ impl AccountRuntimeHost for CliAccountRoutingHost {
     async fn stop_device_routing(&self) {
         self.stop_routing().await;
     }
-
-    fn notify_controllers_settings_changed(&self) {
-        crate::peer_host::notify_controllers_settings_changed();
-    }
 }
 
 fn same_routing_client<T>(current: Option<&Arc<T>>, expected: &Arc<T>) -> bool {
@@ -711,6 +616,7 @@ impl PeerFanoutOwner {
 
 pub(crate) struct PeerFanoutLease {
     pub(crate) session: AccountSession,
+    pub(crate) relay_url: String,
     pub(crate) relay_client: Arc<RelayClient>,
     _routing_lease: tokio::sync::OwnedRwLockReadGuard<()>,
 }
@@ -728,7 +634,7 @@ pub(crate) async fn acquire_peer_fanout_lease(owner: &PeerFanoutOwner) -> Result
     if !runtime.account_context_is_current(owner.account_generation) {
         return Err(anyhow!("queued Peer event account changed"));
     }
-    let (session, _) = runtime
+    let (session, relay_url) = runtime
         .read_account_context_for_generation(owner.account_generation)
         .await?;
     let client = routing
@@ -746,6 +652,7 @@ pub(crate) async fn acquire_peer_fanout_lease(owner: &PeerFanoutOwner) -> Result
     }
     Ok(PeerFanoutLease {
         session,
+        relay_url,
         relay_client: client,
         _routing_lease: routing_lease,
     })

@@ -26,13 +26,6 @@ struct SessionActionSurface: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if presentation == .bottomSheet {
-                Capsule()
-                    .fill(OpenBitFunTheme.line)
-                    .frame(width: 36, height: 4)
-                    .padding(.bottom, 10)
-            }
-
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(model.localized("会话操作"))
@@ -69,11 +62,17 @@ struct SessionActionSurface: View {
         .frame(width: presentation == .popover ? 300 : nil)
         .frame(maxWidth: presentation == .bottomSheet ? .infinity : nil)
         .background(OpenBitFunTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: MobileDesignGeometry.popoverRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: MobileDesignGeometry.popoverRadius)
-                .stroke(OpenBitFunTheme.line, lineWidth: 1)
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: presentation == .popover ? MobileDesignGeometry.popoverRadius : 0
+            )
         )
+        .overlay {
+            if presentation == .popover {
+                RoundedRectangle(cornerRadius: MobileDesignGeometry.popoverRadius)
+                    .stroke(OpenBitFunTheme.line, lineWidth: 1)
+            }
+        }
         .shadow(
             color: presentation == .popover ? OpenBitFunTheme.line : OpenBitFunTheme.transparent,
             radius: presentation == .popover ? 20 : 0,

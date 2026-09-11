@@ -138,11 +138,11 @@ pub(super) async fn build_session_config_options(
         .or_else(|| {
             mode_infos
                 .iter()
-                .find(|mode| mode.id == "agentic")
+                .find(|mode| mode.id == "Standard")
                 .or_else(|| mode_infos.first())
                 .map(|mode| mode.id.clone())
         })
-        .unwrap_or_else(|| "agentic".to_string());
+        .unwrap_or_else(|| "Standard".to_string());
     let mode_options = mode_infos
         .into_iter()
         .map(|mode| {

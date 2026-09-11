@@ -2097,7 +2097,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn file_memory_rejects_symlinked_owner_file() {
+    fn file_memory_omits_symlinked_source_file() {
         use std::os::unix::fs::symlink;
 
         let temp = test_tempdir("file-memory-symlink");
@@ -2109,15 +2109,12 @@ mod tests {
         fs::write(&outside, "outside").unwrap();
         symlink(&outside, memory_root.join("MEMORY.md")).unwrap();
 
-        assert!(matches!(
-            plan_file_memory(&roots),
-            Err(LegacyMigrationError::LinkedPath(_))
-        ));
+        assert_linked_source_is_omitted(&roots);
     }
 
     #[cfg(windows)]
     #[test]
-    fn file_memory_rejects_reparse_owner_file_when_supported() {
+    fn file_memory_omits_reparse_source_file_when_supported() {
         use std::os::windows::fs::symlink_file;
 
         let temp = test_tempdir("file-memory-reparse");
@@ -2131,10 +2128,29 @@ mod tests {
             return;
         }
 
+        assert_linked_source_is_omitted(&roots);
+    }
+
+    fn assert_linked_source_is_omitted(roots: &MigrationRoots) {
+        let source_root = source_file_memory_root(roots);
+        fs::write(source_root.join("memory_summary.md"), "valid summary").unwrap();
         assert!(matches!(
-            plan_file_memory(&roots),
+            validate_regular_file(&source_root, &source_root.join("MEMORY.md")),
             Err(LegacyMigrationError::LinkedPath(_))
         ));
+        let plan = plan_file_memory(roots).expect("skip linked source and keep valid files");
+        assert_eq!(plan.omitted, vec!["MEMORY.md"]);
+        assert_eq!(plan.files.len(), 1);
+        assert_eq!(
+            plan.files[0].source_relative,
+            PathBuf::from("memory_summary.md")
+        );
+        // The same unsafe entry on the destination must still block planning.
+        assert!(collect_memory_files(&roots.legacy_home_root, &source_root).is_err());
+        assert_eq!(
+            fs::read_to_string(roots.legacy_home_root.join("outside.md")).unwrap(),
+            "outside"
+        );
     }
 
     fn memory_selection() -> MigrationSelection {

@@ -1,4 +1,18 @@
 {
+  "defaultHarness": {
+    "title": "預設 Agent Harness",
+    "description": "設定一般新工作階段如何選擇 Harness。助理、ACP 與明確指定模式的工作階段不受影響。",
+    "strategy": "預設方式",
+    "followLast": "跟隨上一次選擇",
+    "fixed": "固定預設模式",
+    "followLastDescription": "新工作階段沿用最近一次在 ChatInput 主動選擇的 Harness。目前記憶：{{name}}。",
+    "followLastEmptyDescription": "尚未記住 Harness 選擇；在 ChatInput 主動選擇前，新工作階段使用 {{name}}。",
+    "fixedDescription": "新工作階段一律使用指定 Harness；目前工作階段不會變更。",
+    "fixedMode": "預設 Harness",
+    "fixedModeDescription": "僅用於未明確指定模式的一般新工作階段。",
+    "compatibilityMode": "{{id}}（相容設定）",
+    "loadFailed": "無法讀取預設 Harness 設定。為避免覆蓋現有設定，此設定已鎖定。"
+  },
   "features": {
     "pet": {
       "title": "桌面寵物",

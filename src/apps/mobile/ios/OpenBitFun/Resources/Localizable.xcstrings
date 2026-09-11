@@ -1,6 +1,16 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "无法打开授权页面，请重试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not open the authorization page. Please try again."
+          }
+        }
+      }
+    },
     "OpenBitFun 桌面版": {
       "localizations": {
         "en": {
@@ -937,6 +947,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Could not load workspaces. Tap to retry."
+          }
+        }
+      }
+    },
+    "这台电脑暂时无法读取": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer cannot be read right now"
           }
         }
       }
@@ -2551,12 +2571,12 @@
         }
       }
     },
-    "已完成 %lld 项读取与搜索": {
+    "已完成 %lld 项操作": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Completed %lld read and search operations"
+            "value": "Completed %lld operations"
           }
         }
       }
@@ -2631,12 +2651,12 @@
         }
       }
     },
-    "登录 OpenBitFun 账号": {
+    "使用 GitHub 登录": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sign in to OpenBitFun"
+            "value": "Sign in with GitHub"
           }
         }
       }
@@ -2931,12 +2951,12 @@
         }
       }
     },
-    "此桌面要求使用 OpenBitFun 账号验证身份。": {
+    "此桌面要求使用 GitHub 账号验证身份。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This desktop requires your OpenBitFun account to verify your identity."
+            "value": "This desktop requires your GitHub account to verify your identity."
           }
         }
       }
@@ -2981,12 +3001,12 @@
         }
       }
     },
-    "OpenBitFun 账号": {
+    "GitHub 账号": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenBitFun account"
+            "value": "GitHub account"
           }
         }
       }
@@ -4051,16 +4071,6 @@
         }
       }
     },
-    "这台电脑暂时无法读取": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This computer cannot be read right now"
-          }
-        }
-      }
-    },
     "还有 %lld 台设备": {
       "localizations": {
         "en": {
@@ -4631,16 +4641,6 @@
         }
       }
     },
-    "登录 OpenBitFun": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sign in to OpenBitFun"
-          }
-        }
-      }
-    },
     "登录后即可同步设备、会话和远程控制状态。": {
       "localizations": {
         "en": {
@@ -5071,12 +5071,12 @@
         }
       }
     },
-    "桌面端已登录 OpenBitFun 账号，需要验证同一账号后继续连接。": {
+    "桌面端已使用 GitHub 登录，需要验证同一账号后继续连接。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The desktop is signed in to a OpenBitFun account. Verify the same account to continue."
+            "value": "The desktop is signed in to a GitHub account. Verify the same account to continue."
           }
         }
       }
@@ -5091,12 +5091,12 @@
         }
       }
     },
-    "请输入 OpenBitFun 账号密码完成配对": {
+    "请使用 GitHub 登录后连接设备": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enter the OpenBitFun account password to finish pairing"
+            "value": "Sign in with GitHub to connect this device"
           }
         }
       }
@@ -7121,12 +7121,12 @@
         }
       }
     },
-    "请输入 OpenBitFun 账号密码。": {
+    "请使用 GitHub 登录以继续。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enter the OpenBitFun account password."
+            "value": "Sign in with GitHub to continue."
           }
         }
       }
@@ -7341,12 +7341,12 @@
         }
       }
     },
-    "把这块手表加入你的 OpenBitFun 账号？": {
+    "把这块手表加入你的 GitHub 账号？": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add this watch to your OpenBitFun account?"
+            "value": "Add this watch to your GitHub account?"
           }
         }
       }
@@ -7855,6 +7855,168 @@
           "stringUnit": {
             "state": "translated",
             "value": "Retry file preview"
+          }
+        }
+      }
+    },
+    "打开 GitHub 授权": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open GitHub authorization"
+          }
+        }
+      }
+    },
+    "通过 GitHub 登录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in with GitHub"
+          }
+        }
+      }
+    },
+    "请使用当前版本的 OpenBitFun 设备二维码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use a current OpenBitFun device QR code."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请使用当前版本的 OpenBitFun 设备二维码。"
+          }
+        }
+      }
+    },
+    "该设备已离线，或不属于当前 GitHub 账户。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device is offline or does not belong to your GitHub account."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该设备已离线，或不属于当前 GitHub 账户。"
+          }
+        }
+      }
+    },
+    "极简": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimal"
+          }
+        }
+      }
+    },
+    "标准": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standard"
+          }
+        }
+      }
+    },
+    "极致": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultimate"
+          }
+        }
+      }
+    },
+    "任务已完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Task completed"
+          }
+        }
+      }
+    },
+    "打开 OpenBitFun 查看结果。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open OpenBitFun to view the result."
+          }
+        }
+      }
+    },
+    "开启任务完成提醒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Task completion notifications"
+          }
+        }
+      }
+    },
+    "稍后": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Later"
+          }
+        }
+      }
+    },
+    "开启通知": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable notifications"
+          }
+        }
+      }
+    },
+    "允许 OpenBitFun 在任务完成时发送通知。你可以稍后在系统设置中更改。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow OpenBitFun to notify you when tasks finish. You can change this later in system settings."
+          }
+        }
+      }
+    },
+    "通知": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications"
+          }
+        }
+      }
+    },
+    "任务完成通知": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Task completion notifications"
           }
         }
       }

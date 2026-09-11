@@ -249,3 +249,9 @@ Detached Dispatch controller, target query compatibility, and managed-baseline c
 ```bash
 cargo test --locked -p openbitfun-core --no-default-features --features agent-runtime,dispatch-store,ssh-remote,git --lib service::dispatch::
 ```
+
+IM bot reply routing, account-device observation, and interaction delivery:
+
+```bash
+cargo test --locked -p openbitfun-core --no-default-features --features remote-connect --lib service::remote_connect::bot::
+```

@@ -52,6 +52,7 @@ function ActivityToolCardBase({
           ) : undefined}
           icon={(
             <ToolCardStatusSlot
+              size={14}
               defaultIcon={defaultIcon}
               status={status}
               toolIcon={icon}

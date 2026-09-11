@@ -66,8 +66,8 @@ export const SessionLaunchPanel: React.FC<SessionLaunchPanelProps> = ({
       {isProMode ? (
         hasWorkspace ? (
           <div className="session-list__create-row">
-            {action('code', t('shared.agents.code'), t('sessions.codeSessionDesc'), onRequestCodeHarness)}
-            {action('cowork', t('shared.agents.cowork'), t('sessions.coworkSessionDesc'), onCreateCowork)}
+            {action('code', t('shared.agents.Standard'), t('sessions.codeSessionDesc'), onRequestCodeHarness)}
+            {action('cowork', t('shared.agents.Cowork'), t('sessions.coworkSessionDesc'), onCreateCowork)}
           </div>
         ) : null
       ) : (

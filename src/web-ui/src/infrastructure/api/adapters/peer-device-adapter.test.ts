@@ -156,12 +156,13 @@ describe('peerInvokePriorityFor', () => {
     expect(peerInvokePriorityFor('get_available_modes')).toBe('high');
   });
 
-  it('keeps account finalize and relay deploy on the controller', () => {
-    expect(isPeerLocalOnlyCommand('account_finalize_login')).toBe(true);
-    expect(isPeerLocalOnlyCommand('account_cancel_pending_login')).toBe(true);
-    expect(isPeerLocalOnlyCommand('account_fetch_session_turns')).toBe(true);
-    expect(isPeerLocalOnlyCommand('relay_deploy_start')).toBe(true);
-    expect(isPeerLocalOnlyCommand('relay_deploy_cancel')).toBe(true);
+  it('keeps GitHub identity and device account operations on the controller', () => {
+    for (const command of [
+      'account_github_start', 'account_github_poll', 'account_github_info',
+      'account_login', 'account_logout', 'account_list_devices', 'account_device_rpc',
+    ]) {
+      expect(isPeerLocalOnlyCommand(command), command).toBe(true);
+    }
     expect(isPeerLocalOnlyCommand('create_session')).toBe(false);
   });
 

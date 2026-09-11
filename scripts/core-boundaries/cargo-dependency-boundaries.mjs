@@ -132,6 +132,7 @@ function isProcMacroPackage(pkg) {
 }
 
 const SERVICES_INTEGRATIONS_TOKIO_FEATURES = new Map([
+  ['account-identity', ['rt', 'sync']],
   ['announcement', ['fs', 'sync']],
   ['models-dev', ['fs', 'sync', 'time']],
   ['browser-control', ['time']],
@@ -328,6 +329,11 @@ const REQWEST_PACKAGE_PROFILES = new Map([
     dependencyFeatures: ['form', 'http2', 'json', 'rustls-no-provider'],
     optional: false,
     tlsProviderDependency: 'openbitfun-services-core',
+  }],
+  // Relay verifies global identity over bounded JSON HTTPS; no streaming or form API.
+  ['openbitfun-relay-service', {
+    dependencyFeatures: ['json', 'rustls-no-provider'],
+    optional: false,
   }],
   ['openbitfun-skin-market-service', {
     dependencyFeatures: ['http2', 'json', 'rustls-no-provider'],
@@ -1023,6 +1029,7 @@ export function findServicesIntegrationsReqwestFeatureViolations(pkg) {
   const featureGraph = pkg.features ?? {};
   const ownerFeatures = new Set(servicesReqwestOwnerFeatures);
   const ownerFeatureReferences = new Map([
+    ['account-identity', ['reqwest/json']],
     ['announcement', ['reqwest/json']],
     ['browser-control', ['reqwest/json']],
     ['mcp', ['reqwest/json', 'reqwest/stream']],

@@ -8,16 +8,7 @@ export interface ConversationIntentDispatcherHooks {
   readonly openSidebar: () => void;
   readonly back: () => void;
   readonly newRemoteSession: () => void;
-  readonly newGeneralSession: () => void;
-  readonly activeGeneralSession: () => RemoteSession;
-  readonly activeGeneralSessionId: () => string;
-  readonly isGeneralBusy: () => boolean;
-  readonly isPinned: (sessionId: string) => boolean;
-  readonly pin: (session: RemoteSession, pinned: boolean, busy: boolean) => Promise<void>;
-  readonly archive: (session: RemoteSession) => Promise<void>;
-  readonly delete: (session: RemoteSession) => Promise<void>;
-  readonly showToast: (text: string) => void;
-  readonly uploadedFileCount: () => number;
+  readonly unsupported: () => void;
   readonly stop: () => Promise<void>;
   readonly loadOlder: () => Promise<void>;
   readonly approve: (toolId: string, input?: Object) => Promise<void>;
@@ -49,23 +40,12 @@ export class ConversationIntentDispatcher {
     switch (intent.type) {
       case ConversationIntentType.OpenSidebar: this.hooks.openSidebar(); return;
       case ConversationIntentType.Back: this.hooks.back(); return;
-      case ConversationIntentType.NewSession:
-        route === AppRoute.RemoteChat ? this.hooks.newRemoteSession() : this.hooks.newGeneralSession(); return;
+      case ConversationIntentType.NewSession: this.hooks.newRemoteSession(); return;
       case ConversationIntentType.TogglePin:
-        if (this.isGeneralSession(route)) {
-          const session = this.hooks.activeGeneralSession();
-          void this.hooks.pin(session, !this.hooks.isPinned(session.id), this.hooks.isGeneralBusy());
-        }
-        return;
       case ConversationIntentType.Archive:
-        if (this.isGeneralSession(route)) void this.hooks.archive(this.hooks.activeGeneralSession());
-        return;
       case ConversationIntentType.Delete:
-        if (this.isGeneralSession(route)) void this.hooks.delete(this.hooks.activeGeneralSession());
-        return;
       case ConversationIntentType.ShowUploadedFiles:
-        const count = this.hooks.uploadedFileCount();
-        this.hooks.showToast(count > 0 ? `当前会话已上传 ${count} 个文件` : '当前会话暂无已上传文件'); return;
+        this.hooks.unsupported(); return;
       case ConversationIntentType.Stop: void this.hooks.stop(); return;
       case ConversationIntentType.LoadOlder: void this.hooks.loadOlder(); return;
       case ConversationIntentType.ApproveTool: void this.hooks.approve(intent.toolId, intent.updatedInput); return;
@@ -93,7 +73,4 @@ export class ConversationIntentDispatcher {
     }
   }
 
-  private isGeneralSession(route: AppRoute): boolean {
-    return AppRouteContract.isGeneralComposerRoute(route) && this.hooks.activeGeneralSessionId().length > 0;
-  }
 }

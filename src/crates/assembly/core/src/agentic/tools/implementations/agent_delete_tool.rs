@@ -217,7 +217,7 @@ mod tests {
         let intents = AgentDeleteTool::new()
             .permission_intents(
                 &serde_json::json!({ "agent_ids": ["a2", "a3"] }),
-                &context("Ultra"),
+                &context("Ultimate"),
             )
             .expect("permission intent");
         assert_eq!(intents.len(), 1);

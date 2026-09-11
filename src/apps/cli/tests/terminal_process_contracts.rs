@@ -31,6 +31,8 @@ const EXEC_STREAM_SIZE: PtySize = PtySize {
 const STARTUP_INPUT: &[u8] = b"exercise active turn resize Q7Z9";
 const STARTUP_INPUT_SENTINEL: &str = "Q7Z9";
 const MULTILINE_INPUT_SENTINEL: &str = "M7Q4";
+// Must not match the product version in the startup header (for example beta).
+const MULTILINE_TAIL_SENTINEL: &str = "Z9R2";
 const RECOVERY_INPUT: &[u8] = b"READY_AFTER_CANCEL K4W8";
 const RECOVERY_INPUT_SENTINEL: &str = "K4W8";
 
@@ -117,12 +119,16 @@ fn interactive_startup_survives_resize_multiline_input_and_emits_cleanup() {
     // Ratatui emits only changed cells, so the sentinel must not share characters
     // with the startup placeholder at the same screen positions.
     #[cfg(unix)]
-    process.write(b"\x1b[200~M7Q4\r\nbeta\x1b[201~");
+    process.write(
+        format!("\x1b[200~{MULTILINE_INPUT_SENTINEL}\r\n{MULTILINE_TAIL_SENTINEL}\x1b[201~")
+            .as_bytes(),
+    );
     #[cfg(windows)]
     {
         let mut rapid_input = MULTILINE_INPUT_SENTINEL.as_bytes().to_vec();
         rapid_input.extend(std::iter::repeat_n(b'a', 251));
-        rapid_input.extend_from_slice(b"\rbeta");
+        rapid_input.push(b'\r');
+        rapid_input.extend_from_slice(MULTILINE_TAIL_SENTINEL.as_bytes());
         process.write(&rapid_input);
     }
 
@@ -132,7 +138,7 @@ fn interactive_startup_survives_resize_multiline_input_and_emits_cleanup() {
         "interactive startup did not render multiline input",
     );
     process.expect_output(
-        "beta",
+        MULTILINE_TAIL_SENTINEL,
         Duration::from_secs(15),
         "interactive startup did not render the multiline input tail",
     );
@@ -152,7 +158,7 @@ fn interactive_startup_survives_resize_multiline_input_and_emits_cleanup() {
         "paste text was not rendered:\n{output}"
     );
     assert!(
-        output.contains("beta"),
+        output.contains(MULTILINE_TAIL_SENTINEL),
         "paste tail was not rendered:\n{output}"
     );
     assert!(

@@ -167,6 +167,7 @@ pub(crate) struct MigratorView {
     pub findings: Vec<ScanFinding>,
     pub plan: Option<MigrationPlan>,
     pub report: Option<MigrationRunReport>,
+    pub workspace_counts: Option<openbitfun_legacy_migration_adapters::WorkspaceReportCounts>,
     pub progress: Option<MigrationProgressEvent>,
     pub blockers: Vec<WriterProcess>,
     pub status: MigrationRunStatus,
@@ -794,6 +795,9 @@ fn validate_selection(selection: &MigrationSelection) -> Result<(), CommandError
 fn snapshot(session: &MigratorSession) -> MigratorView {
     let plan = session.plan.as_ref().map(redact_plan_for_ui);
     let report = session.report.as_ref().map(redact_report_for_ui);
+    let workspace_counts = session.report.as_ref().and_then(|report| {
+        openbitfun_legacy_migration_adapters::workspace_report_counts(&session.roots, report).ok()
+    });
     MigratorView {
         tool_version: env!("CARGO_PKG_VERSION").to_string(),
         locations: session.roots.clone(),
@@ -818,6 +822,7 @@ fn snapshot(session: &MigratorSession) -> MigratorView {
             ),
         plan,
         report,
+        workspace_counts,
         progress: session.progress.clone(),
         blockers: session.blockers.clone(),
         status: session.status,

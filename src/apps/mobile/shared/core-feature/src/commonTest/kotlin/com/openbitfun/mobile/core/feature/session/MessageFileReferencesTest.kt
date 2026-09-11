@@ -6,6 +6,15 @@ import kotlin.test.assertTrue
 
 class MessageFileReferencesTest {
     @Test
+    fun generatedImagesFilesAndRuntimeArtifactsShareTheFileCardPath() {
+        val references = MessageFileReferenceProjector.project(
+            "![Preview](preview.png)\n[Image](computer://preview.png)\n[Animation](file:///workspace/movie.html)\n" +
+                "[Report](openbitfun://current-session/artifacts/report.pdf)",
+        )
+        assertEquals(listOf("preview.png", "/workspace/movie.html", "openbitfun://current-session/artifacts/report.pdf"), references.map { it.remotePath })
+    }
+
+    @Test
     fun takesBothTheLinkedAndTheBareReferenceAndNamesEachByItsFile() {
         val references = MessageFileReferenceProjector.project(
             "See [the readme](computer:///repo/README.md), then computer:///repo/src/main.kt.",

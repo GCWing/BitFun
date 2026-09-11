@@ -24,6 +24,8 @@ const panelMocks = vi.hoisted(() => ({
   respondPermission: vi.fn(() => Promise.resolve()),
   respondPermissionBatch: vi.fn(() => Promise.resolve()),
   virtualItems: [] as unknown[],
+  flowChatSubscriber: null as ((state: FlowChatState) => void) | null,
+  flowChatSelectorSubscribers: new Set<(state: FlowChatState) => void>(),
 }));
 
 let flowChatState: FlowChatState;
@@ -52,6 +54,17 @@ vi.mock('../modern/VirtualItemRenderer', async () => {
         'data-allow-transcript-export': String(allowTranscriptExport),
       });
     },
+  };
+});
+
+// Action-bar tests exercise context and review behavior independently of DOM
+// viewport geometry. The real windowing contract has its own integration test.
+vi.mock('./BtwVirtualSessionList', async () => {
+  const { VirtualItemRenderer } = await import('../modern/VirtualItemRenderer');
+  return {
+    BtwVirtualSessionList: ({ items }: { items: import('../../store/modernFlowChatStore').VirtualItem[] }) => (
+      <>{items.map((item, index) => <VirtualItemRenderer key={index} item={item} index={index} />)}</>
+    ),
   };
 });
 
@@ -184,8 +197,28 @@ vi.mock('../../store/FlowChatStore', () => ({
   },
   flowChatStore: {
     getState: () => flowChatState,
-    subscribe: () => () => {},
-    subscribeSelector: () => () => {},
+    subscribeSelector: <T,>(select: (state: FlowChatState) => T, notify: (selected: T) => void) => {
+      let previous = select(flowChatState);
+      const listener = (state: FlowChatState) => {
+        const next = select(state);
+        if (Object.is(previous, next)) return;
+        previous = next;
+        notify(next);
+      };
+      panelMocks.flowChatSelectorSubscribers.add(listener);
+      panelMocks.flowChatSubscriber = state => {
+        panelMocks.flowChatSelectorSubscribers.forEach(subscriber => subscriber(state));
+      };
+      return () => { panelMocks.flowChatSelectorSubscribers.delete(listener); };
+    },
+    subscribe: (listener: (state: FlowChatState) => void) => {
+      panelMocks.flowChatSubscriber = listener;
+      return () => {
+        if (panelMocks.flowChatSubscriber === listener) {
+          panelMocks.flowChatSubscriber = null;
+        }
+      };
+    },
   },
 }));
 
@@ -535,6 +568,7 @@ describe('BtwSessionPanel review action bar integration', () => {
     panelMocks.respondPermissionBatch.mockReset();
     panelMocks.respondPermissionBatch.mockResolvedValue(undefined);
     panelMocks.virtualItems = [];
+    panelMocks.flowChatSubscriber = null;
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
@@ -569,6 +603,46 @@ describe('BtwSessionPanel review action bar integration', () => {
     container.remove();
     useReviewActionBarStore.getState().reset();
     vi.useRealTimers();
+  });
+
+  it('unmounts hidden content and subscriptions without cancelling the task', async () => {
+    const render = async (isActive: boolean) => {
+      await act(async () => {
+        root.render(<BtwSessionPanel childSessionId="deep-review-child" parentSessionId="parent-session" isActive={isActive} />);
+      });
+    };
+    await render(true);
+    expect(container.querySelector('.btw-session-panel')).not.toBeNull();
+    expect(panelMocks.flowChatSelectorSubscribers.size).toBeGreaterThan(0);
+    await render(false);
+    expect(container.childElementCount).toBe(0);
+    expect(panelMocks.flowChatSelectorSubscribers.size).toBe(0);
+    const child = flowChatState.sessions.get('deep-review-child')!;
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map(flowChatState.sessions).set(child.sessionId, { ...child, title: 'Updated while hidden' }),
+    };
+    await render(true);
+    expect(container.textContent).toContain('Updated while hidden');
+    expect(panelMocks.flowChatSelectorSubscribers.size).toBeGreaterThan(0);
+    expect(panelMocks.cancelSession).not.toHaveBeenCalled();
+    expect(panelMocks.cancelSessionTask).not.toHaveBeenCalled();
+  });
+
+  it('does not restore stale persisted review state again after tab switching', async () => {
+    vi.mocked(loadPersistedReviewState).mockClear();
+    vi.mocked(loadPersistedReviewState).mockResolvedValue(null);
+    await act(async () => {
+      root.render(<BtwSessionPanel childSessionId="deep-review-child" parentSessionId="parent-session" />);
+    });
+    expect(loadPersistedReviewState).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      root.render(<BtwSessionPanel childSessionId="deep-review-child" parentSessionId="parent-session" isActive={false} />);
+    });
+    await act(async () => {
+      root.render(<BtwSessionPanel childSessionId="deep-review-child" parentSessionId="parent-session" />);
+    });
+    expect(loadPersistedReviewState).toHaveBeenCalledTimes(1);
   });
 
   it('cancels a running side question with Escape inside its panel', async () => {
@@ -654,7 +728,7 @@ describe('BtwSessionPanel review action bar integration', () => {
       sessionId: 'deep-review-child',
       toolCallId: 'direct-child-tool',
       projectId: 'project-1',
-      agentId: 'agentic',
+      agentId: 'Standard',
       action: 'edit',
       resources: ['src/main.rs'],
       source: { kind: 'tool_call', identity: 'Write' },
@@ -1605,6 +1679,68 @@ describe('BtwSessionPanel review action bar integration', () => {
       minimized: true,
       customInstructions: 'Keep the fix focused.',
     });
+  });
+
+  it('does not reapply stale persisted minimize state after a local restore during streaming', async () => {
+    vi.mocked(loadPersistedReviewState).mockClear();
+    vi.mocked(loadPersistedReviewState).mockResolvedValueOnce({
+      version: 1,
+      phase: 'review_running',
+      completedRemediationIds: [],
+      minimized: true,
+      customInstructions: '',
+      persistedAt: 2,
+    });
+    const runningSession = createRunningDeepReviewSession();
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', runningSession],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      root.render(
+        <BtwSessionPanel
+          childSessionId="deep-review-child"
+          parentSessionId="parent-session"
+          workspacePath="D:/workspace/project"
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const restoreButton = container.querySelector<HTMLButtonElement>(
+      '.btw-session-panel__minimized-button',
+    );
+    expect(restoreButton).toBeTruthy();
+    await act(async () => {
+      restoreButton?.click();
+    });
+    expect(useReviewActionBarStore.getState().getSessionState('deep-review-child')?.minimized)
+      .toBe(false);
+
+    const streamedSession = {
+      ...runningSession,
+      lastActiveAt: runningSession.lastActiveAt + 1,
+    };
+    flowChatState = {
+      ...flowChatState,
+      sessions: new Map([
+        ['deep-review-child', streamedSession],
+        ['parent-session', flowChatState.sessions.get('parent-session')!],
+      ]),
+    } as FlowChatState;
+
+    await act(async () => {
+      panelMocks.flowChatSubscriber?.(flowChatState);
+      await Promise.resolve();
+    });
+
+    expect(loadPersistedReviewState).toHaveBeenCalledTimes(1);
+    expect(useReviewActionBarStore.getState().getSessionState('deep-review-child')?.minimized)
+      .toBe(false);
   });
 
   it('restores persisted follow-up and review scope only when the child still exists', async () => {

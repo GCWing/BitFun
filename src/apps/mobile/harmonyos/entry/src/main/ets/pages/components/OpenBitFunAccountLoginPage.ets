@@ -23,16 +23,15 @@ const CREDENTIAL_ROW_HEIGHT: number = 60;
 
 @ComponentV2
 export struct OpenBitFunAccountLoginPage {
-  @Event cloudLogin: (relayUrl: string, username: string, password: string) => Promise<string> =
-    async (_relayUrl: string, _username: string, _password: string): Promise<string> => '';
+  @Event cloudLogin: () => Promise<string> =
+    async (): Promise<string> => '';
+  @Event cloudCancelLogin: () => void = () => {};
   @Event onClose: () => void = () => {};
   @Event onLoginSuccess: () => void = () => {};
-  @Local relayUrl: string = DEFAULT_CLOUD_RELAY_URL;
-  @Local username: string = '';
-  @Local password: string = '';
   @Local errorText: string = '';
   @Local isBusy: boolean = false;
-  @Local showAdvanced: boolean = false;
+
+  aboutToDisappear(): void { this.cloudCancelLogin(); }
 
   build() {
     Column({ space: 0 }) {
@@ -88,8 +87,6 @@ export struct OpenBitFunAccountLoginPage {
         .textAlign(TextAlign.Center)
         .margin({ top: 8, bottom: 24 })
 
-      this.CredentialCard()
-      this.AdvancedCard()
 
       if (this.errorText.length > 0) {
         Text(this.errorText)
@@ -105,150 +102,14 @@ export struct OpenBitFunAccountLoginPage {
     .alignItems(HorizontalAlign.Center)
   }
 
-  @Builder
-  private CredentialCard() {
-    Column() {
-      Row({ space: 12 }) {
-        SymbolGlyph($r('sys.symbol.person'))
-          .fontSize(21)
-          .fontColor([MUTED])
-          .width(24)
-          .height(24)
-        TextInput({
-          placeholder: RemoteI18n.t('connect.accountUsernamePlaceholder'),
-          text: this.username
-        })
-          .height(CREDENTIAL_ROW_HEIGHT)
-          .layoutWeight(1)
-          .fontSize(MobileDesignTypography.bodyLarge.size)
-          .fontColor(INK)
-          .placeholderColor(SUBTLE)
-          .backgroundColor(PAGE_BG_FADE)
-          .padding({ left: 0, right: 4 })
-          .onChange((value: string) => { this.username = value; })
-      }
-      .width('100%')
-      .height(CREDENTIAL_ROW_HEIGHT)
-      .padding({ left: 18, right: 12 })
-      .alignItems(VerticalAlign.Center)
-
-      Divider()
-        .strokeWidth(1)
-        .color(LINE)
-        .margin({ left: 54, right: 16 })
-
-      Row({ space: 12 }) {
-        SymbolGlyph($r('sys.symbol.lock'))
-          .fontSize(20)
-          .fontColor([MUTED])
-          .width(24)
-          .height(24)
-        TextInput({
-          placeholder: RemoteI18n.t('connect.accountPasswordPlaceholder'),
-          text: this.password
-        })
-          .height(CREDENTIAL_ROW_HEIGHT)
-          .layoutWeight(1)
-          .fontSize(MobileDesignTypography.bodyLarge.size)
-          .fontColor(INK)
-          .placeholderColor(SUBTLE)
-          .backgroundColor(PAGE_BG_FADE)
-          .padding({ left: 0, right: 4 })
-          .type(InputType.Password)
-          .showPasswordIcon(true)
-          .onChange((value: string) => { this.password = value; })
-      }
-      .width('100%')
-      .height(CREDENTIAL_ROW_HEIGHT)
-      .padding({ left: 18, right: 12 })
-      .alignItems(VerticalAlign.Center)
-    }
-    .width('100%')
-    .backgroundColor(CARD)
-    .border({ width: 1, color: LINE })
-    .borderRadius(24)
-    .shadow({ radius: 16, color: SHADOW_FAINT, offsetY: 5 })
-    .clip(true)
-  }
-
-  @Builder
-  private AdvancedCard() {
-    Column() {
-      Row({ space: 14 }) {
-        SymbolGlyph($r('sys.symbol.gearshape'))
-          .fontSize(21)
-          .fontColor([MUTED])
-          .width(24)
-          .height(24)
-        Text(RemoteI18n.t('sheet.advancedOptions'))
-          .fontSize(MobileDesignTypography.titleSmall.size)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(INK)
-          .layoutWeight(1)
-        SymbolGlyph(this.showAdvanced ?
-          $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
-          .fontSize(13)
-          .fontColor([MUTED])
-      }
-      .width('100%')
-      .height(58)
-      .padding({ left: 18, right: 18 })
-      .alignItems(VerticalAlign.Center)
-      .onClick(() => {
-        this.showAdvanced = !this.showAdvanced;
-      })
-
-      if (this.showAdvanced) {
-        Divider()
-          .strokeWidth(1)
-          .color(LINE)
-          .margin({ left: 18, right: 18 })
-
-        Column({ space: 8 }) {
-          Text(RemoteI18n.t('remote.settings.loginServer'))
-            .fontSize(MobileDesignTypography.labelSmall.size)
-            .fontColor(MUTED)
-            .width('100%')
-
-          TextInput({
-            placeholder: RemoteI18n.t('remote.settings.relayUrlPlaceholder'),
-            text: this.relayUrl
-          })
-            .height(48)
-            .fontSize(MobileDesignTypography.bodyMedium.size)
-            .fontColor(INK)
-            .placeholderColor(SUBTLE)
-            .backgroundColor(PAGE_BG_FADE)
-            .border({ width: 1, color: LINE })
-            .borderRadius(14)
-            .padding({ left: 14, right: 14 })
-            .onChange((value: string) => { this.relayUrl = value; })
-        }
-        .width('100%')
-        .padding({ left: 18, right: 18, top: 14, bottom: 18 })
-        .alignItems(HorizontalAlign.Start)
-      }
-    }
-    .width('100%')
-    .backgroundColor(CARD)
-    .border({ width: 1, color: LINE })
-    .borderRadius(20)
-    .clip(true)
-    .margin({ top: 14 })
-  }
-
-  private canSubmit(): boolean {
-    return !this.isBusy && this.relayUrl.trim().length > 0 &&
-      this.username.trim().length > 0 && this.password.length > 0;
-  }
+  private canSubmit(): boolean { return !this.isBusy; }
 
   private async submit(): Promise<void> {
     if (!this.canSubmit()) return;
     this.isBusy = true;
     this.errorText = '';
     try {
-      await this.cloudLogin(this.relayUrl, this.username, this.password);
-      this.password = '';
+      await this.cloudLogin();
       this.onLoginSuccess();
     } catch (err) {
       this.errorText = err instanceof Error ? err.message : RemoteI18n.t('remote.settings.accountLoginFailed');

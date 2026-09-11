@@ -49,7 +49,9 @@ export const RuntimeStatusSlot: React.FC<RuntimeStatusSlotProps> = ({
         data-openbitfun-component="runtime-status-slot"
         data-openbitfun-part="content"
       >
-        <Spinner size="sm" />
+        <span className="runtime-status-slot__icon" data-openbitfun-component="runtime-status-slot" data-openbitfun-part="leadingIcon" aria-hidden="true">
+          <Spinner size="sm" />
+        </span>
         <OverflowText
           className="runtime-status-slot__hint"
           data-openbitfun-component="runtime-status-slot"

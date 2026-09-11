@@ -368,7 +368,7 @@ mod tests {
 
         let workspace = TestWorkspace::new();
         let manager = PersistenceManager::new(workspace.path_manager()).unwrap();
-        let source = Session::new("Source".into(), "agentic".into(), Default::default());
+        let source = Session::new("Source".into(), "Standard".into(), Default::default());
         manager
             .save_session(workspace.path(), &source)
             .await
@@ -531,7 +531,7 @@ mod tests {
 
         let mut source_session = Session::new(
             "Source Title".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Default::default(),
         );
         source_session.kind = SessionKind::Standard;
@@ -658,7 +658,7 @@ mod tests {
 
         assert_ne!(result.session_id, source_session.session_id);
         assert_eq!(result.session_name, "Source Title (1)");
-        assert_eq!(result.agent_type, "agentic");
+        assert_eq!(result.agent_type, "Standard");
         let branched_session = manager
             .load_session(workspace.path(), &result.session_id)
             .await
@@ -763,7 +763,7 @@ mod tests {
             PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
         let source_session = Session::new(
             "Source Title".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Default::default(),
         );
         manager
@@ -821,7 +821,7 @@ mod tests {
             PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
         let mut source_session = Session::new(
             "Source Title".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Default::default(),
         );
         source_session.compression_state.compression_count = 3;
@@ -905,7 +905,7 @@ mod tests {
             PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
         let mut source_session = Session::new(
             "Source Title".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Default::default(),
         );
         source_session.kind = SessionKind::Standard;
@@ -984,7 +984,7 @@ mod tests {
             PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
         let mut source_session = Session::new(
             "Source Title".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Default::default(),
         );
         source_session.kind = SessionKind::Standard;
@@ -1065,7 +1065,7 @@ mod tests {
         );
         let mut source_session = Session::new(
             "Source Title".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Default::default(),
         );
         source_session.kind = SessionKind::Standard;
@@ -1083,7 +1083,7 @@ mod tests {
 
         let mut second_source_session = Session::new(
             "Source Title".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Default::default(),
         );
         second_source_session.kind = SessionKind::Standard;
@@ -1143,7 +1143,7 @@ mod tests {
 
         let mut source_session = Session::new(
             "Source Title".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Default::default(),
         );
         source_session.kind = SessionKind::Standard;

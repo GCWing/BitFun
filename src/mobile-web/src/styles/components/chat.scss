@@ -197,7 +197,6 @@
   animation: scrollBtnIn 200ms var(--easing-standard);
 
   &:active {
-    transform: translateX(-50%) scale(0.92);
     box-shadow: var(--openbitfun-shadow-sm);
   }
 

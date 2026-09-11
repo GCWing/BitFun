@@ -1029,7 +1029,7 @@ mod tests {
             None,
             None,
             None,
-            "agentic".to_string(),
+            "Standard".to_string(),
             "input".to_string(),
             None,
             DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),

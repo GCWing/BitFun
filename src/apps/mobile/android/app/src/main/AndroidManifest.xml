@@ -4,6 +4,8 @@
     <!-- Pairing and every command afterwards go to the relay over HTTPS. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"

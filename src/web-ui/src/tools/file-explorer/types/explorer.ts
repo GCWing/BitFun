@@ -35,12 +35,14 @@ export interface ExplorerSnapshot {
 
 export interface ExplorerControllerConfig extends FileSystemOptions {
   rootPath?: string;
+  remoteConnectionId?: string;
   autoLoad?: boolean;
   enableAutoWatch?: boolean;
 }
 
 export interface ExplorerChildrenRequest {
   path: string;
+  remoteConnectionId?: string;
   options?: FileSystemOptions;
 }
 

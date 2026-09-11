@@ -39,6 +39,8 @@ describe('RuntimeStatusSlot', () => {
       root.render(<RuntimeStatusSlot sessionId="session-1" placement="footer" />);
     });
     const slot = container.querySelector<HTMLElement>('.runtime-status-slot');
+    const iconSlot = container.querySelector('[data-openbitfun-part="leadingIcon"]');
+    expect(iconSlot?.querySelector('[data-testid="dot-matrix"]')).not.toBeNull();
     expect(slot).not.toBeNull();
     expect(slot?.dataset.runtimeStatusVisible).toBe('false');
 
@@ -62,11 +64,13 @@ describe('RuntimeStatusSlot', () => {
       });
     });
     expect(slot?.textContent).toContain('Transferring workspace');
+    expect(container.querySelector('[data-openbitfun-part="leadingIcon"]')).toBe(iconSlot);
 
     act(() => {
       useRuntimeStatusStore.getState().clear({ sessionId: 'session-1' });
     });
     expect(container.querySelector('.runtime-status-slot')).toBe(slot);
     expect(slot?.dataset.runtimeStatusVisible).toBe('false');
+    expect(container.querySelector('[data-openbitfun-part="leadingIcon"]')).toBe(iconSlot);
   });
 });

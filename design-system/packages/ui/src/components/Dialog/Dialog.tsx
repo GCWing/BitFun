@@ -209,9 +209,13 @@ export const Sheet = forwardRef<HTMLDivElement, SheetProps>(function Sheet({
   );
 });
 
-export const DialogHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  function DialogHeader({ className, ...props }, ref) {
-    return <header {...props} className={classNames(styles.header, className)} data-openbitfun-part="header" ref={ref} />;
+export interface DialogHeaderProps extends HTMLAttributes<HTMLDivElement> {
+  separator?: boolean;
+}
+
+export const DialogHeader = forwardRef<HTMLDivElement, DialogHeaderProps>(
+  function DialogHeader({ className, separator = false, ...props }, ref) {
+    return <header {...props} className={classNames(styles.header, className)} data-openbitfun-part="header" data-separator={separator} ref={ref} />;
   },
 );
 
@@ -291,15 +295,17 @@ export const DialogBody = forwardRef<HTMLDivElement, DialogBodyProps>(
 
 export interface DialogFooterProps extends HTMLAttributes<HTMLElement> {
   appearance?: DialogFooterAppearance;
+  separator?: boolean;
 }
 
 export const DialogFooter = forwardRef<HTMLElement, DialogFooterProps>(
-  function DialogFooter({ appearance = "attached", className, ...props }, ref) {
+  function DialogFooter({ appearance = "attached", className, separator = false, ...props }, ref) {
     return (
       <footer
         {...props}
         className={classNames(styles.footer, className)}
         data-appearance={appearance}
+        data-separator={separator}
         data-openbitfun-part="footer"
         ref={ref}
       />

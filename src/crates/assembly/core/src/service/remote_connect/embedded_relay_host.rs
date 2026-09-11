@@ -1,4 +1,4 @@
-//! Host capability required by Remote Connect LAN and Ngrok orchestration.
+//! Host capability required by Remote Connect LAN orchestration.
 //!
 //! Product assembly decides when the embedded relay is needed. Concrete
 //! listener, router, static-file, and task lifecycle details belong to the app

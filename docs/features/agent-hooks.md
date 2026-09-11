@@ -125,6 +125,43 @@ OpenCode plugin Hooks are intentionally excluded. Their JavaScript callbacks
 need the OpenCode plugin execution domain; the current OpenCode Hook catalog is
 still discovery/static preview and is not executable.
 
+The compatibility page also discovers **DeepSeek Harness** and **PI** Hooks.
+The Hook owner shows these sources as read-only, with their native events,
+disabled/unsupported states, and unresolved-source diagnostics. Refresh uses the
+same host catalog; discovering a source never loads or imports its code.
+
+- DeepSeek Harness: `$DSH_HOME/cordis.patch.yml` (default `~/.dsh`),
+  `profiles/*/cordis.yml` and `cordis.patch.yml`, and the selected workspace's
+  Cordis composition files. Explicit `dsh-hooks-claude-code` and `dsh-hooks-codex`
+  rows provide `config.configPath`; relative paths use the selected launch
+  workspace, not the profile directory. Without that workspace they remain
+  unresolved. Group/insert rows and disabled groups are recognized. The Codex
+  bridge supports only its five native events and skips asynchronous handlers.
+  Bundle composition and runtime Cordis registrations remain opaque.
+- PI: `~/.pi/agent/extensions` (or `PI_CODING_AGENT_DIR/extensions`),
+  `.pi/extensions`, and `settings.json` extension paths relative to their owning
+  config directory. Single `.ts`/`.js` entries, directory `index.ts`/`index.js`,
+  and local `package.json` `pi.extensions` entries are inspected without import.
+  Literal `pi.on(...)` registrations in a default function or arrow export are
+  native-only; indirect exports and dynamic registrations are opaque. Package
+  installation/resolution and dynamic selectors require PI itself.
+
+Skill discovery also includes `.dsh/skills`, `$DSH_HOME/skills`, `.pi/skills`,
+and `$PI_CODING_AGENT_DIR/skills` (default `~/.pi/agent/skills`). These sources
+are appended to the existing root order. DSH supports direct bundles and flat
+Markdown; PI additionally supports nested groups and optional frontmatter names.
+Flat entries retain their own stable keys and Markdown filenames. Existing
+directory-shaped payloads still default to `SKILL.md`. Configured/custom,
+package-provided, and runtime-published Skill paths are outside this standard-root
+discovery. Project roots use the active workspace; native ancestor/profile
+resolution is not reproduced. Remote project Skill discovery uses the workspace
+filesystem, while the Hook catalog still rejects remote workspace domains.
+
+Source references: [DSH Skills](https://github.com/deepseek-ai/deepseek-harness/blob/c389f96bf3a9b6807cb71ed6bdad5849be0df6d8/docs/subsystems/skills.md),
+[DSH Codex bridge](https://github.com/deepseek-ai/deepseek-harness/blob/c389f96bf3a9b6807cb71ed6bdad5849be0df6d8/packages/hooks/hooks-codex/src/config.ts),
+[PI Skills](https://github.com/earendil-works/pi/blob/6160683a4a8012f0d1cd30c145df18b4ca6f5176/packages/coding-agent/docs/skills.md),
+[PI Extensions](https://github.com/earendil-works/pi/blob/6160683a4a8012f0d1cd30c145df18b4ca6f5176/packages/coding-agent/docs/extensions.md).
+
 Root CLI equivalents are:
 
 ```text

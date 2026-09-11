@@ -2,7 +2,7 @@
  * MainNav — primary product navigation sidebar.
  *
  * Layout (top to bottom):
- *   1. Search and New Session
+ *   1. Search
  *   2. AI Assistant, Task Board, Mini Apps, then Extensions & Compatibility
  *   3. Unified Sessions (all or grouped by project / assistant)
  *
@@ -235,10 +235,6 @@ const MainNav: React.FC<MainNavProps> = ({
     };
   }, [workspaceMenuOpen, updateWorkspaceMenuPos]);
 
-  const handleCreateSession = useCallback(() => {
-    void activateProductAction('session.new');
-  }, []);
-
   const handleOpenAgents = useCallback(() => {
     void activateProductAction('surface.agents.open');
   }, []);
@@ -345,7 +341,6 @@ const MainNav: React.FC<MainNavProps> = ({
     getAppearanceOverlayHost()
   ) : null;
 
-  const createSessionLabel = t('nav.sessions.newSession');
   const addSessionGroupTooltip = t('nav.tooltips.addSessionGroup');
   const agentsTooltip = t('nav.tooltips.agents');
   const skillsTooltip = t('nav.tooltips.skills');
@@ -394,20 +389,6 @@ const MainNav: React.FC<MainNavProps> = ({
               </button>
             </Tooltip>
           </div>
-          <Tooltip content={createSessionLabel} placement="right" followCursor>
-            <button
-              type="button"
-              className="openbitfun-nav-panel__utility-action"
-              data-openbitfun-component="nav-panel"
-              data-openbitfun-part="topAction"
-              data-openbitfun-action="new-session"
-              onClick={handleCreateSession}
-              aria-label={createSessionLabel}
-              data-testid="nav-new-session-btn"
-            >
-              <Icon name="plus" size="lg" style={{ width: 15, height: 15 }} aria-hidden="true" />
-            </button>
-          </Tooltip>
         </div>
         </div>
       </NavigationPanelHeader>

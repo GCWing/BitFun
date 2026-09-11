@@ -984,7 +984,7 @@ describe('PeerSessionRefreshModule journal apply', () => {
             startTime: 1,
           }],
           status: 'active',
-          config: { agentType: 'agentic' },
+          config: { agentType: 'Standard' },
           createdAt: 1,
           lastActiveAt: 2,
           error: null,

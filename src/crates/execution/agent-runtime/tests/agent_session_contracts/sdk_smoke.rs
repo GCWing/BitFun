@@ -282,7 +282,7 @@ impl AgentSubmissionPort for FakeSdkAgentProvider {
     }
 
     async fn resolve_session_agent_type(&self, _session_id: &str) -> PortResult<Option<String>> {
-        Ok(Some("agentic".to_string()))
+        Ok(Some("Standard".to_string()))
     }
 }
 
@@ -301,7 +301,7 @@ async fn sdk_facade_runs_with_fake_provider_and_local_event_stream() {
             AgentRunRequest::new(
                 SessionSelector::create(
                     "SDK smoke",
-                    "agentic",
+                    "Standard",
                     Some("/workspace/project".to_string()),
                 ),
                 "hello from sdk",
@@ -314,7 +314,7 @@ async fn sdk_facade_runs_with_fake_provider_and_local_event_stream() {
 
     assert_eq!(handle.session_id, "sdk-session-1");
     assert_eq!(handle.turn_id, "sdk-turn-1");
-    assert_eq!(handle.agent_type.as_deref(), Some("agentic"));
+    assert_eq!(handle.agent_type.as_deref(), Some("Standard"));
     assert!(handle.accepted);
 
     runtime
@@ -410,9 +410,9 @@ async fn sdk_facade_accepts_fake_services_tools_and_hooks_without_core() {
         .with_tool_registry(Arc::new(tools))
         .with_hook_registry(hooks)
         .with_agent_registry(Arc::new(FakeSdkAgentRegistry {
-            agent_ids: vec!["agentic".to_string(), "Explore".to_string()],
+            agent_ids: vec!["Standard".to_string(), "Explore".to_string()],
             workspace_agent_ids: vec![
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "Explore".to_string(),
                 "ProjectReviewer".to_string(),
             ],
@@ -424,14 +424,14 @@ async fn sdk_facade_accepts_fake_services_tools_and_hooks_without_core() {
     assert_eq!(runtime.hook_registry().hooks()[0].id(), "sdk.post_call");
     assert_eq!(
         runtime.registered_agent_ids(RuntimeAgentRegistryQuery::default()),
-        vec!["agentic".to_string(), "Explore".to_string()]
+        vec!["Standard".to_string(), "Explore".to_string()]
     );
     assert_eq!(
         runtime.registered_agent_ids(RuntimeAgentRegistryQuery {
             workspace_root: Some(Path::new("/workspace/project")),
         }),
         vec![
-            "agentic".to_string(),
+            "Standard".to_string(),
             "Explore".to_string(),
             "ProjectReviewer".to_string()
         ]

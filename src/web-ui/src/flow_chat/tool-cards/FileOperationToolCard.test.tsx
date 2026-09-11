@@ -274,17 +274,21 @@ describe('FileOperationToolCard', () => {
 
   });
 
-  it('replaces an existing remote diff with the selected operation on the same file', async () => {
+  it('replaces an existing remote diff in the same Workbench resource', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     mocks.snapshotsAvailable = false;
     const tabUtils = await vi.importActual<typeof import('../../shared/utils/tabUtils')>(
       '../../shared/utils/tabUtils',
     );
+    const { useContentResourceStore } = await vi.importActual<
+      typeof import('../../app/workbench/contentResourceStore')
+    >('../../app/workbench/contentResourceStore');
+    const { useSceneStore } = await vi.importActual<typeof import('../../app/stores/sceneStore')>(
+      '../../app/stores/sceneStore',
+    );
+    useContentResourceStore.setState({ resources: {} });
+    useSceneStore.getState().resetForPeerSwitch();
     mocks.createDiffEditorTab.mockImplementation(tabUtils.createDiffEditorTab);
-    const events: Array<{ duplicateCheckKey: string; replaceExisting: boolean; data: { originalCode: string; modifiedCode: string; readOnly: boolean } }> = [];
-    window.addEventListener('agent-create-tab', event => {
-      events.push((event as CustomEvent).detail);
-    });
     const config = {
       toolName: 'Edit', displayName: 'Edit', icon: 'EDIT',
       requiresConfirmation: false, resultDisplayType: 'detailed', displayMode: 'standard',
@@ -308,12 +312,19 @@ describe('FileOperationToolCard', () => {
       });
       await act(async () => { await vi.advanceTimersByTimeAsync(260); });
     }
-    expect(events).toHaveLength(2);
-    expect(events[0].duplicateCheckKey).toBe(events[1].duplicateCheckKey);
-    expect(events[1]).toMatchObject({
-      replaceExisting: true,
-      data: { originalCode: 'operation-2 before', modifiedCode: 'operation-2 after', readOnly: true },
+    const resources = Object.values(useContentResourceStore.getState().resources);
+    expect(resources).toHaveLength(1);
+    expect(resources[0].content).toMatchObject({
+      type: 'diff-code-editor',
+      data: {
+        originalCode: 'operation-2 before',
+        modifiedCode: 'operation-2 after',
+        readOnly: true,
+      },
     });
+    expect(useSceneStore.getState().openTabs.filter(tab => tab.contentId)).toEqual([
+      expect.objectContaining({ contentId: resources[0].id }),
+    ]);
   });
 
   it('routes only successful Write calls for .plan.md files to the plan display', async () => {

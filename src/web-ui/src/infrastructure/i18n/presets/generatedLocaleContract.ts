@@ -42,15 +42,19 @@ export const SHARED_TERMS_BY_LOCALE = {
       "workspace": "工作区"
     },
     "modes": {
-      "agentic": "代理模式",
       "assistant": "助手模式",
       "expert": "专家模式",
       "review": "评审模式"
     },
     "agents": {
-      "code": "代码会话",
-      "cowork": "协作会话",
-      "claw": "Claw",
+      "Minimal": "极简",
+      "Standard": "标准",
+      "Ultimate": "极致",
+      "Creative": "创造",
+      "Claw": "助理",
+      "Cowork": "办公协作",
+      "DeepResearch": "深度研究",
+      "ComputerUse": "电脑操作",
       "default": "默认助手"
     },
     "tools": {
@@ -64,7 +68,6 @@ export const SHARED_TERMS_BY_LOCALE = {
     },
     "connectionMethods": {
       "lan": "局域网",
-      "ngrok": "Ngrok",
       "openbitfunServer": "OpenBitFun Server",
       "customServer": "自定义服务器",
       "botFeishu": "飞书机器人",
@@ -92,15 +95,19 @@ export const SHARED_TERMS_BY_LOCALE = {
       "workspace": "Workspace"
     },
     "modes": {
-      "agentic": "Agentic Mode",
       "assistant": "Assistant Mode",
       "expert": "Expert Mode",
       "review": "Review Mode"
     },
     "agents": {
-      "code": "Code Session",
-      "cowork": "Cowork Session",
-      "claw": "Claw",
+      "Minimal": "Minimal",
+      "Standard": "Standard",
+      "Ultimate": "Ultimate",
+      "Creative": "Creative",
+      "Claw": "Assistant",
+      "Cowork": "Cowork",
+      "DeepResearch": "Deep Research",
+      "ComputerUse": "Computer Use",
       "default": "Default Assistant"
     },
     "tools": {
@@ -114,7 +121,6 @@ export const SHARED_TERMS_BY_LOCALE = {
     },
     "connectionMethods": {
       "lan": "LAN",
-      "ngrok": "Ngrok",
       "openbitfunServer": "OpenBitFun Server",
       "customServer": "Custom Server",
       "botFeishu": "Feishu Bot",
@@ -142,15 +148,19 @@ export const SHARED_TERMS_BY_LOCALE = {
       "workspace": "工作區"
     },
     "modes": {
-      "agentic": "代理模式",
       "assistant": "助手模式",
       "expert": "專家模式",
       "review": "審查模式"
     },
     "agents": {
-      "code": "程式碼會話",
-      "cowork": "協作會話",
-      "claw": "Claw",
+      "Minimal": "極簡",
+      "Standard": "標準",
+      "Ultimate": "極致",
+      "Creative": "創造",
+      "Claw": "助理",
+      "Cowork": "辦公協作",
+      "DeepResearch": "深度研究",
+      "ComputerUse": "電腦操作",
       "default": "預設助手"
     },
     "tools": {
@@ -164,7 +174,6 @@ export const SHARED_TERMS_BY_LOCALE = {
     },
     "connectionMethods": {
       "lan": "區域網路",
-      "ngrok": "Ngrok",
       "openbitfunServer": "OpenBitFun Server",
       "customServer": "自訂伺服器",
       "botFeishu": "飛書機器人",

@@ -105,6 +105,11 @@ pub type TerminalExecStreamingOutputSink = mpsc::Sender<String>;
 
 #[async_trait::async_trait]
 pub trait TerminalPort: RuntimeServicePort + std::fmt::Debug {
+    /// None means the provider cannot guarantee a fixed replay geometry.
+    fn exec_terminal_size(&self) -> Option<ExecTerminalSize> {
+        None
+    }
+
     /// Authoritative liveness query for an ExecCommand session.
     /// Providers that cannot inspect state fail closed.
     async fn is_session_active(&self, _session_id: i32) -> PortResult<bool> {

@@ -71,10 +71,15 @@ describe('session surface composition', () => {
     const toolbarSource = readSource('./ToolbarMode.tsx');
     const bubbleSource = readSource('../../../app/layout/FloatingMiniChat.tsx');
 
-    expect(communicationSource).toContain('<RealtimeVoiceCallPanel />');
+    const voiceSource = readSource('../voice/RealtimeVoiceCallPanel.tsx');
+    expect(communicationSource).toContain('<RealtimeVoiceCallPanel onClose={onCloseVoice} />');
     expect(communicationSource).toContain('onClick={handleModeSwitch}');
     expect(communicationSource).toContain("'voiceCall.call.switchToVoice'");
-    expect(communicationSource).toContain("'voiceCall.call.switchToChat'");
+    expect(voiceSource).toContain('<VoiceCallPanel');
+    expect(voiceSource).toContain("'voiceCall.call.switchToChat'");
+    expect(communicationSource).toContain('enabled && !isVoiceMode');
+    expect(bubbleSource).toContain('onCloseVoice={handleClose}');
+    expect(toolbarSource).toContain('onCloseVoice={handleToggleExpanded}');
     expect(toolbarSource).toContain('switchTestId="toolbar-realtime-voice-mode-switch"');
     expect(bubbleSource).toContain('switchTestId="hello-realtime-voice-mode-switch"');
   });

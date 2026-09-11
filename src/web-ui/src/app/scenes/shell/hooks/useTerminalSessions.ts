@@ -1,3 +1,4 @@
+import { getActiveSurfaceId } from '@/infrastructure/peer-device/deviceSurface';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getTerminalService } from '@/tools/terminal/services/TerminalService';
 import type { SessionResponse } from '@/tools/terminal/types/session';
@@ -157,7 +158,7 @@ export function useTerminalSessions(options: UseTerminalSessionsOptions) {
       snapshots.set(key, next);
       return { ...previous, sessions: next };
     });
-    window.dispatchEvent(new CustomEvent('terminal-session-renamed', { detail: { sessionId, newName } }));
+    window.dispatchEvent(new CustomEvent('terminal-session-renamed', { detail: { sessionId, newName, surfaceId: getActiveSurfaceId() } }));
   }, [assertCurrent, key]);
   const hasSession = useCallback((sessionId: string) => sessionMap.has(sessionId), [sessionMap]);
 

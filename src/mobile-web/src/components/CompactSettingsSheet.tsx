@@ -1,3 +1,4 @@
+import AccountAvatar from './AccountAvatar';
 import React from 'react';
 import {
   MobileBadge,
@@ -18,6 +19,8 @@ interface SettingsDevice {
 
 interface CompactSettingsSheetProps {
   accountLabel: string | null;
+  accountUserId?: string | null;
+  accountAvatarUrl?: string;
   devices: SettingsDevice[];
   isDark: boolean;
   onClose: () => void;
@@ -39,6 +42,8 @@ function ThemeToggleIcon({ isDark }: { isDark: boolean }) {
 
 export default function CompactSettingsSheet({
   accountLabel,
+  accountUserId,
+  accountAvatarUrl,
   devices,
   isDark,
   onClose,
@@ -63,13 +68,12 @@ export default function CompactSettingsSheet({
         <h3>{t('settings.accountSection')}</h3>
         <MobileCard className="harmony-sidebar__account-card">
           <span className="harmony-sidebar__account-avatar" aria-hidden="true">
-            {accountLabel
-              ? accountLabel.slice(0, 1).toLocaleUpperCase()
-              : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></svg>}
+            <AccountAvatar url={accountAvatarUrl} />
           </span>
           <span className="harmony-sidebar__account-copy">
             <strong>{accountLabel ? t('settings.currentAccount') : t('settings.notSignedIn')}</strong>
             <small>{accountLabel || t('settings.connectedByQr')}</small>
+            {accountUserId && <small>{t('settings.githubId', { id: accountUserId })}</small>}
           </span>
           {accountLabel && <MobileBadge className="harmony-sidebar__verified" tone="success">{t('settings.signedIn')}</MobileBadge>}
         </MobileCard>

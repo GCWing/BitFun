@@ -1,156 +1,126 @@
-//! Account login client: Argon2id key derivation + register/login flows.
-//!
-//! The relay never sees the plaintext password or the master key. This module
-//! derives the KEK and password hash locally, wraps the random master key with
-//! the KEK, and sends only non-secret artifacts (salts, hashes, wrapped key)
-//! to the relay. The master key lives in memory only after login.
+//! GitHub-authenticated device credentials and pairwise encrypted relay messages.
 
+use super::device_crypto;
 use anyhow::{anyhow, Result};
-use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use openbitfun_services_core::session::SessionMetadata;
-#[cfg(test)]
-use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::Mutex;
 
 use crate::remote_connect::device::DeviceIdentity;
-use crate::remote_connect::encryption::{decrypt, encrypt};
 use crate::remote_connect::relay_http::{
     relay_http_client, send_with_retry, BufferedRelayResponse, RelayHttpRetry,
 };
 
-/// Salt length for provisioning (client-side account-blob export). Only used
-/// by tests until that tooling lands.
-#[allow(dead_code)]
-const SALT_LEN: usize = 16;
 pub const MASTER_KEY_LEN: usize = 32;
-const NONCE_LEN: usize = 12;
 
-/// Argon2id parameters used for key derivation. Stored on the relay (non-secret)
-/// so the client can rebuild the identical KDF on login.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KdfParams {
-    /// Memory cost in KiB (e.g. 16384 = 16 MiB).
-    pub m: u32,
-    /// Time cost (iterations).
-    pub t: u32,
-    /// Parallelism (lanes).
-    pub p: u32,
-}
-
-impl Default for KdfParams {
-    fn default() -> Self {
-        // Resource-aware Argon2id baseline: 16 MiB, 3 iterations, 4 lanes.
-        Self {
-            m: 16 * 1024,
-            t: 3,
-            p: 4,
-        }
-    }
-}
-
-impl KdfParams {
-    fn build(&self) -> Result<Argon2<'static>> {
-        // KDF parameters come from a remote server. Bound them before Argon2
-        // allocates memory so a malicious or corrupted relay cannot force the
-        // client into multi-gigabyte allocation or an excessive CPU loop.
-        if !(8 * 1024..=256 * 1024).contains(&self.m)
-            || !(1..=10).contains(&self.t)
-            || !(1..=16).contains(&self.p)
-        {
-            return Err(anyhow!(
-                "argon2 parameters are outside the supported safety range"
-            ));
-        }
-        let params = Params::new(self.m, self.t, self.p, Some(MASTER_KEY_LEN))
-            .map_err(|e| anyhow!("invalid argon2 params: {e}"))?;
-        Ok(Argon2::new(Algorithm::Argon2id, Version::V0x13, params))
-    }
-}
-
-/// A successful account session: the relay token + the decrypted master key.
-/// The master key lives in memory only; it is never persisted to disk.
-#[derive(Debug, Clone)]
+/// Device-scoped relay credentials and a locally owned X25519 private key.
+#[derive(Clone)]
 pub struct AccountSession {
     pub token: String,
     pub user_id: String,
     pub master_key: [u8; MASTER_KEY_LEN],
+    peer_keys: Arc<Mutex<HashMap<String, [u8; 32]>>>,
 }
 
-const RELAY_TURNS_IMPORT_STATE_KEY: &str = "relayTurnsImportState";
-const RELAY_TURNS_IMPORT_PENDING: &str = "pending";
-const RELAY_TURNS_IMPORT_COMPLETE: &str = "complete";
-
-/// Return the durable import state used by account-backed Session history.
-/// A missing marker denotes a locally-created Session.
-pub fn relay_session_history_import_state(metadata: &SessionMetadata) -> Option<&str> {
-    metadata
-        .custom_metadata
-        .as_ref()
-        .and_then(serde_json::Value::as_object)
-        .and_then(|custom| custom.get(RELAY_TURNS_IMPORT_STATE_KEY))
-        .and_then(serde_json::Value::as_str)
-}
-
-pub fn relay_session_history_import_is_complete(metadata: &SessionMetadata) -> bool {
-    relay_session_history_import_state(metadata) == Some(RELAY_TURNS_IMPORT_COMPLETE)
-}
-
-/// Fail closed while an imported Session has not completed its local turn
-/// batch. Uploading a metadata-only or partial prefix would overwrite the
-/// account's authoritative full-history bundle.
-pub fn ensure_relay_session_history_exportable(
-    metadata: &SessionMetadata,
-) -> std::result::Result<(), String> {
-    match relay_session_history_import_state(metadata) {
-        None | Some(RELAY_TURNS_IMPORT_COMPLETE) => Ok(()),
-        Some(state) => Err(format!(
-            "session {} history import is incomplete ({state})",
-            metadata.session_id
-        )),
+impl std::fmt::Debug for AccountSession {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AccountSession")
+            .field("user_id", &self.user_id)
+            .finish_non_exhaustive()
     }
 }
 
-/// Align exported metadata with the visible history projection. This matters
-/// while a staged Session restore hides a physical suffix from every consumer.
-pub fn relay_session_export_metadata(
-    metadata: &SessionMetadata,
-    visible_turn_count: usize,
-) -> SessionMetadata {
-    let mut exported = metadata.clone();
-    exported.turn_count = visible_turn_count;
-    exported
-}
+impl AccountSession {
+    pub fn new(token: String, user_id: String, device_secret: [u8; 32]) -> Self {
+        Self {
+            token,
+            user_id,
+            master_key: device_secret,
+            peer_keys: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
 
-fn set_relay_session_history_import_state(metadata: &mut SessionMetadata, state: &str) {
-    let mut custom = metadata
-        .custom_metadata
-        .as_ref()
-        .and_then(serde_json::Value::as_object)
-        .cloned()
-        .unwrap_or_default();
-    custom.insert(
-        RELAY_TURNS_IMPORT_STATE_KEY.to_string(),
-        serde_json::Value::String(state.to_string()),
-    );
-    metadata.custom_metadata = Some(serde_json::Value::Object(custom));
-}
+    pub async fn clear_peer_keys(&self) {
+        self.peer_keys.lock().await.clear();
+    }
 
-pub fn mark_relay_session_history_import_pending(metadata: &mut SessionMetadata) {
-    set_relay_session_history_import_state(metadata, RELAY_TURNS_IMPORT_PENDING);
-}
+    pub async fn peer_message_key(&self, relay_url: &str, device_id: &str) -> Result<[u8; 32]> {
+        let endpoint = AccountClient::endpoint(
+            relay_url,
+            &format!("/api/devices/{}/key", urlencoding::encode(device_id)),
+        )?;
+        let cache_id = endpoint.to_string();
+        let mut keys = self.peer_keys.lock().await;
+        if let Some(key) = keys.get(&cache_id) {
+            return Ok(*key);
+        }
+        let response = relay_http_client()
+            .get(endpoint)
+            .bearer_auth(&self.token)
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(AccountClient::into_error(response).await);
+        }
+        #[derive(Deserialize)]
+        struct PeerKey {
+            device_id: String,
+            public_key: String,
+        }
+        let peer: PeerKey = response.json().await?;
+        if peer.device_id != device_id {
+            return Err(anyhow!("relay returned a different device identity"));
+        }
+        let public = super::encryption::parse_public_key(&peer.public_key)?;
+        let key = device_crypto::derive_message_key(&self.master_key, &public)?;
+        keys.insert(cache_id, key);
+        Ok(key)
+    }
 
-pub fn mark_relay_session_history_import_complete(metadata: &mut SessionMetadata) {
-    set_relay_session_history_import_state(metadata, RELAY_TURNS_IMPORT_COMPLETE);
+    pub async fn encrypt_for_peer(
+        &self,
+        relay_url: &str,
+        device_id: &str,
+        plaintext: &str,
+    ) -> Result<(String, String)> {
+        let key = self.peer_message_key(relay_url, device_id).await?;
+        super::encryption::encrypt_to_base64(&key, plaintext)
+    }
+
+    pub async fn decrypt_from_peer(
+        &self,
+        relay_url: &str,
+        device_id: &str,
+        data: &str,
+        nonce: &str,
+    ) -> Result<String> {
+        let key = self.peer_message_key(relay_url, device_id).await?;
+        match super::encryption::decrypt_from_base64(&key, data, nonce) {
+            Ok(plaintext) => Ok(plaintext),
+            Err(_) => {
+                // A device can rotate its private key while a controller is
+                // disconnected. Refresh its authenticated key once on failure.
+                let endpoint = AccountClient::endpoint(
+                    relay_url,
+                    &format!("/api/devices/{}/key", urlencoding::encode(device_id)),
+                )?;
+                self.peer_keys.lock().await.remove(endpoint.as_str());
+                let key = self.peer_message_key(relay_url, device_id).await?;
+                super::encryption::decrypt_from_base64(&key, data, nonce)
+            }
+        }
+    }
 }
 
 /// A delegated token for a paired client (mobile-web / IM bot).
 /// The desktop requests this from the relay and transmits it along
-/// with the master_key to the paired client via the E2E room channel.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// with a fresh controller private key over the authenticated E2E channel.
+#[derive(Clone)]
 pub struct DelegateToken {
     pub token: String,
     pub user_id: String,
+    pub device_secret: [u8; 32],
 }
 
 /// Full device credential minted for a distinct SSH host. Unlike
@@ -163,106 +133,12 @@ pub struct ProvisionedDeviceToken {
     pub device_id: String,
 }
 
-/// A delegated account identity: token + master_key, for paired clients
-/// that don't do Argon2id themselves. The desktop delegates both.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DelegatedIdentity {
-    pub token: String,
-    pub user_id: String,
-    pub master_key: String, // base64-encoded 32-byte master key
-}
-
-// ── Key derivation & wrapping ───────────────────────────────────────────
-
-/// Derive the KEK (key-encryption key) from the password. The KEK never leaves
-/// the client; it is used only to wrap/unwrap the master key.
-fn derive_kek(password: &str, salt: &[u8], params: &KdfParams) -> Result<[u8; MASTER_KEY_LEN]> {
-    let argon2 = params.build()?;
-    let mut out = [0u8; MASTER_KEY_LEN];
-    argon2
-        .hash_password_into(password.as_bytes(), salt, &mut out)
-        .map_err(|e| anyhow!("argon2 kek: {e}"))?;
-    Ok(out)
-}
-
-/// Derive the password hash for server-side verification (uses a separate salt
-/// so the KEK and the server-verifiable hash cannot be correlated).
-fn derive_password_hash(password: &str, kdf_salt: &[u8], params: &KdfParams) -> Result<String> {
-    let argon2 = params.build()?;
-    let mut out = [0u8; MASTER_KEY_LEN];
-    argon2
-        .hash_password_into(password.as_bytes(), kdf_salt, &mut out)
-        .map_err(|e| anyhow!("argon2 pwd hash: {e}"))?;
-    Ok(BASE64.encode(out))
-}
-
-/// Pack wrapped ciphertext + nonce into a single storable string: `"ct.nonce"`.
-/// Used by the provisioning path (client-side account-blob export for admin
-/// import); not needed for login, hence `dead_code` until that tooling lands.
-#[allow(dead_code)]
-fn pack_wrapped(ct_b64: &str, nonce_b64: &str) -> String {
-    format!("{ct_b64}.{nonce_b64}")
-}
-
-/// Split a packed `"ct.nonce"` string back into its parts.
-fn unpack_wrapped(packed: &str) -> Result<(String, String)> {
-    let (ct, nonce) = packed
-        .split_once('.')
-        .ok_or_else(|| anyhow!("invalid wrapped master key format"))?;
-    Ok((ct.to_string(), nonce.to_string()))
-}
-
-/// Wrap (encrypt) the master key with the KEK → `"ct.nonce"`.
-/// Provisioning helper (see `pack_wrapped`); unused by login.
-#[allow(dead_code)]
-fn wrap_master_key(
-    kek: &[u8; MASTER_KEY_LEN],
-    master_key: &[u8; MASTER_KEY_LEN],
-) -> Result<String> {
-    let (ct, nonce) = encrypt(kek, master_key.as_slice())?;
-    Ok(pack_wrapped(&BASE64.encode(ct), &BASE64.encode(&nonce[..])))
-}
-
-/// Unwrap (decrypt) the master key with the KEK. A GCM tag failure means the
-/// password is wrong.
-fn unwrap_master_key(kek: &[u8; MASTER_KEY_LEN], packed: &str) -> Result<[u8; MASTER_KEY_LEN]> {
-    let (ct_b64, nonce_b64) = unpack_wrapped(packed)?;
-    let ct = BASE64
-        .decode(&ct_b64)
-        .map_err(|e| anyhow!("b64 decode wrapped ct: {e}"))?;
-    let nonce_vec = BASE64
-        .decode(&nonce_b64)
-        .map_err(|e| anyhow!("b64 decode wrapped nonce: {e}"))?;
-    if nonce_vec.len() != NONCE_LEN {
-        return Err(anyhow!("invalid wrapped nonce length"));
-    }
-    let mut nonce = [0u8; NONCE_LEN];
-    nonce.copy_from_slice(&nonce_vec);
-    let pt = decrypt(kek, &ct, &nonce)?;
-    if pt.len() != MASTER_KEY_LEN {
-        return Err(anyhow!("decrypted master key has wrong length"));
-    }
-    let mut mk = [0u8; MASTER_KEY_LEN];
-    mk.copy_from_slice(&pt);
-    Ok(mk)
-}
-
 // ── Relay HTTP client ───────────────────────────────────────────────────
 
 #[derive(Deserialize)]
 struct AuthResponse {
     token: String,
     user_id: String,
-}
-
-#[derive(Deserialize)]
-struct ChallengeResponse {
-    salt: String,
-    kdf_salt: String,
-    argon2_params: String,
-    wrapped_master_key: String,
-    #[serde(default)]
-    login_idempotency_supported: bool,
 }
 
 #[derive(Deserialize)]
@@ -279,7 +155,7 @@ pub struct AccountClient {
 
 /// Check whether an account/relay error message indicates an invalid or
 /// expired account token (relay auth failure). Shared by Desktop, CLI, and
-/// the settings sync engine so they all react to the same relay wording.
+/// account surfaces so they all react to the same relay wording.
 pub fn error_indicates_expired_token(message: &str) -> bool {
     let lower = message.to_ascii_lowercase();
     lower.contains("http 401")
@@ -332,6 +208,61 @@ impl Default for AccountClient {
 }
 
 impl AccountClient {
+    /// Reuse the shared GitHub login used by the OpenBitFun marketplaces.
+    pub async fn login_with_identity(
+        &self,
+        relay_url: &str,
+        device: &DeviceIdentity,
+    ) -> Result<(
+        AccountSession,
+        openbitfun_product_domains::account::GitHubUser,
+    )> {
+        let mut identity =
+            crate::account_identity::AccountIdentityClient::from_environment().await?;
+        let profile = identity
+            .me()
+            .await?
+            .ok_or_else(|| anyhow!("Sign in with GitHub to continue"))?;
+        let access_token = identity
+            .access_token()
+            .await?
+            .ok_or_else(|| anyhow!("Sign in with GitHub to continue"))?;
+        let device_secret = super::session_store::device_secret(
+            relay_url,
+            &profile.user.github_id.to_string(),
+            &device.device_id,
+        )?;
+        let body = serde_json::json!({
+            "access_token": access_token,
+            "device_id": device.device_id,
+            "device_name": device.device_name,
+            "device_kind": "desktop",
+            "public_key": device_crypto::public_key_base64(&device_secret),
+            "request_id": uuid::Uuid::new_v4().to_string(),
+        });
+        let response = send_with_retry(
+            "GitHub relay login",
+            self.http
+                .post(Self::endpoint(relay_url, "/api/auth/login")?)
+                .json(&body),
+            RelayHttpRetry::IdempotentWrite,
+        )
+        .await?;
+        if !response.status().is_success() {
+            return Err(Self::into_buffered_error(response));
+        }
+        let auth: AuthResponse = response.json().await?;
+        if auth.user_id != profile.user.github_id.to_string() {
+            return Err(anyhow!(
+                "relay returned a different GitHub account identity"
+            ));
+        }
+        Ok((
+            AccountSession::new(auth.token, auth.user_id, device_secret),
+            profile.user,
+        ))
+    }
+
     pub fn new() -> Self {
         Self {
             http: relay_http_client(),
@@ -386,473 +317,24 @@ impl AccountClient {
 
     /// Fetch the login challenge and unwrap the master key locally.
     /// Does not call `/api/auth/login` and does not mint a token.
-    async fn unwrap_master_key_for_credentials(
-        &self,
-        relay_url: &str,
-        username: &str,
-        password: &str,
-    ) -> Result<([u8; MASTER_KEY_LEN], ChallengeResponse)> {
-        if username.trim().is_empty()
-            || username.len() > 128
-            || password.is_empty()
-            || password.len() > 1024
-        {
-            return Err(anyhow!("invalid account credential fields"));
-        }
-        let challenge_req = serde_json::json!({ "username": username });
-        let resp = send_with_retry(
-            "login challenge",
-            self.http
-                .post(Self::endpoint(relay_url, "/api/auth/login/challenge")?)
-                .json(&challenge_req),
-            RelayHttpRetry::SafeRead,
-        )
-        .await?;
-        if !resp.status().is_success() {
-            return Err(Self::into_buffered_error(resp));
-        }
-        let challenge: ChallengeResponse = resp.json().await?;
-
-        let salt = BASE64
-            .decode(&challenge.salt)
-            .map_err(|e| anyhow!("b64 decode salt: {e}"))?;
-        if salt.len() != SALT_LEN {
-            return Err(anyhow!("invalid account salt length"));
-        }
-        let params: KdfParams = serde_json::from_str(&challenge.argon2_params)
-            .map_err(|e| anyhow!("parse argon2_params: {e}"))?;
-
-        // GCM tag failure means the password is wrong.
-        let kek = derive_kek(password, &salt, &params)?;
-        let master_key = unwrap_master_key(&kek, &challenge.wrapped_master_key)
-            .map_err(|_| anyhow!("invalid username or password"))?;
-        Ok((master_key, challenge))
-    }
-
-    /// Verify username/password against an existing session without minting a
-    /// new relay token. Uses the same challenge + KEK unwrap path as `login`.
-    /// Succeeds only when the unwrapped master key matches `expected_master_key`.
-    pub async fn verify_password_for_master_key(
-        &self,
-        relay_url: &str,
-        username: &str,
-        password: &str,
-        expected_master_key: &[u8; MASTER_KEY_LEN],
-    ) -> Result<()> {
-        let (master_key, _) = self
-            .unwrap_master_key_for_credentials(relay_url, username, password)
-            .await?;
-        if master_key != *expected_master_key {
-            return Err(anyhow!("invalid username or password"));
-        }
-        Ok(())
-    }
-
-    /// Log in to an existing account. Fetches the KDF challenge, derives the KEK
-    /// locally, unwraps the master key (GCM failure ⇒ wrong password), then
-    /// verifies the password hash with the relay to obtain a token.
-    pub async fn login(
-        &self,
-        relay_url: &str,
-        username: &str,
-        password: &str,
-        device: &DeviceIdentity,
-    ) -> Result<AccountSession> {
-        let (master_key, challenge) = self
-            .unwrap_master_key_for_credentials(relay_url, username, password)
-            .await?;
-
-        let kdf_salt = BASE64
-            .decode(&challenge.kdf_salt)
-            .map_err(|e| anyhow!("b64 decode kdf_salt: {e}"))?;
-        if kdf_salt.len() != SALT_LEN {
-            return Err(anyhow!("invalid account KDF salt length"));
-        }
-        let params: KdfParams = serde_json::from_str(&challenge.argon2_params)
-            .map_err(|e| anyhow!("parse argon2_params: {e}"))?;
-
-        // Derive the server-verifiable hash and submit it.
-        let password_hash = derive_password_hash(password, &kdf_salt, &params)?;
-        let login_req = serde_json::json!({
-            "username": username,
-            "password_hash": password_hash,
-            "device_id": device.device_id,
-            "device_name": device.device_name,
-            "device_kind": "desktop",
-            "request_id": uuid::Uuid::new_v4().to_string(),
-        });
-        let request = self
-            .http
-            .post(Self::endpoint(relay_url, "/api/auth/login")?)
-            .json(&login_req);
-        // New relays persist request_id with the issued token, making an
-        // ambiguous response safe to replay. Older relays omit the challenge
-        // capability flag, so retain one-shot login behavior with them.
-        let resp = if challenge.login_idempotency_supported {
-            send_with_retry("account login", request, RelayHttpRetry::IdempotentWrite).await?
-        } else {
-            send_with_retry("account login", request, RelayHttpRetry::SingleAttempt).await?
-        };
-        if !resp.status().is_success() {
-            return Err(Self::into_buffered_error(resp));
-        }
-        let auth: AuthResponse = resp.json().await?;
-        Ok(AccountSession {
-            token: auth.token,
-            user_id: auth.user_id,
-            master_key,
-        })
-    }
-
-    // ── Encrypted sync (sessions + settings) ────────────────────────────────
-    //
-    // All sync payloads are encrypted with the in-memory master_key via
-    // AES-256-GCM before leaving this device. The relay stores opaque
-    // ciphertext only.
-
     fn auth_header(session: &AccountSession) -> String {
         format!("Bearer {}", session.token)
     }
 
-    /// Encrypt `plaintext` with the master key, returning base64 `(data, nonce)`.
-    fn seal(session: &AccountSession, plaintext: &str) -> Result<(String, String)> {
-        encrypt(&session.master_key, plaintext.as_bytes())
-            .map(|(ct, nonce)| (BASE64.encode(ct), BASE64.encode(&nonce[..])))
-            .map_err(|e| anyhow!("encrypt sync blob: {e}"))
-    }
-
-    /// Decrypt base64 `(data, nonce)` with the master key.
-    fn open(session: &AccountSession, data_b64: &str, nonce_b64: &str) -> Result<String> {
-        let ct = BASE64
-            .decode(data_b64)
-            .map_err(|e| anyhow!("b64 decode sync ct: {e}"))?;
-        let nonce_vec = BASE64
-            .decode(nonce_b64)
-            .map_err(|e| anyhow!("b64 decode sync nonce: {e}"))?;
-        if nonce_vec.len() != NONCE_LEN {
-            return Err(anyhow!("invalid sync nonce length"));
-        }
-        let mut nonce = [0u8; NONCE_LEN];
-        nonce.copy_from_slice(&nonce_vec);
-        let pt = decrypt(&session.master_key, &ct, &nonce)
-            .map_err(|e| anyhow!("decrypt sync blob: {e}"))?;
-        String::from_utf8(pt).map_err(|e| anyhow!("sync blob utf8: {e}"))
-    }
-
-    /// Upload (or replace) a single encrypted session blob for this device.
-    /// Returns the `version` written into the upsert body (client-generated LWW clock).
-    ///
-    /// When the relay reports HTTP 507 (account sync quota full), evict the
-    /// oldest remote session backup (excluding this id) and retry. This keeps
-    /// recent local backups flowing on relays that do not yet auto-evict.
-    pub async fn upload_session(
-        &self,
-        relay_url: &str,
-        session: &AccountSession,
-        session_id: &str,
-        plaintext: &str,
-    ) -> Result<i64> {
-        const MAX_QUOTA_RELIEF_ATTEMPTS: usize = 32;
-        let mut last_quota_error: Option<anyhow::Error> = None;
-        for _ in 0..MAX_QUOTA_RELIEF_ATTEMPTS {
-            match self
-                .upload_session_once(relay_url, session, session_id, plaintext)
-                .await
-            {
-                Ok(version) => return Ok(version),
-                Err(err) if is_insufficient_storage_error(&err) => {
-                    last_quota_error = Some(err);
-                    if !self
-                        .evict_oldest_remote_session(relay_url, session, session_id)
-                        .await?
-                    {
-                        break;
-                    }
-                }
-                Err(err) => return Err(err),
-            }
-        }
-        Err(last_quota_error.unwrap_or_else(|| {
-            anyhow!(
-                "relay returned HTTP 507 Insufficient Storage (the configured account or asset quota is full)"
-            )
-        }))
-    }
-
-    async fn upload_session_once(
-        &self,
-        relay_url: &str,
-        session: &AccountSession,
-        session_id: &str,
-        plaintext: &str,
-    ) -> Result<i64> {
-        let (data, nonce) = Self::seal(session, plaintext)?;
-        let version = chrono::Utc::now().timestamp_millis();
-        let body = serde_json::json!({
-            "session_id": session_id,
-            "encrypted_data": data,
-            "nonce": nonce,
-            "version": version,
-        });
-        let resp = send_with_retry(
-            "upload session",
-            self.http
-                .post(Self::endpoint(relay_url, "/api/sync/sessions")?)
-                .header("Authorization", Self::auth_header(session))
-                .json(&body),
-            RelayHttpRetry::IdempotentWrite,
-        )
-        .await?;
-        if !resp.status().is_success() {
-            return Err(Self::into_buffered_error(resp));
-        }
-        Ok(version)
-    }
-
-    /// Soft-delete the oldest remote sync session other than `keep_session_id`.
-    /// Returns `true` when a session was removed.
-    async fn evict_oldest_remote_session(
-        &self,
-        relay_url: &str,
-        session: &AccountSession,
-        keep_session_id: &str,
-    ) -> Result<bool> {
-        let mut entries = self
-            .list_session_entries(relay_url, session, 0)
-            .await?
-            .into_iter()
-            .filter(|entry| entry.session_id != keep_session_id)
-            .collect::<Vec<_>>();
-        if entries.is_empty() {
-            return Ok(false);
-        }
-        entries.sort_by(|a, b| {
-            a.version
-                .cmp(&b.version)
-                .then_with(|| a.session_id.cmp(&b.session_id))
-        });
-        let victim = entries.remove(0);
-        self.delete_session(relay_url, session, &victim.session_id)
-            .await?;
-        Ok(true)
-    }
-
-    /// List encrypted session blobs updated after `since` without decrypting.
-    /// `session_id` / `version` are plaintext metadata; payload stays sealed.
-    pub async fn list_session_entries(
-        &self,
-        relay_url: &str,
-        session: &AccountSession,
-        since: i64,
-    ) -> Result<Vec<ListedSessionEntry>> {
-        let mut url = Self::endpoint(relay_url, "/api/sync/sessions")?;
-        url.query_pairs_mut()
-            .append_pair("since", &since.max(0).to_string());
-        let resp = send_with_retry(
-            "list sessions",
-            self.http
-                .get(url)
-                .header("Authorization", Self::auth_header(session)),
-            RelayHttpRetry::SafeRead,
-        )
-        .await?;
-        if !resp.status().is_success() {
-            return Err(Self::into_buffered_error(resp));
-        }
-        let bytes = resp.bytes().await?;
-        let payload: SessionsListResponse = serde_json::from_slice(&bytes)
-            .map_err(|e| anyhow!("decode sessions list failed ({} bytes): {e}", bytes.len()))?;
-        Ok(payload
-            .sessions
-            .into_iter()
-            .map(|entry| ListedSessionEntry {
-                session_id: entry.session_id,
-                encrypted_data: entry.encrypted_data,
-                nonce: entry.nonce,
-                version: entry.version,
-            })
-            .collect())
-    }
-
-    /// Decrypt one listed session entry locally.
-    pub fn decrypt_session_entry(
-        session: &AccountSession,
-        entry: &ListedSessionEntry,
-    ) -> Result<FetchedSession> {
-        let plaintext = Self::open(session, &entry.encrypted_data, &entry.nonce)?;
-        Ok(FetchedSession {
-            session_id: entry.session_id.clone(),
-            plaintext,
-            version: entry.version,
-        })
-    }
-
-    /// Fetch encrypted session blobs updated after `since` (relay `version`).
-    /// Pass `since = 0` for a full list. Each entry is decrypted locally.
-    pub async fn fetch_sessions(
-        &self,
-        relay_url: &str,
-        session: &AccountSession,
-        since: i64,
-    ) -> Result<Vec<FetchedSession>> {
-        let entries = self.list_session_entries(relay_url, session, since).await?;
-        entries
-            .into_iter()
-            .map(|entry| Self::decrypt_session_entry(session, &entry))
-            .collect()
-    }
-
-    /// Fetch and decrypt a single session blob by id.
-    pub async fn fetch_session(
-        &self,
-        relay_url: &str,
-        session: &AccountSession,
-        session_id: &str,
-    ) -> Result<Option<FetchedSession>> {
-        let resp = send_with_retry(
-            "fetch session",
-            self.http
-                .get(Self::endpoint(
-                    relay_url,
-                    &format!("/api/sync/sessions/{}", urlencoding::encode(session_id)),
-                )?)
-                .header("Authorization", Self::auth_header(session)),
-            RelayHttpRetry::SafeRead,
-        )
-        .await?;
-        if resp.status() == reqwest::StatusCode::NOT_FOUND {
-            return Ok(None);
-        }
-        if !resp.status().is_success() {
-            return Err(Self::into_buffered_error(resp));
-        }
-        let entry: SessionEntry = resp.json().await?;
-        let plaintext = Self::open(session, &entry.encrypted_data, &entry.nonce)?;
-        Ok(Some(FetchedSession {
-            session_id: entry.session_id,
-            plaintext,
-            version: entry.version,
-        }))
-    }
-
-    /// Delete a session blob (tombstone) — used when a session is removed.
-    pub async fn delete_session(
-        &self,
-        relay_url: &str,
-        session: &AccountSession,
-        session_id: &str,
-    ) -> Result<()> {
-        let resp = send_with_retry(
-            "delete session",
-            self.http
-                .delete(Self::endpoint(
-                    relay_url,
-                    &format!("/api/sync/sessions/{}", urlencoding::encode(session_id)),
-                )?)
-                .header("Authorization", Self::auth_header(session)),
-            RelayHttpRetry::IdempotentWrite,
-        )
-        .await?;
-        if !resp.status().is_success() {
-            return Err(Self::into_buffered_error(resp));
-        }
-        Ok(())
-    }
-
-    /// Upload an encrypted settings blob (keyed by the user, not per-device).
-    /// Returns the version sent with the upload so callers can record a sync
-    /// cursor that matches what the relay actually stored.
-    pub async fn upload_settings(
-        &self,
-        relay_url: &str,
-        session: &AccountSession,
-        plaintext: &str,
-    ) -> Result<i64> {
-        let (data, nonce) = Self::seal(session, plaintext)?;
-        let version = chrono::Utc::now().timestamp_millis();
-        let body = serde_json::json!({
-            "encrypted_data": data,
-            "nonce": nonce,
-            "version": version,
-        });
-        let resp = send_with_retry(
-            "upload settings",
-            self.http
-                .post(Self::endpoint(relay_url, "/api/sync/settings")?)
-                .header("Authorization", Self::auth_header(session))
-                .json(&body),
-            RelayHttpRetry::IdempotentWrite,
-        )
-        .await?;
-        if !resp.status().is_success() {
-            return Err(Self::into_buffered_error(resp));
-        }
-        Ok(version)
-    }
-
-    /// Fetch and decrypt the settings blob. Returns `None` if no settings exist.
-    pub async fn fetch_settings(
-        &self,
-        relay_url: &str,
-        session: &AccountSession,
-    ) -> Result<Option<String>> {
-        Ok(self
-            .fetch_settings_with_version(relay_url, session)
-            .await?
-            .map(|b| b.plaintext))
-    }
-
-    /// Fetch and decrypt the settings blob, including the relay version.
-    /// The version lets the caller skip applying if the cloud hasn't changed
-    /// since the last pull.
-    pub async fn fetch_settings_with_version(
-        &self,
-        relay_url: &str,
-        session: &AccountSession,
-    ) -> Result<Option<SettingsBlob>> {
-        let resp = send_with_retry(
-            "fetch settings",
-            self.http
-                .get(Self::endpoint(relay_url, "/api/sync/settings")?)
-                .header("Authorization", Self::auth_header(session)),
-            RelayHttpRetry::SafeRead,
-        )
-        .await?;
-        if resp.status() == reqwest::StatusCode::NOT_FOUND {
-            return Ok(None);
-        }
-        if !resp.status().is_success() {
-            return Err(Self::into_buffered_error(resp));
-        }
-        let opt: Option<SettingsEntry> = resp.json().await?;
-        match opt {
-            None => Ok(None),
-            Some(entry) => {
-                let pt = Self::open(session, &entry.encrypted_data, &entry.nonce)?;
-                Ok(Some(SettingsBlob {
-                    plaintext: pt,
-                    version: entry.version,
-                }))
-            }
-        }
-    }
-
-    // ── Device RPC (browse/control other same-account devices) ────────────
-
-    /// Delegate a new token for the same account (for paired mobile/IM clients).
-    /// Returns the new token + user_id. The caller is responsible for securely
-    /// transmitting the token + master_key to the paired client.
+    /// Issue an account token for a paired controller.
     pub async fn delegate_token(
         &self,
         relay_url: &str,
         session: &AccountSession,
     ) -> Result<DelegateToken> {
+        let device_secret = super::device_crypto::generate_secret();
         let resp = send_with_retry(
             "delegate account token",
             self.http
                 .post(Self::endpoint(relay_url, "/api/auth/delegate")?)
-                .header("Authorization", Self::auth_header(session)),
-            RelayHttpRetry::IdempotentWrite,
+                .header("Authorization", Self::auth_header(session))
+                .json(&serde_json::json!({ "public_key": super::device_crypto::public_key_base64(&device_secret) })),
+            RelayHttpRetry::SingleAttempt,
         )
         .await?;
         if !resp.status().is_success() {
@@ -862,6 +344,7 @@ impl AccountClient {
         Ok(DelegateToken {
             token: auth.token,
             user_id: auth.user_id,
+            device_secret,
         })
     }
 
@@ -880,11 +363,13 @@ impl AccountClient {
         device_name: &str,
         device_kind: &str,
         request_id: uuid::Uuid,
+        device_secret: &[u8; 32],
     ) -> Result<ProvisionedDeviceToken> {
         let body = serde_json::json!({
             "device_id": device_id,
             "device_name": device_name,
             "device_kind": device_kind,
+            "public_key": device_crypto::public_key_base64(device_secret),
             "request_id": request_id.to_string(),
         });
         let resp = send_with_retry(
@@ -992,7 +477,9 @@ impl AccountClient {
         plaintext_command: &str,
     ) -> Result<String> {
         // Encrypt the command with the master key
-        let (data, nonce) = Self::seal(session, plaintext_command)?;
+        let (data, nonce) = session
+            .encrypt_for_peer(relay_url, target_device_id, plaintext_command)
+            .await?;
         let body = serde_json::json!({
             "encrypted_data": data,
             "nonce": nonce,
@@ -1012,7 +499,14 @@ impl AccountClient {
         }
         let entry: RpcResponseEntry = resp.json().await?;
         // Decrypt the response with the master key
-        Self::open(session, &entry.encrypted_data, &entry.nonce)
+        session
+            .decrypt_from_peer(
+                relay_url,
+                target_device_id,
+                &entry.encrypted_data,
+                &entry.nonce,
+            )
+            .await
     }
 }
 
@@ -1043,136 +537,9 @@ struct RpcResponseEntry {
     nonce: String,
 }
 
-#[derive(Deserialize)]
-struct SessionsListResponse {
-    sessions: Vec<SessionEntry>,
-}
-
-#[derive(Deserialize)]
-struct SessionEntry {
-    session_id: String,
-    encrypted_data: String,
-    nonce: String,
-    #[serde(default)]
-    version: i64,
-}
-
-fn is_insufficient_storage_error(err: &anyhow::Error) -> bool {
-    let msg = err.to_string();
-    msg.contains("HTTP 507")
-        || msg.contains("Insufficient Storage")
-        || msg.to_ascii_lowercase().contains("quota is full")
-}
-
-/// Decrypted session sync blob with relay version metadata.
-#[derive(Debug, Clone)]
-pub struct FetchedSession {
-    pub session_id: String,
-    pub plaintext: String,
-    pub version: i64,
-}
-
-/// Encrypted session list entry (`session_id`/`version` are not secret).
-#[derive(Debug, Clone)]
-pub struct ListedSessionEntry {
-    pub session_id: String,
-    pub encrypted_data: String,
-    pub nonce: String,
-    pub version: i64,
-}
-
-/// A settings blob with version metadata, returned by `fetch_settings_with_version`.
-#[derive(Debug, Clone)]
-pub struct SettingsBlob {
-    pub plaintext: String,
-    pub version: i64,
-}
-
-#[derive(Deserialize)]
-struct SettingsEntry {
-    encrypted_data: String,
-    nonce: String,
-    #[serde(default)]
-    version: i64,
-    #[serde(default)]
-    #[allow(dead_code)]
-    updated_at: i64,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn wrap_unwrap_round_trip() {
-        let params = KdfParams::default();
-        let mut salt = [0u8; SALT_LEN];
-        let mut master_key = [0u8; MASTER_KEY_LEN];
-        rand::thread_rng().fill_bytes(&mut salt);
-        rand::thread_rng().fill_bytes(&mut master_key);
-
-        let kek = derive_kek("correct-horse-battery", &salt, &params).unwrap();
-        let wrapped = wrap_master_key(&kek, &master_key).unwrap();
-        let recovered = unwrap_master_key(&kek, &wrapped).unwrap();
-        assert_eq!(recovered, master_key);
-    }
-
-    #[test]
-    fn wrong_password_fails_to_unwrap() {
-        let params = KdfParams::default();
-        let mut salt = [0u8; SALT_LEN];
-        let mut master_key = [0u8; MASTER_KEY_LEN];
-        rand::thread_rng().fill_bytes(&mut salt);
-        rand::thread_rng().fill_bytes(&mut master_key);
-
-        let kek = derive_kek("correct-password", &salt, &params).unwrap();
-        let wrapped = wrap_master_key(&kek, &master_key).unwrap();
-
-        let wrong_kek = derive_kek("wrong-password", &salt, &params).unwrap();
-        assert!(unwrap_master_key(&wrong_kek, &wrapped).is_err());
-    }
-
-    #[test]
-    fn kdf_params_round_trip() {
-        let params = KdfParams::default();
-        let json = serde_json::to_string(&params).unwrap();
-        let parsed: KdfParams = serde_json::from_str(&json).unwrap();
-        assert_eq!(parsed.m, params.m);
-        assert_eq!(parsed.t, params.t);
-        assert_eq!(parsed.p, params.p);
-        assert!(params.build().is_ok());
-        assert!(KdfParams {
-            m: u32::MAX,
-            t: 3,
-            p: 4,
-        }
-        .build()
-        .is_err());
-    }
-
-    #[test]
-    fn password_hash_matches_the_browser_argon2id_vector() {
-        let params = KdfParams {
-            m: 8 * 1024,
-            t: 1,
-            p: 1,
-        };
-        let salt = std::array::from_fn::<_, SALT_LEN, _>(|index| index as u8);
-        assert_eq!(
-            derive_password_hash("correct horse battery staple", &salt, &params).unwrap(),
-            "mu73UxPlhfSSwzxeEtgumtJTt914Yy1Tfomc1O3deJw="
-        );
-    }
-
-    #[test]
-    fn detects_insufficient_storage_errors_for_quota_relief() {
-        assert!(is_insufficient_storage_error(&anyhow!(
-            "relay returned HTTP 507 Insufficient Storage (the configured account or asset quota is full)"
-        )));
-        assert!(!is_insufficient_storage_error(&anyhow!(
-            "relay returned HTTP 413 Payload Too Large"
-        )));
-    }
 
     #[test]
     fn relay_endpoint_accepts_http_servers_and_rejects_ambiguous_urls() {
@@ -1207,33 +574,5 @@ mod tests {
             build_relay_websocket_url("http://127.0.0.1:3000/relay").unwrap(),
             "ws://127.0.0.1:3000/relay/ws"
         );
-    }
-
-    #[test]
-    fn account_history_export_waits_for_the_durable_import_marker() {
-        let mut metadata = SessionMetadata::new(
-            "session".to_string(),
-            "Session".to_string(),
-            "agentic".to_string(),
-            "auto".to_string(),
-        );
-        metadata.turn_count = 3;
-
-        assert!(ensure_relay_session_history_exportable(&metadata).is_ok());
-        mark_relay_session_history_import_pending(&mut metadata);
-        assert!(!relay_session_history_import_is_complete(&metadata));
-        assert!(ensure_relay_session_history_exportable(&metadata).is_err());
-
-        mark_relay_session_history_import_complete(&mut metadata);
-        assert!(relay_session_history_import_is_complete(&metadata));
-        assert!(ensure_relay_session_history_exportable(&metadata).is_ok());
-        let exported = relay_session_export_metadata(&metadata, 2);
-        assert_eq!(metadata.turn_count, 3);
-        assert_eq!(exported.turn_count, 2);
-
-        metadata.custom_metadata = Some(serde_json::json!({
-            "relayTurnsImportState": "unknown"
-        }));
-        assert!(ensure_relay_session_history_exportable(&metadata).is_err());
     }
 }

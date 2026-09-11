@@ -1,4 +1,4 @@
-import type { TFunction } from 'i18next';
+import type { UseI18nReturn } from '@/infrastructure/i18n/hooks/useI18n';
 import type { UserToolGroup, UserToolGroupsConfig } from '@/infrastructure/config/types';
 import type { DynamicToolInfo } from '@/shared/types/agent-api';
 import { isUserSelectableToolName } from '@/shared/utils/toolVisibility';
@@ -164,7 +164,7 @@ function dynamicGroupLabel(tool: GroupableTool): string {
 export function resolveToolGroups(
   tools: GroupableTool[],
   userGroups: UserToolGroup[],
-  t: TFunction<'scenes/agents'>,
+  t: UseI18nReturn['t'],
 ): ResolvedToolGroup[] {
   const selectableTools = activeTools(tools);
   const toolByName = new Map(selectableTools.map((tool) => [tool.name, tool]));
@@ -276,7 +276,7 @@ export function resolveToolGroupSummary(
   tools: GroupableTool[],
   userGroups: UserToolGroup[],
   selectedToolNames: readonly string[],
-  t: TFunction<'scenes/agents'>,
+  t: UseI18nReturn['t'],
 ): ResolvedToolGroup[] {
   const selected = new Set(normalizeToolNames(selectedToolNames));
   const groups = resolveToolGroups(tools, userGroups, t);

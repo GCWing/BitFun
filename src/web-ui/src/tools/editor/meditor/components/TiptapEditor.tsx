@@ -1,3 +1,4 @@
+import { useResourceFileAccess, type ResourceFileAccess } from '@/infrastructure/api/ResourceFileContext';
 import React, {
   useCallback,
   useEffect,
@@ -111,6 +112,7 @@ function getTopLevelBlockIds(doc: JSONContent | null | undefined): string[] {
 async function resolveEditorLocalImages(
   root: HTMLDivElement | null,
   basePath?: string,
+  fileAccess?: ResourceFileAccess | null,
 ): Promise<void> {
   const container = root?.querySelector<HTMLElement>('.ProseMirror');
   if (!container) {
@@ -131,7 +133,7 @@ async function resolveEditorLocalImages(
     }
 
     const absolutePath = resolveImagePath(src, basePath);
-    const cachedDataUrl = getCachedLocalImageDataUrl(absolutePath);
+    const cachedDataUrl = getCachedLocalImageDataUrl(absolutePath, fileAccess);
     img.setAttribute('data-local-image', 'true');
     img.setAttribute('data-local-path', absolutePath);
     img.setAttribute('data-original-src', src);
@@ -152,7 +154,7 @@ async function resolveEditorLocalImages(
     }
   });
 
-  await loadLocalImages(container);
+  await loadLocalImages(container, fileAccess);
 }
 
 type InlineAiStatus = 'idle' | 'submitting' | 'streaming' | 'ready' | 'error';
@@ -399,6 +401,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
   filePath,
   basePath,
 }, ref) => {
+  const fileAccess = useResourceFileAccess();
   const { t } = useI18n('tools');
   const { t: tCommon } = useI18n('common');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -551,7 +554,11 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       TaskItem.configure({
         nested: true,
       }),
-      Link.configure({
+      Link.extend({
+        addAttributes() {
+          return { ...this.parent?.(), title: { default: null } };
+        },
+      }).configure({
         openOnClick: false,
       }),
       // Placeholder decorations keep hints outside the document mutation path.
@@ -568,6 +575,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       MarkdownAlignmentExtension,
       BlockIdExtension,
       MarkdownImage.configure({
+        fileAccess,
         editLabel: t('editor.markdownEditor.editImage'),
         doneLabel: t('editor.markdownEditor.finishBlockEdit'),
         srcLabel: t('editor.markdownEditor.imageAddress'),
@@ -592,6 +600,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       }),
       // Keep raw/render-only fallbacks for HTML we still can't round-trip safely.
       RenderOnlyBlock.configure({
+        fileAccess,
         typeLabels: {
           math: t('editor.markdownEditor.blockTypes.math'),
           mermaid: 'Mermaid',
@@ -607,6 +616,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
         basePath,
       }),
       RawHtmlBlock.configure({
+        fileAccess,
         label: 'HTML',
         editLabel: t('editor.markdownEditor.editBlockSource'),
         doneLabel: t('editor.markdownEditor.finishBlockEdit'),
@@ -723,7 +733,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       do {
         rerunRequested = false;
         try {
-          await resolveEditorLocalImages(rootRef.current, basePath);
+          await resolveEditorLocalImages(rootRef.current, basePath, fileAccess);
         } catch (error) {
           if (!cancelled) {
             log.error('Failed to resolve editor local images', { error, basePath });
@@ -763,7 +773,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
       cancelled = true;
       observer?.disconnect();
     };
-  }, [basePath, editor, value]);
+  }, [basePath, editor, value, fileAccess]);
 
   useEffect(() => {
     if (!editor || value === lastReceivedValueRef.current) return;
@@ -1100,6 +1110,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
           status: inlineAiState.status,
           response: inlineAiState.response,
           error: inlineAiState.error,
+          fileAccess,
           basePath,
           canAccept: (
             inlineAiState.status === 'ready' &&
@@ -1131,6 +1142,7 @@ export const TiptapEditor = React.forwardRef<TiptapEditorHandle, TiptapEditorPro
     handleAcceptInlineContinue,
     handleRejectInlineContinue,
     handleRetryInlineContinue,
+    fileAccess,
     inlineAiState,
     t,
     tCommon,

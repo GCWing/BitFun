@@ -54,6 +54,7 @@ impl TelegramBot {
         }
     }
 
+    #[cfg(test)]
     pub fn new(config: TelegramConfig) -> Self {
         Self::new_fenced(config, BotRuntimeFence::standalone())
     }
@@ -129,56 +130,55 @@ impl TelegramBot {
             .await
     }
 
-    /// Send a local file to a Telegram chat as a document attachment.
-    /// Caller is expected to pre-check the size against `MAX_TELEGRAM_FILE_BYTES`.
-    async fn send_file_as_document(&self, chat_id: i64, file_path: &str) -> Result<()> {
-        self.api.send_file_as_document(chat_id, file_path).await
-    }
-
     /// Scan `text` for downloadable file references and push every matching
     /// file directly to the Telegram chat as an attachment.  Files exceeding
     /// `MAX_TELEGRAM_FILE_BYTES` are skipped with a brief notice; per-file
     /// upload failures are reported as plain-text replies.
-    async fn notify_files_ready(&self, chat_id: i64, text: &str) {
+    async fn notify_files_ready(
+        &self,
+        chat_id: i64,
+        session_id: &str,
+        remote_target: Option<&super::command_router::RemoteBotTarget>,
+        text: &str,
+        identity_epoch: u64,
+    ) {
         let language = current_bot_language().await;
-        let workspace_root = {
-            let states = self.chat_states.read().await;
-            states.get(&chat_id).and_then(|s| s.active_workspace_path())
-        };
-        let files = super::collect_auto_push_files(
-            text,
-            workspace_root.as_deref().map(std::path::Path::new),
-        );
-        if files.is_empty() {
-            return;
-        }
-
-        // Skip the "正在为你发送 N 个文件……" intro: the document message
-        // itself is visible in the chat; only error / size-skip notices
-        // below need to surface to the user.
-        for file in files {
-            if file.size > MAX_TELEGRAM_FILE_BYTES {
-                let notice = super::auto_push_skip_too_large_message(
-                    language,
-                    &file.name,
-                    file.size,
-                    MAX_TELEGRAM_FILE_BYTES,
-                );
-                let _ = self.send_message(chat_id, &notice).await;
-                continue;
+        for reference in super::extract_output_file_references(text) {
+            if !self.runtime_fence.is_lifecycle_current()
+                || self.runtime_fence.identity_epoch() != identity_epoch
+            {
+                return;
             }
-            match self.send_file_as_document(chat_id, &file.abs_path).await {
-                Ok(()) => info!(
-                    "Telegram auto-pushed file to chat {chat_id}: {}",
-                    file.abs_path
-                ),
-                Err(e) => {
-                    warn!(
-                        "Telegram auto-push failed for {} in chat {chat_id}: {e}",
-                        file.name
-                    );
-                    let notice =
-                        super::auto_push_failed_message(language, &file.name, &e.to_string());
+            let content = super::read_output_file(
+                session_id,
+                remote_target,
+                &reference,
+                MAX_TELEGRAM_FILE_BYTES,
+                &|| {
+                    self.runtime_fence.is_lifecycle_current()
+                        && self.runtime_fence.identity_epoch() == identity_epoch
+                },
+            )
+            .await;
+            if !self.runtime_fence.is_lifecycle_current()
+                || self.runtime_fence.identity_epoch() != identity_epoch
+            {
+                return;
+            }
+            let result = match content {
+                Ok(content) => self
+                    .api
+                    .send_artifact(chat_id, content)
+                    .await
+                    .map_err(|error| error.to_string()),
+                Err(error) => Err(error),
+            };
+            if let Err(error) = result {
+                warn!("Telegram output file delivery failed: {error}");
+                let notice = super::auto_push_failed_message(language, &reference, &error);
+                if self.runtime_fence.is_lifecycle_current()
+                    && self.runtime_fence.identity_epoch() == identity_epoch
+                {
                     let _ = self.send_message(chat_id, &notice).await;
                 }
             }
@@ -375,6 +375,7 @@ impl TelegramBot {
             return;
         }
         let mut states = self.chat_states.write().await;
+        let command_identity_epoch = self.runtime_fence.identity_epoch();
         self.runtime_fence.reconcile_states(&mut states);
         let state = states.entry(chat_id).or_insert_with(|| {
             let mut s = BotChatState::new(chat_id.to_string());
@@ -417,6 +418,9 @@ impl TelegramBot {
             return;
         }
 
+        if self.runtime_fence.identity_epoch() != command_identity_epoch {
+            return;
+        }
         let cmd = parse_command(text);
         let result = handle_command(state, cmd, images).await;
 
@@ -426,13 +430,18 @@ impl TelegramBot {
         }
         drop(states);
 
-        if !self.runtime_fence.is_lifecycle_current() {
+        if !self.runtime_fence.is_lifecycle_current()
+            || self.runtime_fence.identity_epoch() != command_identity_epoch
+        {
             return;
         }
 
         self.send_handle_result(chat_id, &result).await;
 
         if let Some(forward) = result.forward_to_session {
+            let output_session_id = forward.session_id.clone();
+            let output_remote_target = forward.remote_target.clone();
+            let output_identity_epoch = command_identity_epoch;
             let bot = self.clone();
             tokio::spawn(async move {
                 let interaction_bot = bot.clone();
@@ -441,7 +450,7 @@ impl TelegramBot {
                         let interaction_bot = interaction_bot.clone();
                         Box::pin(async move {
                             interaction_bot
-                                .deliver_interaction(chat_id, interaction)
+                                .deliver_interaction(chat_id, interaction, output_identity_epoch)
                                 .await;
                         })
                     });
@@ -449,22 +458,63 @@ impl TelegramBot {
                 let sender: BotMessageSender = std::sync::Arc::new(move |text: String| {
                     let msg_bot = msg_bot.clone();
                     Box::pin(async move {
+                        if !msg_bot.runtime_fence.is_lifecycle_current()
+                            || msg_bot.runtime_fence.identity_epoch() != output_identity_epoch
+                        {
+                            return;
+                        }
                         msg_bot.send_message(chat_id, &text).await.ok();
                     })
                 });
                 let verbose_mode = load_bot_persistence().verbose_mode;
-                let result =
-                    execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode)
+                let result = execute_forwarded_turn(
+                    forward,
+                    Some(handler),
+                    Some(sender),
+                    verbose_mode,
+                    &bot.runtime_fence,
+                    output_identity_epoch,
+                )
+                .await;
+                if !bot.runtime_fence.is_lifecycle_current()
+                    || bot.runtime_fence.identity_epoch() != output_identity_epoch
+                {
+                    return;
+                }
+                if let Some(next) = super::retire_remote_interactions(
+                    &bot.chat_states,
+                    &chat_id,
+                    output_remote_target.as_ref(),
+                    &result.completed_remote_tools,
+                    &bot.runtime_fence,
+                    output_identity_epoch,
+                )
+                .await
+                {
+                    bot.deliver_interaction(chat_id, next, output_identity_epoch)
                         .await;
+                }
                 if !result.display_text.is_empty() {
                     bot.send_message(chat_id, &result.display_text).await.ok();
                 }
-                bot.notify_files_ready(chat_id, &result.full_text).await;
+                bot.notify_files_ready(
+                    chat_id,
+                    &output_session_id,
+                    output_remote_target.as_ref(),
+                    &result.full_text,
+                    output_identity_epoch,
+                )
+                .await;
             });
         }
     }
 
-    async fn deliver_interaction(&self, chat_id: i64, interaction: BotInteractiveRequest) {
+    async fn deliver_interaction(
+        &self,
+        chat_id: i64,
+        interaction: BotInteractiveRequest,
+        identity_epoch: u64,
+    ) {
         if !self.runtime_fence.is_lifecycle_current() {
             return;
         }
@@ -475,7 +525,12 @@ impl TelegramBot {
             s.paired = true;
             s
         });
-        super::command_router::apply_interactive_request(state, &interaction);
+        if self.runtime_fence.identity_epoch() != identity_epoch {
+            return;
+        }
+        if !super::command_router::apply_interactive_request(state, &interaction) {
+            return;
+        }
         self.persist_chat_state(chat_id, state).await;
         drop(states);
 
@@ -491,6 +546,7 @@ impl TelegramBot {
     async fn persist_chat_state(&self, chat_id: i64, state: &BotChatState) {
         let snapshot = self.runtime_fence.persistence_snapshot(state);
         let connection = SavedBotConnection {
+            account_user_id: self.runtime_fence.account_user_id(),
             bot_type: "telegram".to_string(),
             chat_id: chat_id.to_string(),
             config: BotConfig::Telegram {

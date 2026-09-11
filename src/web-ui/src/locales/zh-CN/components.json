@@ -41,6 +41,7 @@
     "emptyError": "此字段不能为空"
   },
   "markdown": {
+    "imageUnavailable": "图片预览加载失败",
     "remoteImageUnavailable": "派发任务暂不支持图片预览",
     "copySuccess": "复制成功",
     "copyCode": "复制代码",
@@ -627,5 +628,15 @@
     "selectProjectDirectory": "选择要打开的项目目录"
   },
   "hide": "隐藏",
-  "show": "显示"
+  "show": "显示",
+  "workbench": {
+    "dragToPopOut": "拖到顶部弹出",
+    "releaseToPopOut": "松开以弹出",
+    "save": "保存",
+    "discard": "放弃修改",
+    "cancel": "取消",
+    "unsavedMessage": "关闭前保存“{{title}}”的更改？",
+    "closeOtherContent": "关闭其他内容标签",
+    "closeAllContent": "关闭所有内容标签"
+  }
 }

@@ -35,6 +35,11 @@ public object MessageFileReferenceProjector {
     /** As many cards as fit under a message without becoming the message. */
     public const val DEFAULT_LIMIT: Int = 4
 
+    private val OUTPUT_EXTENSIONS: Set<String> = setOf(
+        "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "avif", "ico", "html", "htm",
+        "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "tsv", "zip", "mp4", "webm", "mp3", "wav",
+    )
+
     // The projection is about which files a turn named, not about which session
     // is open, so it resolves against a context that carries neither.
     private val CONTEXT = FilePreviewTargetContext(
@@ -43,7 +48,7 @@ public object MessageFileReferenceProjector {
         controlTargetEpoch = 0,
     )
 
-    private val BARE_REFERENCE = Regex("""computer://[^\s)\]}>"']+""")
+    private val BARE_REFERENCE = Regex("""(?:computer|file|openbitfun)://[^\s)\]}>"']+""")
 
     public fun project(source: String): List<MessageFileReference> = project(source, DEFAULT_LIMIT)
 
@@ -82,9 +87,10 @@ public object MessageFileReferenceProjector {
         references: MutableList<MessageFileReference>,
         seen: MutableSet<String>,
     ) {
-        // Only the desktop's own scheme: an `http` link is a link, and a bare
-        // relative path in prose is far more often a word than a file.
-        if (!reference.trim().lowercase().startsWith("computer://")) return
+        val lower = reference.trim().lowercase()
+        val explicit = listOf("computer://", "file:", "openbitfun://runtime/", "openbitfun://current-session/").any(lower::startsWith)
+        val extension = lower.substringBefore('#').substringAfterLast('.', "")
+        if (!explicit && extension !in OUTPUT_EXTENSIONS) return
         val resolution = FileTargetResolver.resolve(reference, "", CONTEXT)
         val target = resolution.target ?: return
         if (resolution.kind != FileReferenceKind.REMOTE_WORKSPACE_FILE) return

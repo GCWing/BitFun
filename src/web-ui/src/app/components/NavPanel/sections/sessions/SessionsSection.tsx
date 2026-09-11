@@ -43,7 +43,11 @@ import {
 import { stateMachineManager } from '@/flow_chat/state-machine';
 import { sessionNavStatusService } from '@/flow_chat/services/sessionNavStatusService';
 import { i18nService } from '@/infrastructure/i18n';
-import { resolveSessionTitle } from '@/flow_chat/utils/sessionTitle';
+import { isDefaultSessionTitle, resolveSessionTitle } from '@/flow_chat/utils/sessionTitle';
+import { useSessionTitleNumbers } from '@/flow_chat/hooks/useSessionTitleNumbers';
+import { SessionTitleNumber } from '@/flow_chat/components/SessionTitleNumber';
+import { useSessionComposerStore } from '@/flow_chat/store/sessionComposerStore';
+import { getActiveSurfaceId, surfaceScopedKey } from '@/infrastructure/peer-device/deviceSurface';
 import { isSessionNavRowActive } from './sessionNavSelection';
 import { isSessionRowPointerTarget } from './sessionOpenPointer';
 import {
@@ -97,7 +101,6 @@ const log = createLogger('SessionsSection');
 const ScheduledJobsModal = lazy(() => import('@/app/components/scheduled-jobs/ScheduledJobsModal'));
 const WorkspaceSessionBatchModal = lazy(() => import('../workspaces/WorkspaceSessionBatchModal'));
 
-type SessionMode = 'code' | 'cowork' | 'claw';
 type HistoryOpenIntentDispatchResult = 'none' | 'dispatched' | 'already-pending';
 
 /** Page size for the fully-expanded (level 2) session list. */
@@ -109,18 +112,20 @@ const SESSIONS_LEVEL_2_PAGE = 200;
  */
 const SESSIONS_BUFFER_PREFETCH_DELAY_MS = 800;
 
-const escapeRegExp = (value: string): string =>
-  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const resolveSessionModeType = (session: Session): SessionMode => {
-  const normalizedMode = session.mode?.toLowerCase();
-  if (normalizedMode === 'cowork') return 'cowork';
-  if (normalizedMode === 'claw') return 'claw';
-  return 'code';
-};
-
 const getTitle = (session: Session): string =>
   resolveSessionTitle(session, (key, options) => i18nService.t(key, options));
+
+function DefaultSessionTitlePreview({ sessionId, createdAt }: Pick<Session, 'sessionId' | 'createdAt'>) {
+  const draft = useSessionComposerStore(state =>
+    state.drafts[surfaceScopedKey(getActiveSurfaceId(), sessionId)]?.value,
+  );
+  const firstLine = draft?.trim().split(/\r?\n/, 1)[0];
+  return (
+    <div className="openbitfun-nav-panel__inline-item-tooltip-meta">
+      {firstLine || i18nService.formatDate(createdAt, { dateStyle: 'medium', timeStyle: 'short' })}
+    </div>
+  );
+}
 
 const countTopLevelSessionsInScope = (
   sessions: Iterable<Session>,
@@ -1184,31 +1189,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
     [activeSessionId, dispatchHistoryOpenIntentForSession, editingSessionId],
   );
 
-  const resolveSessionTitle = useCallback(
-    (session: Session): string => {
-      const rawTitle = getTitle(session);
-      const newSessionPrefixes = Array.from(
-        new Set([
-          t('nav.sessions.newSession'),
-          i18nService.t('nav.sessions.newSession', { lng: 'en-US' }),
-          i18nService.t('nav.sessions.newSession', { lng: 'zh-CN' }),
-          i18nService.t('nav.sessions.newSession', { lng: 'zh-TW' }),
-        ].filter((value): value is string => Boolean(value)))
-      );
-      const matched = rawTitle.match(
-        new RegExp(`^(?:${newSessionPrefixes.map(escapeRegExp).join('|')})\\s*(\\d+)$`, 'i')
-      );
-      if (!matched) return rawTitle;
-
-      const mode = resolveSessionModeType(session);
-      const label =
-        mode === 'claw'
-          ? t('nav.sessions.newClawSession')
-          : t('nav.sessions.newSession');
-      return `${label} ${matched[1]}`;
-    },
-    [t]
-  );
+  const resolveSessionTitle = getTitle;
+  const titleNumbers = useSessionTitleNumbers(flowChatState.sessions);
 
   const handleMenuOpen = useCallback(
     (e: React.MouseEvent, sessionId: string) => {
@@ -1572,6 +1554,9 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 ? relationship.kind
                 : null;
           const sessionTitle = resolveSessionTitle(session);
+          const titleNumber = titleNumbers.get(session.sessionId);
+          const displayTitle = titleNumber ? `${sessionTitle} ${titleNumber}` : sessionTitle;
+          const isDefaultTitle = isDefaultSessionTitle(session);
           const sessionWorkspaceScope = workspaceScopes?.find(scope => sessionBelongsToWorkspaceNavRow(
             session,
             scope.workspacePath,
@@ -1627,6 +1612,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               })
             : null;
           const showRichTooltip =
+            isDefaultTitle ||
             Boolean(sessionWorkspaceScope) ||
             showAssistantInTooltip ||
             isChildSession ||
@@ -1634,7 +1620,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
             isDispatched;
           const tooltipContent = showRichTooltip ? (
             <div className="openbitfun-nav-panel__inline-item-tooltip">
-              <div className="openbitfun-nav-panel__inline-item-tooltip-title">{sessionTitle}</div>
+              <div className="openbitfun-nav-panel__inline-item-tooltip-title">{displayTitle}</div>
+              {isDefaultTitle ? (
+                <DefaultSessionTitlePreview sessionId={session.sessionId} createdAt={session.createdAt} />
+              ) : null}
               {sessionWorkspaceScope ? (
                 <div className="openbitfun-nav-panel__inline-item-tooltip-meta">
                   {sessionWorkspaceScope.workspaceName}
@@ -1716,6 +1705,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                 openMenuSessionId === session.sessionId && 'menuOpen',
               ].filter(Boolean).join(' ') || undefined}
               data-testid="nav-session-item"
+              aria-label={displayTitle}
               data-session-id={session.sessionId}
               data-session-kind={relationship.kind}
               data-session-level={String(level)}
@@ -1773,7 +1763,10 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                   <span className="openbitfun-nav-panel__inline-item-main" data-openbitfun-component="sessions-section" data-openbitfun-part="rowMain">
                     <span className="openbitfun-nav-panel__inline-item-copy">
                       <span className="openbitfun-nav-panel__inline-item-primary">
-                        <OverflowText behavior="marquee" title="" className="openbitfun-nav-panel__inline-item-label">{sessionTitle}</OverflowText>
+                        <span className="openbitfun-nav-panel__inline-item-title">
+                          <OverflowText behavior="marquee" title="" className="openbitfun-nav-panel__inline-item-label">{sessionTitle}</OverflowText>
+                          <SessionTitleNumber number={titleNumber} />
+                        </span>
                     {isChildSession ? (
                       <span className="openbitfun-nav-panel__inline-item-btw-badge">{childSessionBadge}</span>
                     ) : null}

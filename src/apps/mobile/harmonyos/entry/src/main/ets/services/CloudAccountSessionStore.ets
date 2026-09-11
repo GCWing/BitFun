@@ -1,3 +1,4 @@
+import { GitHubAccountProfile, readCachedGitHubProfile } from './GitHubAccountProfile';
 import { huks } from '@kit.UniversalKeystoreKit';
 import { preferences } from '@kit.ArkData';
 import { Encoding } from './Encoding';
@@ -5,8 +6,8 @@ import { HarmonyUpgradeIdentityContract } from './HarmonyUpgradeIdentityContract
 import { OhosError } from './OhosError';
 
 const STORE_NAME: string = HarmonyUpgradeIdentityContract.CLOUD_ACCOUNT_STORE;
-const CIPHER_KEY: string = 'session_cipher';
-const IV_KEY: string = 'session_iv';
+const CIPHER_KEY: string = 'github_device_session_v1_cipher';
+const IV_KEY: string = 'github_device_session_v1_iv';
 const HUKS_ALIAS: string = HarmonyUpgradeIdentityContract.CLOUD_ACCOUNT_HUKS_ALIAS;
 
 export interface PersistedCloudAccountSession {
@@ -22,6 +23,7 @@ export interface PersistedCloudAccountSession {
 /** Persists only an HUKS-encrypted account session, never plaintext secrets. */
 export class CloudAccountSessionStore {
   private store?: preferences.Preferences;
+  private deviceKeyWork?: Promise<Uint8Array>;
 
   async init(context: Context): Promise<void> {
     try {
@@ -31,7 +33,40 @@ export class CloudAccountSessionStore {
     }
   }
 
+  async deviceSecret(): Promise<Uint8Array> {
+    if (!this.deviceKeyWork) this.deviceKeyWork = this.loadOrCreateDeviceSecret();
+    try { return new Uint8Array(await this.deviceKeyWork); }
+    catch (err) { this.deviceKeyWork = undefined; throw OhosError.wrap('device identity', err); }
+  }
+
+  private async loadOrCreateDeviceSecret(): Promise<Uint8Array> {
+    const value = await this.readSealed('device_private_key_v1_cipher', 'device_private_key_v1_iv');
+    if (value) {
+      const secret = Encoding.base64ToBytes(value);
+      if (secret.length !== 32) throw new Error('Stored device identity is invalid.');
+      return secret;
+    }
+    const previous = await this.load();
+    const secret = previous ? Encoding.base64ToBytes(previous.masterKey) : Encoding.randomBytes(32);
+    if (secret.length !== 32) throw new Error('Stored device identity is invalid.');
+    await this.writeSealed('device_private_key_v1_cipher', 'device_private_key_v1_iv', Encoding.bytesToBase64(secret));
+    return secret;
+  }
+
+  async loadProfile(userId: string): Promise<GitHubAccountProfile | undefined> {
+    const text = await this.readSealed(`github_profile_${userId}_v1_cipher`, `github_profile_${userId}_v1_iv`);
+    return readCachedGitHubProfile(userId, text || '');
+  }
+
+  async saveProfile(profile: GitHubAccountProfile): Promise<void> {
+    await this.writeSealed(`github_profile_${profile.userId}_v1_cipher`, `github_profile_${profile.userId}_v1_iv`, JSON.stringify(profile));
+  }
+
   async save(session: PersistedCloudAccountSession): Promise<void> {
+    await this.writeSealed(CIPHER_KEY, IV_KEY, JSON.stringify(session));
+  }
+
+  private async writeSealed(cipherKey: string, ivKey: string, plaintext: string): Promise<void> {
     try {
       const store = this.requireStore();
       await this.ensureKey();
@@ -40,13 +75,13 @@ export class CloudAccountSessionStore {
       const handle = await huks.initSession(HUKS_ALIAS, options);
       const encrypted = await huks.finishSession(handle.handle, {
         properties: options.properties,
-        inData: Encoding.utf8ToBytes(JSON.stringify(session))
+        inData: Encoding.utf8ToBytes(plaintext)
       });
       if (!encrypted.outData || encrypted.outData.length === 0) {
         throw new Error('Cloud account session encryption failed.');
       }
-      await store.put(CIPHER_KEY, Encoding.bytesToBase64(encrypted.outData));
-      await store.put(IV_KEY, Encoding.bytesToBase64(iv));
+      await store.put(cipherKey, Encoding.bytesToBase64(encrypted.outData));
+      await store.put(ivKey, Encoding.bytesToBase64(iv));
       await store.flush();
     } catch (err) {
       throw OhosError.wrap('cloud account session save', err);
@@ -54,10 +89,15 @@ export class CloudAccountSessionStore {
   }
 
   async load(): Promise<PersistedCloudAccountSession | undefined> {
+    const text = await this.readSealed(CIPHER_KEY, IV_KEY);
+    return text ? JSON.parse(text) as PersistedCloudAccountSession : undefined;
+  }
+
+  private async readSealed(cipherKey: string, ivKey: string): Promise<string | undefined> {
     try {
       const store = this.requireStore();
-      const cipher = await store.get(CIPHER_KEY, '');
-      const ivText = await store.get(IV_KEY, '');
+      const cipher = await store.get(cipherKey, '');
+      const ivText = await store.get(ivKey, '');
       if (typeof cipher !== 'string' || typeof ivText !== 'string' || cipher.length === 0 || ivText.length === 0) {
         return undefined;
       }
@@ -71,7 +111,7 @@ export class CloudAccountSessionStore {
       if (!decrypted.outData) {
         return undefined;
       }
-      return JSON.parse(Encoding.bytesToUtf8(decrypted.outData)) as PersistedCloudAccountSession;
+      return Encoding.bytesToUtf8(decrypted.outData);
     } catch (err) {
       throw OhosError.wrap('cloud account session load', err);
     }

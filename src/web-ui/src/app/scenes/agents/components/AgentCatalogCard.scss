@@ -1,0 +1,109 @@
+.agent-catalog-card {
+  &__surface {
+    width: 100%;
+    min-height: 168px;
+    cursor: pointer;
+    border-color: var(--openbitfun-color-border-subtle);
+    background-clip: border-box;
+    transition:
+      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+
+    &:hover {
+      background-color: var(--openbitfun-color-surface-subtle);
+    }
+
+    &:active {
+      background-color: var(--openbitfun-color-action-neutral-surface-pressed);
+    }
+
+    &:focus-visible {
+      outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+      outline-offset: var(--openbitfun-focus-offset);
+    }
+  }
+
+  &__header {
+    gap: var(--openbitfun-space-3);
+  }
+
+  &__icon {
+    display: inline-flex;
+    align-items: center;
+    min-height: calc(var(--openbitfun-type-heading-card-font-size) * var(--openbitfun-type-heading-card-line-height));
+    color: var(--openbitfun-color-content-secondary);
+  }
+
+  &__title {
+    width: 100%;
+    min-width: 0;
+  }
+
+  &__identity {
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-meta-font-size);
+    line-height: var(--openbitfun-type-meta-line-height);
+  }
+
+  &__description {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  &__footer {
+    flex-wrap: wrap;
+  }
+
+  &__metrics {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--openbitfun-space-1) var(--openbitfun-space-3);
+    min-width: 0;
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-meta-font-size);
+    line-height: var(--openbitfun-type-meta-line-height);
+  }
+
+  &__metric {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--openbitfun-space-1);
+  }
+
+  &__metric-value {
+    color: var(--openbitfun-color-content-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &__model {
+    flex: 1 1 120px;
+    min-width: 0;
+  }
+
+  &__status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--openbitfun-space-1);
+    max-width: 100%;
+    color: var(--openbitfun-color-content-muted);
+    font-size: var(--openbitfun-type-meta-font-size);
+    line-height: var(--openbitfun-type-meta-line-height);
+  }
+
+  &__status-icon {
+    flex: none;
+    color: var(--openbitfun-color-status-success-content);
+  }
+
+  &__status[data-openbitfun-state='disabled'] &__status-icon {
+    color: var(--openbitfun-color-status-warning-content);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-catalog-card__surface {
+    transition: none;
+  }
+}

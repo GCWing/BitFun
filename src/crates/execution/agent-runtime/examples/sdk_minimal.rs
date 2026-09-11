@@ -42,7 +42,7 @@ impl AgentSubmissionPort for ExampleAgentProvider {
     }
 
     async fn resolve_session_agent_type(&self, _session_id: &str) -> PortResult<Option<String>> {
-        Ok(Some("agentic".to_string()))
+        Ok(Some("Standard".to_string()))
     }
 }
 
@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let handle = runtime
         .run(
             AgentRunRequest::new(
-                SessionSelector::create("Example SDK Session", "agentic", None),
+                SessionSelector::create("Example SDK Session", "Standard", None),
                 "hello from an SDK embedder",
             )
             .with_source(AgentSubmissionSource::Cli),

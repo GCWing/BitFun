@@ -1,70 +1,39 @@
-/**
- * TabBar component styles.
- */
-
+/** TabGroup and Toolbar own control appearance; the canvas owns overflow/drag layout. */
 .canvas-tab-bar {
-  display: flex;
-  align-items: center;
-  height: 36px;
-  padding: 0 4px;
+  flex-shrink: 0;
+  // Put the vertical inset inside the scroller so tab focus rings stay visible.
+  padding-block: 0;
   background: var(--openbitfun-color-surface-scene);
-  border-bottom: 1px solid var(--openbitfun-color-border-default);
 
-  // Active group - slightly different background for active tabs
-  &.is-active-group {
-    background: var(--openbitfun-color-surface-scene);
-  }
-
-  // Tab list
   &__tabs {
     display: flex;
-    align-items: center;
     flex: 1;
-    min-width: 0;
-    overflow: hidden;
+    min-inline-size: 0;
+    padding-block: var(--openbitfun-layout-toolbar-sm-padding-block);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
   }
 
-  // Tab wrapper
   &__tab-wrapper {
     position: relative;
     display: flex;
+    flex: 0 0 auto;
     align-items: center;
-    transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+    max-inline-size: 100%;
+    transition: transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
-  // Actions area
   &__actions {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding-left: 8px;
+    gap: var(--openbitfun-layout-toolbar-group-gap-sm);
     flex-shrink: 0;
-  }
-
-  // Action button
-  &__action-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    background: transparent;
-    border: none;
-    border-radius: 4px;
-    color: var(--openbitfun-color-content-secondary);
-    cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
-
-    &:hover {
-      background: var(--openbitfun-color-action-neutral-surface-hover);
-      color: var(--openbitfun-color-content-primary);
-    }
-
-    &--close-all:hover {
-      background: color-mix(in srgb, var(--openbitfun-color-status-danger-content) 15%, transparent);
-      color: var(--openbitfun-color-status-danger-content);
-    }
   }
 }
 
@@ -74,15 +43,13 @@
   }
 }
 
-// Drop indicator
 .canvas-tab-drop-indicator {
   position: absolute;
-  left: 0;
-  top: 4px;
-  bottom: 4px;
-  width: 2px;
+  inset-inline-start: 0;
+  inset-block: var(--openbitfun-space-1);
+  inline-size: var(--openbitfun-border-width-strong);
   background: var(--openbitfun-color-accent-default);
-  border-radius: 1px;
-  z-index: 10;
+  border-radius: var(--openbitfun-radius-xs);
+  z-index: var(--openbitfun-layer-decoration);
   pointer-events: none;
 }

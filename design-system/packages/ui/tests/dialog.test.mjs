@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { DialogFooter } from "../dist/index.js";
+import { DialogFooter, DialogHeader } from "../dist/index.js";
 
 test("Dialog and Sheet compose the shared overlay kernel and compound anatomy", async () => {
   const source = await readFile(
@@ -69,7 +69,7 @@ test("Dialog geometry and typography use public design tokens", async () => {
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });
 
-test("DialogFooter exposes a centered opaque floating action layer", async () => {
+test("DialogFooter exposes a centered frosted floating action layer", async () => {
   const markup = renderToStaticMarkup(
     createElement(
       DialogFooter,
@@ -83,8 +83,17 @@ test("DialogFooter exposes a centered opaque floating action layer", async () =>
   assert.match(markup, /data-appearance="floating"/);
   assert.match(styles, /\[data-appearance=floating\]\{[^}]*position:absolute/);
   assert.match(styles, /\[data-appearance=floating\]\{[^}]*justify-content:center/);
-  assert.match(styles, /\[data-appearance=floating\]\{[^}]*background:var\(--openbitfun-color-surface-raised\)/);
-  assert.doesNotMatch(styles, /\[data-appearance=floating\]\{[^}]*background:transparent/);
+  assert.match(styles, /\[data-appearance=floating\]:before\{[^}]*background:linear-gradient/);
+  assert.match(styles, /\[data-appearance=floating\]:before\{[^}]*backdrop-filter:var\(--openbitfun-overlay-dialog-footer-blur\)/);
   assert.match(styles, /\[data-appearance=floating\]\{[^}]*pointer-events:auto/);
   assert.match(styles, /--openbitfun-overlay-dialog-footer-action-min-width/);
+});
+
+test("dialog separators are explicit and do not leak native attributes", () => {
+  for (const component of [DialogHeader, DialogFooter]) {
+    assert.match(renderToStaticMarkup(createElement(component)), /data-separator="false"/);
+    const markup = renderToStaticMarkup(createElement(component, { separator: true }));
+    assert.match(markup, /data-separator="true"/);
+    assert.doesNotMatch(markup, / separator=/);
+  }
 });

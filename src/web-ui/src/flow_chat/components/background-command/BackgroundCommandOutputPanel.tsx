@@ -1,5 +1,5 @@
 import { OverflowText, Button, IconButton } from '@openbitfun/ui';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { AlertCircle, Keyboard, Loader2 } from 'lucide-react';
 import { Checkbox, Textarea, Tooltip, Icon } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +8,7 @@ import type {
   BackgroundCommandOutputMetadata,
   BackgroundCommandOutputStatus,
 } from '@/infrastructure/api/service-api/AgentAPI';
-import { LazyTerminalOutputRenderer } from '@/tools/terminal/components/LazyTerminalOutputRenderer';
+import type { TerminalProjection } from './backgroundTerminalReplay';
 import { notificationService } from '@/shared/notification-system';
 import {
   isPeerDeviceModeActive,
@@ -16,6 +16,7 @@ import {
 } from '@/infrastructure/peer-device/peerModeFlag';
 import './BackgroundCommandOutputPanel.scss';
 
+const BackgroundTerminalProjection = React.lazy(() => import('./BackgroundTerminalProjection'));
 const BACKGROUND_COMMAND_OUTPUT_POLL_INTERVAL_MS = 1000;
 
 export interface BackgroundCommandOutputPanelData {
@@ -87,118 +88,91 @@ function statusLabelKey(status: BackgroundCommandOutputStatus): string {
   return `backgroundCommandOutput.status.${status}`;
 }
 
-function sanitizeTerminalOutputForLogView(output: string): string {
-  return output
-    // OSC/DCS/PM/APC payloads update terminal metadata or device state; they are
-    // not readable command output in a linear log view.
-    // eslint-disable-next-line no-control-regex -- terminal control sequences are intentional here.
-    .replace(/\x1b[\]PX_^][\s\S]*?(?:\x07|\x1b\\)/g, '')
-    // Keep SGR color/style sequences for xterm rendering, but strip all other
-    // CSI sequences because they mutate screen state, cursor position, or modes.
-    // eslint-disable-next-line no-control-regex -- terminal control sequences are intentional here.
-    .replace(/\x1b\[([0-?]*)([ -/]*)([@-~])/g, (sequence, _params, _intermediates, finalByte) => (
-      finalByte === 'm' ? sequence : ''
-    ))
-    // Strip remaining simple ESC sequences such as RIS/charset selection.
-    // eslint-disable-next-line no-control-regex -- terminal control sequences are intentional here.
-    .replace(/\x1b[ -/]*[@-~]/g, '');
-}
-
 export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanelProps> = ({ data }) => {
   const { t } = useTranslation('flow-chat');
   const [metadata, setMetadata] = useState<BackgroundCommandOutputMetadata | null>(null);
   const [output, setOutput] = useState('');
-  const [sanitizeOutput, setSanitizeOutput] = useState(false);
+  const [projection, setProjection] = useState<TerminalProjection | null>(null);
   const [isInputEditorOpen, setIsInputEditorOpen] = useState(false);
   const [inputChars, setInputChars] = useState('');
   const [inputAppendEnter, setInputAppendEnter] = useState(true);
   const [maskInput, setMaskInput] = useState(false);
   const [isSendingInput, setIsSendingInput] = useState(false);
-  const [cursor, setCursor] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const cursorRef = useRef<number | undefined>(undefined);
   const inputEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const autoOpenedInputForSessionRef = useRef<string | null>(null);
 
   useEffect(() => {
-    cursorRef.current = cursor;
-  }, [cursor]);
-
-  useEffect(() => {
     let cancelled = false;
+    let reading = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cursor: number | undefined;
+    let sawCompleted = false;
+    let replay: import('./backgroundTerminalReplay').BackgroundTerminalReplay | undefined;
+    setMetadata(null);
+    setOutput('');
+    setProjection(null);
+    setLoading(true);
+    setError(null);
 
-    const readOutput = async (initial = false) => {
-      if (data.mockKind) {
-        const mock = mockOutputForKind(data.mockKind);
-        if (!cancelled) {
-          setMetadata(mock.metadata);
-          setOutput(mock.output);
-          setCursor(1);
-          setLoading(false);
-          setError(null);
-        }
-        return;
-      }
-
+    const readOutput = async () => {
+      reading = true;
+      let running = true;
       try {
-        const response = await agentAPI.readBackgroundCommandOutput({
-          execSessionId: data.execSessionId,
-          remote: data.remote,
-          cursor: initial ? undefined : cursorRef.current,
-        });
-        if (cancelled) {
-          return;
+        if (!replay) {
+          const module = await import('./backgroundTerminalReplay');
+          if (cancelled) return;
+          replay = new module.BackgroundTerminalReplay();
         }
-
+        const mock = data.mockKind ? mockOutputForKind(data.mockKind) : null;
+        const response = mock ? {
+          metadata: mock.metadata, cursor: 1, reset: false,
+          snapshot: mock.output, chunks: [],
+        } : await agentAPI.readBackgroundCommandOutput({
+          execSessionId: data.execSessionId, remote: data.remote, cursor,
+        });
+        if (cancelled) return;
+        const nextProjection = await replay.accept(response);
+        if (cancelled) return;
+        const previousCursor = cursor;
+        cursor = response.cursor;
         setMetadata(response.metadata);
-        setCursor(response.cursor);
+        setProjection(nextProjection);
+        setOutput(replay.rawOutput);
         setError(null);
-        setOutput((previous) => {
-          if (response.snapshot != null || response.reset) {
-            return response.snapshot ?? '';
-          }
-          if (response.chunks.length === 0) {
-            return previous;
-          }
-          return `${previous}${response.chunks.join('')}`;
-        });
+        // Lifecycle completion and output capture arrive on separate queues.
+        // Drain until a completed command returns an unchanged cursor.
+        const completed = response.metadata.status !== 'running';
+        running = !mock && (!completed || !sawCompleted || previousCursor !== cursor);
+        sawCompleted = completed;
       } catch (readError) {
-        if (!cancelled) {
-          setError(readError instanceof Error ? readError.message : String(readError));
-        }
+        if (!cancelled) setError(readError instanceof Error ? readError.message : String(readError));
       } finally {
-        if (!cancelled) {
+        reading = false;
+        if (cancelled) replay?.dispose();
+        else {
           setLoading(false);
+          if (running) timer = setTimeout(() => { void readOutput(); }, isPeerDeviceModeActive()
+            ? PEER_MODE_BACKGROUND_COMMAND_POLL_MS : BACKGROUND_COMMAND_OUTPUT_POLL_INTERVAL_MS);
         }
       }
     };
-
-    void readOutput(true);
-    const intervalId = window.setInterval(() => {
-      if (metadata?.status && metadata.status !== 'running') {
-        return;
-      }
-      void readOutput(false);
-    }, isPeerDeviceModeActive()
-      ? PEER_MODE_BACKGROUND_COMMAND_POLL_MS
-      : BACKGROUND_COMMAND_OUTPUT_POLL_INTERVAL_MS);
-
+    void readOutput();
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
+      clearTimeout(timer);
+      // Dispose only after the queued parser write completes.
+      // If idle, no write is in flight and disposal is immediate below.
+      if (!reading) replay?.dispose();
     };
-  }, [data.execSessionId, data.mockKind, data.remote, metadata?.status]);
+  }, [data.execSessionId, data.execSessionKey, data.mockKind, data.remote]);
 
   const command = metadata?.command || data.command || data.title || data.execSessionKey;
-  const displayedOutput = useMemo(
-    () => sanitizeOutput ? sanitizeTerminalOutputForLogView(output) : output,
-    [output, sanitizeOutput],
-  );
-
   const copyOutput = () => {
-    void navigator.clipboard.writeText(displayedOutput);
+    void navigator.clipboard.writeText(projection?.text ?? '');
   };
+  const copyRawOutput = () => { void navigator.clipboard.writeText(output); };
 
   const copyCommand = () => {
     void navigator.clipboard.writeText(command);
@@ -323,12 +297,17 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
                 icon={<Icon name="duplicate" size="sm" aria-hidden="true" />}
               />
             </Tooltip>
-            <Tooltip content={t('backgroundCommandOutput.copy')}>
+            <Tooltip content={t('backgroundCommandOutput.copyRaw')}>
+            <IconButton size="sm" onClick={copyRawOutput}
+              aria-label={t('backgroundCommandOutput.copyRaw')} disabled={!output}
+              icon={<Icon name="terminal" size="sm" aria-hidden="true" />} />
+          </Tooltip>
+          <Tooltip content={t('backgroundCommandOutput.copy')}>
               <IconButton
                 size="sm"
                 onClick={copyOutput}
                 aria-label={t('backgroundCommandOutput.copy')}
-                disabled={!displayedOutput}
+                disabled={!projection?.text}
                 icon={<Icon name="duplicate" size="sm" aria-hidden="true" />}
               />
             </Tooltip>
@@ -355,23 +334,12 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
               </span>
             ) : null}
           </div>
-          <Tooltip content={t('backgroundCommandOutput.simplifiedViewTooltip')}>
-            <span className="background-command-output-panel__sanitize-toggle-trigger">
-              <Checkbox
-                className="background-command-output-panel__sanitize-toggle"
-                size="sm"
-                checked={sanitizeOutput}
-                onChange={(event) => setSanitizeOutput(event.target.checked)}
-                label={t('backgroundCommandOutput.simplifiedView')}
-              />
-            </span>
-          </Tooltip>
         </div>
 
-        {metadata?.truncatedFromStart ? (
+        {metadata?.truncatedFromStart || projection?.incomplete ? (
           <div data-openbitfun-component="background-command-output-panel" data-openbitfun-part="notice" className="background-command-output-panel__notice">
             <AlertCircle size={14} aria-hidden="true" />
-            <span>{t('backgroundCommandOutput.truncatedFromStart')}</span>
+            <span>{t(projection?.incomplete ? 'backgroundCommandOutput.replayIncomplete' : 'backgroundCommandOutput.truncatedFromStart')}</span>
           </div>
         ) : null}
 
@@ -383,14 +351,15 @@ export const BackgroundCommandOutputPanel: React.FC<BackgroundCommandOutputPanel
         ) : null}
 
         <div data-openbitfun-component="background-command-output-panel" data-openbitfun-part="output" className="background-command-output-panel__output">
-          {displayedOutput ? (
-            <div data-openbitfun-component="background-command-output-panel" data-openbitfun-part="terminal">
-              <LazyTerminalOutputRenderer
-                content={displayedOutput}
-                className="background-command-output-panel__terminal"
-                minHeight={420}
-                maxHeight={1200}
-              />
+          {projection?.unknownGeometry ? (
+            <div className="background-command-output-panel__empty">
+              {t('backgroundCommandOutput.unknownGeometry')}
+            </div>
+          ) : projection?.text ? (
+            <div data-openbitfun-component="background-command-output-panel" data-openbitfun-part="terminal" className="background-command-output-panel__terminal-container">
+              <Suspense fallback={<pre className="background-command-output-panel__projection-fallback">{projection.text}</pre>}>
+                <BackgroundTerminalProjection projection={projection} />
+              </Suspense>
             </div>
           ) : (
             <div data-openbitfun-component="background-command-output-panel" data-openbitfun-part="empty" className="background-command-output-panel__empty">

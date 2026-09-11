@@ -1,33 +1,46 @@
 {
   "defaultDesc": "专注于编程的 AI 伙伴，擅长代码分析与项目管理",
-
   "modelSlots": {
-    "primary":     { "label": "主力", "desc": "通用对话与推理" },
-    "fast":        { "label": "快速", "desc": "轻量快速响应" },
-    "compression": { "label": "压缩", "desc": "上下文长度压缩" },
-    "image":       { "label": "图像", "desc": "图像生成与理解" },
-    "voice":       { "label": "语音", "desc": "语音合成与识别" },
-    "retrieval":   { "label": "检索", "desc": "向量检索与嵌入" }
+    "primary": {
+      "label": "主力",
+      "desc": "通用对话与推理"
+    },
+    "fast": {
+      "label": "快速",
+      "desc": "轻量快速响应"
+    },
+    "compression": {
+      "label": "压缩",
+      "desc": "上下文长度压缩"
+    },
+    "image": {
+      "label": "图像",
+      "desc": "图像生成与理解"
+    },
+    "voice": {
+      "label": "语音",
+      "desc": "语音合成与识别"
+    },
+    "retrieval": {
+      "label": "检索",
+      "desc": "向量检索与嵌入"
+    }
   },
-
   "slotDefault": {
-    "primary":     "主力模型",
-    "fast":        "快速模型",
+    "primary": "主力模型",
+    "fast": "快速模型",
     "unconfigured": "未配置"
   },
-
   "modelGroups": {
     "presets": "系统预设",
-    "models":  "可用模型"
+    "models": "可用模型"
   },
-
   "hero": {
-    "editNameTitle":  "点击编辑名称",
-    "editDescTitle":  "点击编辑描述",
+    "editNameTitle": "点击编辑名称",
+    "editDescTitle": "点击编辑描述",
     "descPlaceholder": "添加描述...",
-    "radarTitle":     "点击图形放大 · 点击维度文字可跳转"
+    "radarTitle": "点击图形放大 · 点击维度文字可跳转"
   },
-
   "identity": {
     "emoji": "表情标识",
     "emojiPlaceholder": "设置表情标识",
@@ -63,104 +76,92 @@
     "resetSuccess": "已重置助手人设",
     "resetFailed": "重置助手人设失败"
   },
-
   "home": {
     "descHint": "点击编辑 IDENTITY.md 正文。"
   },
-
   "sections": {
-    "brain":        "大脑",
+    "brain": "大脑",
     "capabilities": "能力",
-    "interaction":  "交互"
+    "interaction": "交互"
   },
-
   "cards": {
-    "model":       "模型",
-    "rules":       "行为守则",
-    "memory":      "记忆",
-    "toolsMcp":    "工具与MCP",
-    "skills":      "技能",
+    "model": "模型",
+    "rules": "行为守则",
+    "memory": "记忆",
+    "toolsMcp": "工具与MCP",
+    "skills": "技能",
     "preferences": "偏好"
   },
-
   "actions": {
     "globalManage": "全局管理",
-    "manage":       "管理",
-    "selectAll":    "全选",
-    "clearAll":     "清空",
-    "reset":        "重置",
-    "collapse":     "收起"
+    "manage": "管理",
+    "selectAll": "全选",
+    "clearAll": "清空",
+    "reset": "重置",
+    "collapse": "收起"
   },
-
   "kpi": {
-    "rules":        "用户 {{user}} · 项目 {{project}} · {{enabled}} 启用",
-    "memory":       "{{count}} 条启用",
-    "skills":       "{{count}} 个启用",
-    "toolStats":    "{{enabled}}/{{total}} 内置",
+    "rules": "用户 {{user}} · 项目 {{project}} · {{enabled}} 启用",
+    "memory": "{{count}} 条启用",
+    "skills": "{{count}} 个启用",
+    "toolStats": "{{enabled}}/{{total}} 内置",
     "toolStatsMcp": "{{enabled}}/{{total}} 内置 · MCP {{mcpHealthy}}/{{mcpTotal}}"
   },
-
   "empty": {
-    "rules":     "暂无守则",
-    "memory":    "暂无记忆",
-    "tools":     "暂无工具信息",
+    "rules": "暂无守则",
+    "memory": "暂无记忆",
+    "tools": "暂无工具信息",
     "toolsUnsupported": "所连接的 Peer 主机未提供工具目录。",
-    "toolsFailed":     "无法加载工具目录，请尝试刷新。",
-    "skills":    "暂无技能"
+    "toolsFailed": "无法加载工具目录，请尝试刷新。",
+    "skills": "暂无技能"
   },
-
   "notifications": {
-    "modelUpdated":  "模型已更新",
-    "updateFailed":  "更新失败",
-    "toggleFailed":  "切换失败",
-    "resetSuccess":  "已重置",
-    "resetFailed":   "重置失败",
-    "resetConfirm":  "确定要重置工具配置吗？"
+    "modelUpdated": "模型已更新",
+    "updateFailed": "更新失败",
+    "toggleFailed": "切换失败",
+    "resetSuccess": "已重置",
+    "resetFailed": "重置失败",
+    "resetConfirm": "确定要重置工具配置吗？"
   },
-
   "radar": {
-    "title":    "性格雷达",
+    "title": "性格雷达",
     "subtitle": "点击维度标签可跳转至对应配置",
     "dims": {
-      "creativity":   "创造力",
-      "rigor":        "严谨度",
-      "autonomy":     "自主性",
-      "memory":       "记忆力",
-      "expression":   "表达力",
+      "creativity": "创造力",
+      "rigor": "严谨度",
+      "autonomy": "自主性",
+      "memory": "记忆力",
+      "expression": "表达力",
       "adaptability": "适应性"
     }
   },
-
   "prefs": {
-    "visualMode":         "可视化模式",
-    "visualModeDesc":     "执行时显示可视化反馈",
-    "sessionTitle":       "会话自动命名",
-    "sessionTitleDesc":   "新会话自动生成标题"
+    "visualMode": "可视化模式",
+    "visualModeDesc": "执行时显示可视化反馈",
+    "sessionTitle": "会话自动命名",
+    "sessionTitleDesc": "新会话自动生成标题"
   },
-
   "nursery": {
-    "backToGallery": "助理",
-
+    "backToGallery": "$t(shared:agents.Claw)",
     "gallery": {
-      "title":              "助理",
-      "subtitle":           "创建、配置助理，或随时开始新会话",
-      "newAssistant":       "创建助理",
-      "creating":           "正在创建...",
-      "createFailed":       "无法创建助理，请稍后重试",
-      "loadFailed":         "无法加载助理",
-      "emptyTitle":         "还没有助理",
-      "emptySubtitle":      "创建一个助理，为它设置身份、工具和个性",
-      "assistantsTitle":    "你的助理",
+      "title": "$t(shared:agents.Claw)",
+      "subtitle": "创建、配置助理，或随时开始新会话",
+      "newAssistant": "创建助理",
+      "creating": "正在创建...",
+      "createFailed": "无法创建助理，请稍后重试",
+      "loadFailed": "无法加载助理",
+      "emptyTitle": "还没有助理",
+      "emptySubtitle": "创建一个助理，为它设置身份、工具和个性",
+      "assistantsTitle": "你的助理",
       "assistantsSubtitle": "配置助理，或直接开始新会话"
     },
-
     "template": {
-      "title":        "助理默认配置",
-      "subtitle":     "新建助理将继承这里启用的工具和技能",
+      "title": "助理默认配置",
+      "subtitle": "新建助理将继承这里启用的工具和技能",
       "pageDescription": "设置助理默认可使用的技能和工具。更改会自动保存，并从下一次执行开始应用。",
       "scopeLabel": "当前设备 · 用户级配置",
       "defaultBadge": "默认",
-      "configure":    "配置默认能力",
+      "configure": "配置默认能力",
       "restoreProductDefaults": "恢复产品默认值",
       "saveState": {
         "saved": "已保存",
@@ -222,15 +223,15 @@
       "configurationUnavailable": "未能加载默认配置，相关开关暂时不可用。",
       "retry": "重试",
       "statsUnavailable": "暂时无法获取详情",
-      "tokenTitle":   "上下文占用估算",
+      "tokenTitle": "上下文占用估算",
       "tokenSystemPrompt": "系统提示词",
       "tokenToolInjection": "工具描述注入",
-      "tokenRules":   "行为守则",
+      "tokenRules": "行为守则",
       "tokenMemories": "记忆",
-      "tokenTotal":   "默认总占用",
+      "tokenTotal": "默认总占用",
       "stats": {
-        "tools":          "{{count}} 个工具",
-        "skills":         "{{count}} 个技能"
+        "tools": "{{count}} 个工具",
+        "skills": "{{count}} 个技能"
       },
       "groupCountEmpty": "空",
       "builtinToolsSection": "内置工具",
@@ -295,46 +296,43 @@
       "skillRuntimeEnabled": "已启用，当前未采用",
       "skillOrigin": "来源与范围：{{origin}}"
     },
-
     "tabs": {
-      "identity":    "身份",
+      "identity": "身份",
       "personality": "性格",
-      "ability":     "能力",
-      "memory":      "记忆"
+      "ability": "能力",
+      "memory": "记忆"
     },
-
     "card": {
-      "unnamed":             "未命名助理",
-      "noVibe":              "一个等待定义的助理",
-      "configure":           "配置助理",
-      "newSession":          "新建会话",
-      "startingSession":     "正在启动...",
-      "newSessionFailed":    "无法新建会话，请稍后重试",
-      "tokenTitle":          "上下文占用估算",
-      "primaryBadge":        "主助理",
-      "setPrimary":          "设为主助理",
-      "setPrimarySuccess":   "主助理已更新",
-      "setPrimaryFailed":    "无法设置主助理",
-      "delete":              "删除助理",
-      "deleteFailed":        "无法删除助理，请稍后重试",
-      "deleteConfirmTitle":  "删除助理",
+      "unnamed": "未命名助理",
+      "noVibe": "一个等待定义的助理",
+      "configure": "配置助理",
+      "newSession": "新建会话",
+      "startingSession": "正在启动...",
+      "newSessionFailed": "无法新建会话，请稍后重试",
+      "tokenTitle": "上下文占用估算",
+      "primaryBadge": "主助理",
+      "setPrimary": "设为主助理",
+      "setPrimarySuccess": "主助理已更新",
+      "setPrimaryFailed": "无法设置主助理",
+      "delete": "删除助理",
+      "deleteFailed": "无法删除助理，请稍后重试",
+      "deleteConfirmTitle": "删除助理",
       "deleteConfirmMessage": "确定要删除助理「{{name}}」吗？此操作不可撤销。",
-      "deleteConfirm":       "确认删除",
-      "deleteCancel":        "取消"
+      "deleteConfirm": "确认删除",
+      "deleteCancel": "取消"
     },
-
     "assistant": {
-      "inheritGroup":   "继承模板",
+      "inheritGroup": "继承模板",
       "inheritPrimary": "继承模板（主力）",
-      "inheritFast":    "继承模板（快速）",
+      "inheritFast": "继承模板（快速）",
       "personaDocsTitle": "关键文档",
       "sessionsSectionTitle": "会话",
       "scheduledSessionsTitle": "定时会话",
       "scheduledSessionsNoWorkspace": "请先选择助理工作区后再管理定时会话。",
       "personaDocs": {
         "IDENTITY": "身份",
-        "SOUL":     "核心人设",
-        "USER":     "用户画像"
+        "SOUL": "核心人设",
+        "USER": "用户画像"
       },
       "personaDocSaveFailed": "保存文档失败",
       "personaDocLoadFailed": "读取文档失败"

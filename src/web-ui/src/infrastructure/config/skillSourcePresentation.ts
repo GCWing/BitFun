@@ -10,6 +10,9 @@ const SOURCE_LABEL_BY_ID: Record<string, string> = {
   opencode: 'OpenCode',
   'agent-skills': 'Agent Skills',
   agents: 'Agent Skills',
+  'deepseek-harness': 'DeepSeek Harness',
+  dsh: 'DeepSeek Harness',
+  pi: 'PI',
 };
 
 function knownSourceLabel(value: string | undefined): string | undefined {
@@ -52,6 +55,7 @@ export function getSkillSourceId(skill: SkillInfo): string {
     .toLowerCase()
     .replace(/^(home|config)\./, '');
   if (identity === 'claude') return 'claude-code';
+  if (identity === 'dsh') return 'deepseek-harness';
   if (identity === 'agents') return 'agent-skills';
   if (identity === 'openbitfun-system' || identity === 'openbitfun-user') return 'openbitfun';
   if (identity.startsWith('opencode.')) return 'opencode';

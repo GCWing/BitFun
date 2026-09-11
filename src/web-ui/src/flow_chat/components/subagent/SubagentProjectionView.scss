@@ -1,3 +1,5 @@
+@use '../../item-rhythm' as itemRhythm;
+
 .subagent-projection-wrapper {
   width: 100%;
 }
@@ -5,7 +7,7 @@
 .subagent-projection-container {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--openbitfun-control-flow-chat-flow-item-gap);
   overflow-y: auto;
   overscroll-behavior: contain;
   box-sizing: border-box;
@@ -23,10 +25,11 @@
 .subagent-projection-text--truncated {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--openbitfun-control-flow-chat-inline-gap);
 }
 
 .subagent-projection-content {
+  @include itemRhythm.apply($enclosed: true);
   min-width: 0;
 
   .flow-thinking-item .thinking-content {

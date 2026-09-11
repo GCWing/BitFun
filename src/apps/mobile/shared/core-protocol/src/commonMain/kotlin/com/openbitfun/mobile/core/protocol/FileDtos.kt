@@ -27,4 +27,5 @@ public data class ReadFileChunkResponse(
     @SerialName("chunk_size") val chunkSize: Long? = null,
     @SerialName("total_size") val totalSize: Long? = null,
     @SerialName("mime_type") val mimeType: String? = null,
+    @SerialName("revision") val revision: String? = null,
 ) : CommandStatus

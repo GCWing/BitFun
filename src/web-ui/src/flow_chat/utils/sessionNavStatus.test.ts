@@ -16,13 +16,13 @@ function turn(id: string, state: DialogTurn['status'], tools: FlowToolItem[] = [
 
 function session(dialogTurns: DialogTurn[] = [], overrides: Partial<Session> = {}): Session {
   return { sessionId: 'session', title: 'Task', sessionKind: 'normal', dialogTurns,
-    status: 'idle', config: { agentType: 'agentic' }, createdAt: 1, lastActiveAt: 1,
+    status: 'idle', config: { agentType: 'Standard' }, createdAt: 1, lastActiveAt: 1,
     error: null, ...overrides } as Session;
 }
 
 function permission(overrides: Partial<PermissionRequest> = {}): PermissionRequest {
   return { requestId: 'request', sessionId: 'session', roundId: 'round-work', order: 0,
-    projectId: 'workspace', agentId: 'agentic', action: 'edit', resources: [],
+    projectId: 'workspace', agentId: 'Standard', action: 'edit', resources: [],
     source: { kind: 'tool_call', identity: 'Write' }, ...overrides };
 }
 
@@ -190,7 +190,7 @@ describe('session navigation status', () => {
   });
 
   it('uses target dispatch facts and exposes stale transport separately', () => {
-    const value = session([], { config: { agentType: 'agentic', dispatchJobState: 'running' } });
+    const value = session([], { config: { agentType: 'Standard', dispatchJobState: 'running' } });
     expect(deriveSessionNavStatus({ session: value }).kind).toBe('running');
     expect(deriveSessionNavStatus({ session: value, reachability: 'unreachable' }).kind).toBe('syncing');
     expect(deriveSessionNavStatus({ session: { ...value, hasUnreadCompletion: 'error',

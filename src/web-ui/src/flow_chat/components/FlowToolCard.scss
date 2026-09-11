@@ -1,22 +1,7 @@
 .flowchat-flow-item {
-  margin: 0 0 var(--openbitfun-control-flow-chat-flow-item-gap) 0;
+  margin: 0;
   font-size: var(--openbitfun-type-flow-body-font-size);
   line-height: var(--openbitfun-type-flow-support-line-height);
-}
-
-/* A run of collapsed ambient tools reads like consecutive transcript lines.
- * Keep the normal flow-item gap at either edge of the run, but do not insert a
- * card gap between each one-line row. Expanded ambient cards retain section
- * spacing because they are content surfaces rather than line items. */
-.flowchat-flow-item:has(
-  > .flow-tool-card-wrapper[data-openbitfun-attention='ambient']
-    [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='root'][data-openbitfun-expanded-shell='false']
-):has(
-  + .flowchat-flow-item
-    > .flow-tool-card-wrapper[data-openbitfun-attention='ambient']
-      [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='root'][data-openbitfun-expanded-shell='false']
-) {
-  margin-bottom: 0;
 }
 
 .flow-tool-card-wrapper {

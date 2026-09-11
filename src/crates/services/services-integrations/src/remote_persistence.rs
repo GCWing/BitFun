@@ -13,10 +13,10 @@ use rand::RngCore;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 const NONCE_SIZE: usize = 12;
 
@@ -48,22 +48,6 @@ impl DeviceIdentityRecord {
 pub struct AccountHintRecord {
     pub username: String,
     pub relay_url: String,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AccountSyncStateRecord {
-    #[serde(default)]
-    pub last_session_since: i64,
-    #[serde(default)]
-    pub uploaded_hashes: HashMap<String, String>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SettingsCursorRecord {
-    #[serde(default)]
-    pub version: i64,
-    #[serde(default)]
-    pub hash: String,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -147,22 +131,6 @@ pub fn read_account_hint(path: &Path) -> Result<Option<AccountHintRecord>> {
 
 pub fn write_account_hint(path: &Path, value: &AccountHintRecord) -> Result<()> {
     write_json_atomic(path, value, true)
-}
-
-pub fn read_account_sync_state(path: &Path) -> Result<Option<AccountSyncStateRecord>> {
-    read_optional_json(path)
-}
-
-pub fn write_account_sync_state(path: &Path, value: &AccountSyncStateRecord) -> Result<()> {
-    write_json_atomic(path, value, false)
-}
-
-pub fn read_settings_cursor(path: &Path) -> Result<Option<SettingsCursorRecord>> {
-    read_optional_json(path)
-}
-
-pub fn write_settings_cursor(path: &Path, value: &SettingsCursorRecord) -> Result<()> {
-    write_json_atomic(path, value, false)
 }
 
 pub fn read_legacy_account_session(
@@ -455,6 +423,8 @@ pub struct BotChatStateRecord {
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedBotConnectionRecord {
+    #[serde(default)]
+    pub account_user_id: String,
     pub bot_type: String,
     pub chat_id: String,
     pub config: BotConfigRecord,
@@ -464,7 +434,6 @@ pub struct SavedBotConnectionRecord {
 
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RemoteConnectFormStateRecord {
-    pub custom_server_url: String,
     pub telegram_bot_token: String,
     pub feishu_app_id: String,
     pub feishu_app_secret: String,
@@ -920,6 +889,65 @@ pub fn write_weixin_sync_buffer(path: &Path, value: &str) -> Result<()> {
     write_atomic(path, value.as_bytes(), true)
 }
 
+/// Stable per-account, per-relay device key. Candidate logins must not rotate a
+/// public key still used by the active session. A process lock serializes first
+/// creation across Desktop and CLI, and malformed keys remain untouched.
+pub fn load_or_create_device_secret(
+    directory: &Path,
+    relay_url: &str,
+    user_id: &str,
+    device_id: &str,
+) -> Result<[u8; 32]> {
+    let mut scope = Sha256::new();
+    for part in [relay_url.trim_end_matches('/'), user_id, device_id] {
+        scope.update((part.len() as u64).to_le_bytes());
+        scope.update(part.as_bytes());
+    }
+    let name = format!("{:x}", scope.finalize());
+    let keys = directory.join("device-keys");
+    std::fs::create_dir_all(&keys).context("create device key directory")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&keys, std::fs::Permissions::from_mode(0o700))?;
+    }
+    let mut options = OpenOptions::new();
+    options.read(true).write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let lock = options.open(keys.join(format!("{name}.lock")))?;
+    fs2::FileExt::lock_exclusive(&lock).context("lock device key")?;
+    let path = keys.join(format!("{name}.key"));
+    match std::fs::read(&path) {
+        Ok(bytes) => bytes
+            .try_into()
+            .map_err(|_| anyhow!("stored device key has an invalid length")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // Preserve the key of an already authenticated install on first migration.
+            let previous = read_current_account_session(directory, &MachineBinding::current())?;
+            let secret = previous
+                .filter(|session| {
+                    session.user_id == user_id
+                        && session.relay_url.trim_end_matches('/')
+                            == relay_url.trim_end_matches('/')
+                        && session.device_id.as_deref() == Some(device_id)
+                })
+                .map(|session| session.master_key)
+                .unwrap_or_else(|| {
+                    let mut secret = [0; 32];
+                    OsRng.fill_bytes(&mut secret);
+                    secret
+                });
+            write_private_bytes(&path, &secret)?;
+            Ok(secret)
+        }
+        Err(error) => Err(error).context("read device key"),
+    }
+}
+
 pub fn write_private_bytes(path: &Path, value: &[u8]) -> Result<()> {
     write_atomic(path, value, true)
 }
@@ -1055,33 +1083,10 @@ pub fn is_safe_weixin_account_id(value: &str) -> bool {
             .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
 }
 
-pub fn account_sync_paths(directory: &Path) -> Result<Vec<PathBuf>> {
-    let entries = match std::fs::read_dir(directory) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error).context("read account sync directory"),
-    };
-    let mut paths = Vec::new();
-    for entry in entries {
-        let entry = entry.context("read account sync entry")?;
-        let file_type = entry.file_type().context("read account sync entry type")?;
-        if file_type.is_symlink() || !file_type.is_file() {
-            bail!("account sync directory contains a non-regular entry");
-        }
-        let path = entry.path();
-        if path.extension().and_then(|value| value.to_str()) == Some("json")
-            && !path.to_string_lossy().ends_with(".tmp")
-        {
-            paths.push(path);
-        }
-    }
-    paths.sort();
-    Ok(paths)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn legacy_v2_account_session_reencrypts_for_the_current_owner() {
@@ -1251,5 +1256,49 @@ mod tests {
             .prefix(&format!("remote-persistence-{label}-"))
             .tempdir_in(root)
             .expect("test temporary directory")
+    }
+}
+
+#[cfg(test)]
+mod device_secret_tests {
+    use super::*;
+
+    #[test]
+    fn device_keys_survive_relogin_and_are_scoped_to_account_and_endpoint() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = load_or_create_device_secret(dir.path(), "http://127.0.0.1:9700", "1", "device")
+            .unwrap();
+        assert_eq!(
+            key,
+            load_or_create_device_secret(dir.path(), "http://127.0.0.1:9700/", "1", "device")
+                .unwrap()
+        );
+        assert_ne!(
+            key,
+            load_or_create_device_secret(dir.path(), "http://127.0.0.1:9700", "2", "device")
+                .unwrap()
+        );
+        assert_ne!(
+            key,
+            load_or_create_device_secret(
+                dir.path(),
+                "https://remote.openbitfun.com/v/1.0.0",
+                "1",
+                "device"
+            )
+            .unwrap()
+        );
+        std::thread::scope(|scope| {
+            for _ in 0..8 {
+                let path = dir.path();
+                scope.spawn(move || {
+                    assert_eq!(
+                        key,
+                        load_or_create_device_secret(path, "http://127.0.0.1:9700", "1", "device")
+                            .unwrap()
+                    )
+                });
+            }
+        });
     }
 }

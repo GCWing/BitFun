@@ -149,10 +149,47 @@ public enum class RemoteSessionFailureReason {
     RATE_LIMITED,
 }
 
+public enum class WorkspaceSessionDirectoryStatus {
+    IDLE,
+    LOADING,
+    READY,
+    FAILED,
+}
+
+/** One independently loaded workspace branch in a live remote session store. */
+public data class WorkspaceSessionDirectoryEntry public constructor(
+    public val path: String,
+    public val status: WorkspaceSessionDirectoryStatus,
+    public val sessions: List<RemoteSession>,
+)
+
+public data class WorkspaceSessionDirectoryUiState public constructor(
+    public val workspaces: List<WorkspaceSessionDirectoryEntry>,
+) {
+    public fun workspace(path: String): WorkspaceSessionDirectoryEntry? {
+        val normalized = normalizeWorkspaceSessionPath(path)
+        return workspaces.firstOrNull { normalizeWorkspaceSessionPath(it.path) == normalized }
+    }
+}
+
+private fun normalizeWorkspaceSessionPath(path: String): String {
+    val trimmed = path.trim()
+    val normalized = trimmed.trimEnd('/')
+    return normalized.ifEmpty { trimmed }
+}
+
 public data class ComposerImage public constructor(
     public val id: String,
     public val dataUrl: String,
     public val mimeType: String,
+)
+
+/** A host acknowledgement, used to consume only the draft that was sent. */
+public data class SentChatMessage public constructor(
+    public val id: String,
+    public val sessionId: String,
+    public val content: String,
+    public val imageIds: List<String>,
 )
 
 public sealed interface RemoteSessionUiState {
@@ -193,7 +230,29 @@ public sealed interface RemoteSessionUiState {
         public val draft: String,
         /** Monotonic authority revision for session-list projection on this store. */
         public val revision: Long,
+        public val lastSentMessage: SentChatMessage?,
     ) : RemoteSessionUiState {
+        /** Preserve the existing Swift/Kotlin initializer when adding acknowledgement state. */
+        public constructor(
+            sessions: List<RemoteSession>,
+            selectedSessionId: String?,
+            timeline: ChatTimelineState?,
+            busy: Boolean,
+            permissionMode: SessionPermissionMode?,
+            permissionModeFailure: PermissionModeFailure?,
+            query: String,
+            agentFilter: SessionAgentFilter,
+            hasMore: Boolean,
+            hasMoreMessages: Boolean,
+            modelCatalog: RemoteModelCatalog?,
+            modelCatalogFailure: ModelCatalogFailure?,
+            draft: String,
+            revision: Long,
+        ) : this(
+            sessions, selectedSessionId, timeline, busy, permissionMode, permissionModeFailure,
+            query, agentFilter, hasMore, hasMoreMessages, modelCatalog, modelCatalogFailure, draft, revision, null,
+        )
+
         public constructor(
             sessions: List<RemoteSession>,
             selectedSessionId: String?,
@@ -264,6 +323,15 @@ public sealed interface RemoteSessionIntent {
 
     /** Fetch the transcript page immediately before the oldest visible message. */
     public data object LoadOlderMessages : RemoteSessionIntent
+
+    /** Load one sidebar workspace branch without changing the desktop's active workspace. */
+    public data class LoadWorkspaceSessions public constructor(
+        public val path: String,
+    ) : RemoteSessionIntent
+
+    public data class RetryWorkspaceSessions public constructor(
+        public val path: String,
+    ) : RemoteSessionIntent
 
     public data class Search public constructor(
         public val query: String,

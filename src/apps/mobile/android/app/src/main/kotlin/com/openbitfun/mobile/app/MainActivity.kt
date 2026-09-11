@@ -36,9 +36,23 @@ class MainActivity : ComponentActivity() {
             }
             OpenBitFunTheme(dark = dark) {
                 MobileScreen()
+                com.openbitfun.mobile.app.ui.shell.NotificationOnboarding()
             }
         }
     }
+
+    override fun onStart() {
+        super.onStart()
+        if (!intent.getBooleanExtra(DESIGN_PREVIEW_EXTRA, false)) accountModel().setBackground(false)
+    }
+
+    override fun onStop() {
+        if (!intent.getBooleanExtra(DESIGN_PREVIEW_EXTRA, false)) accountModel().setBackground(true)
+        super.onStop()
+    }
+
+    private fun accountModel() = androidx.lifecycle.ViewModelProvider(this,
+        com.openbitfun.mobile.app.viewmodel.AccountViewModel.Factory)[com.openbitfun.mobile.app.viewmodel.AccountViewModel::class.java]
 
     private companion object {
         const val DESIGN_PREVIEW_EXTRA = "openbitfun.design_preview"

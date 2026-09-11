@@ -72,7 +72,7 @@ internal fun ConversationTimelineView(
     onCancelTool: (String, String) -> Unit,
     onAnswerTool: (String, String) -> Unit,
     onAnswerToolStructured: (String, List<QuestionAnswer>) -> Unit,
-    onRetry: (String) -> Unit,
+    onRetry: (ConversationRow) -> Unit,
     onOpenFile: (String, String) -> Unit,
     previewingRemotePath: String,
     previewLoading: Boolean,

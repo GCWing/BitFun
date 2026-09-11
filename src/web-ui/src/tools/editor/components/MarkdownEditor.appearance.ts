@@ -2,6 +2,7 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 
 export const markdownEditorAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'markdown-editor',
+  componentAttribute: 'data-openbitfun-product-component',
   parts: [
     { id: 'root' }, { id: 'loading' }, { id: 'error' },
     { id: 'toolbar' }, { id: 'actions' }, { id: 'body' },

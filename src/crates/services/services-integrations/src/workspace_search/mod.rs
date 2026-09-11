@@ -13,6 +13,7 @@ pub(crate) mod result_mapping;
 mod service;
 mod types;
 
+pub use auto_index::workspace_search_supports_local_root;
 pub use index_queue::WorkspaceSearchAutoIndexPriority;
 pub use service::{
     resolve_workspace_search_daemon_program_path, workspace_search_daemon_available,

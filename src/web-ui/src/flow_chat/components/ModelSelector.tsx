@@ -49,11 +49,8 @@ import {
 import { createLogger } from '@/shared/utils/logger';
 import { getModelSelectorDropdownLayout } from './modelSelectorDropdownPosition';
 import { AcpModeSelector } from './AcpModeSelector';
-import {
-  ReasoningIntensityMark,
-  presetDisplayLabel,
-  reasoningIntensityLevel,
-} from './ReasoningPresetSelector';
+import { ReasoningIntensityMark } from './ReasoningPresetSelector';
+import { presetDisplayLabel, reasoningIntensityLevel } from './reasoningPresetPresentation';
 import {
   getRecentReasoningPreset,
   setRecentReasoningPreset,

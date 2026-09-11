@@ -13,11 +13,8 @@
     "empty": "沒有符合的兼容產品"
   },
   "host": {
-    "label": "執行主機",
     "local": "本機",
-    "remote": "遠端 · {{name}}",
-    "switchLabel": "切換執行主機",
-    "switchAction": "執行主機切換"
+    "remote": "遠端 · {{name}}"
   },
   "groups": {
     "connected": "已連接或發現",

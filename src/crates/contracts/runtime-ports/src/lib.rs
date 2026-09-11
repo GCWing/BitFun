@@ -85,6 +85,13 @@ pub use web_search::*;
 
 pub type PortResult<T> = Result<T, PortError>;
 
+/// Source geometry for a fixed-size ExecCommand PTY replay.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecTerminalSize {
+    pub cols: u16,
+    pub rows: u16,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PortErrorKind {
@@ -318,7 +325,7 @@ impl DelegationPolicy {
     }
 
     pub fn spawn_child_for(self, agent_type: &str) -> Self {
-        let is_swarm_planner = matches!(agent_type, "Ultra" | "SwarmPlanner");
+        let is_swarm_planner = matches!(agent_type, "Ultimate" | "SwarmPlanner");
         Self {
             allow_subagent_spawn: self.scope == DelegationScope::Swarm && is_swarm_planner,
             nesting_depth: self.nesting_depth.saturating_add(1),

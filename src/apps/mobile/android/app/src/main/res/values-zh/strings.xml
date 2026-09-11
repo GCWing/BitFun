@@ -24,15 +24,15 @@
     <string name="settings_theme_light">浅色</string>
     <string name="settings_theme_dark">深色</string>
     <string name="account_title">账号</string>
-    <string name="account_login_title">登录 OpenBitFun</string>
-    <string name="account_login_body">登录后即可同步设备、会话和远程控制状态。</string>
+    <string name="account_login_title">使用 GitHub 登录</string>
+    <string name="account_login_body">使用 GitHub 登录，连接你的电脑并远程操作会话。</string>
     <string name="account_login_server">登录服务器</string>
     <string name="account_username_placeholder">OpenBitFun 用户名</string>
     <string name="account_password_placeholder">OpenBitFun 密码</string>
     <string name="account_relay_url_placeholder">Relay 地址，例如 https://relay.example.com</string>
     <string name="account_signing_in">正在登录…</string>
     <string name="account_profile_title">个人资料</string>
-    <string name="account_openbitfun_account">OpenBitFun 账号</string>
+    <string name="account_openbitfun_account">GitHub 账号</string>
     <string name="account_signed_in_body">当前连接已通过账号 %1$s 验证。密码不会保存到手机。</string>
     <string name="account_connect">连接</string>
     <string name="account_device_current_control">当前控制</string>
@@ -40,7 +40,7 @@
     <string name="account_relay_url">中继地址</string>
     <string name="account_username">用户名</string>
     <string name="account_password">密码</string>
-    <string name="account_sign_in">登录</string>
+    <string name="account_sign_in">通过 GitHub 登录</string>
     <string name="account_sign_out">退出登录</string>
     <string name="account_offline">离线</string>
     <string name="account_online">在线</string>
@@ -329,7 +329,7 @@
     <string name="sidebar_untitled">未命名会话</string>
     <string name="sidebar_new_chat">聊天</string>
     <string name="sidebar_signed_out_new_chat">新聊天</string>
-    <string name="sidebar_sign_in">登录 OpenBitFun 账号</string>
+    <string name="sidebar_sign_in">使用 GitHub 登录</string>
     <string name="sidebar_scan_to_connect">扫码连接</string>
     <string name="connect_choose_connection">选择连接方式</string>
     <string name="shell_open_sidebar">打开侧边栏</string>
@@ -431,4 +431,17 @@
     <string name="remote_settings_openbitfun_user">OpenBitFun 用户</string>
     <string name="remote_settings_account_signed_in">已认证</string>
     <string name="chat_load_older_messages">加载更早消息</string>
+    <string name="account_open_github">打开 GitHub 授权</string>
+    <string name="account_device_link_invalid">请使用当前版本的 OpenBitFun 设备二维码。</string>
+    <string name="account_device_link_unavailable">该设备已离线，或不属于当前 GitHub 账户。</string>
+    <string name="chat_image_prepare_failed">无法处理这张图片，请选择其他图片。</string>
+    <string name="harness_minimal">极简</string>
+    <string name="harness_standard">标准</string>
+    <string name="harness_ultimate">极致</string>
+    <string name="task_completed_title">任务已完成</string>
+    <string name="task_completed_body">打开 OpenBitFun 查看结果。</string>
+    <string name="notification_onboarding_title">开启任务完成提醒</string>
+    <string name="notification_onboarding_later">稍后</string>
+    <string name="notification_onboarding_enable">开启通知</string>
+    <string name="notification_onboarding_body">允许 OpenBitFun 在任务完成时发送通知。你可以稍后在系统设置中更改。</string>
 </resources>

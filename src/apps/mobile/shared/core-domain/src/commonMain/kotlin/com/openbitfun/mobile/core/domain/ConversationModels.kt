@@ -65,6 +65,10 @@ public data class ChatSessionSnapshot public constructor(
     public val activeTurn: ChatMessage?,
     public val modelCatalog: RemoteModelCatalog?,
     public val shouldSyncAfterTurnEnded: Boolean,
+    /** Authoritative persisted history, distinct from an additive poll tail. */
+    public val messageSnapshot: List<ChatMessage>?,
+    /** The desktop reports fewer persisted messages than the client cursor. */
+    public val historyRewritten: Boolean,
 )
 
 public data class PollSessionResult public constructor(
@@ -76,6 +80,10 @@ public data class PollSessionResult public constructor(
     public val totalMessageCount: Int,
     public val activeTurn: ChatMessage?,
     public val modelCatalog: RemoteModelCatalog?,
+    /** Authoritative persisted history, distinct from [newMessages]. */
+    public val messageSnapshot: List<ChatMessage>?,
+    /** Whether [totalMessageCount] came from the peer instead of a local fallback. */
+    public val hasAuthoritativeMessageCount: Boolean,
 )
 
 public enum class ChatTimelineItemType {

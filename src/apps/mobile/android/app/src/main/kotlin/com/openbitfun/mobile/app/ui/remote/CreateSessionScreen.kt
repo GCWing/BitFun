@@ -43,6 +43,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.openbitfun.mobile.core.feature.session.HarnessProfilePolicy
+import com.openbitfun.mobile.core.feature.session.HarnessProfile
 import com.openbitfun.mobile.app.R
 import com.openbitfun.mobile.app.ui.chat.ComposerBar
 import com.openbitfun.mobile.app.ui.common.CircleControl
@@ -156,6 +158,8 @@ internal fun CreateSessionScreen(
     // Not saveable: an open sheet is a finger part-way through a gesture.
     var pickerKind by remember { mutableStateOf<CreateSelectionKind?>(null) }
     val focusManager = LocalFocusManager.current
+    var harnessProfile by remember { mutableStateOf(HarnessProfile.STANDARD) }
+    var harnessMenuOpen by remember { mutableStateOf(false) }
     val ready = workspaceState as? RemoteWorkspaceUiState.Ready
     LaunchedEffect(modelOptions) {
         if (modelOptions.none { it.id == selectedModelId }) {
@@ -311,6 +315,19 @@ internal fun CreateSessionScreen(
             }
         }
 
+        if (!workspacePath.isNullOrBlank() && HarnessProfilePolicy.supported(ready?.hostCapabilities.orEmpty())) {
+            Box {
+                androidx.compose.material3.TextButton(onClick = { harnessMenuOpen = true }) { HarnessProfileLabel(harnessProfile) }
+                androidx.compose.material3.DropdownMenu(expanded = harnessMenuOpen, onDismissRequest = { harnessMenuOpen = false }) {
+                    HarnessProfile.entries.forEach { profile ->
+                        androidx.compose.material3.DropdownMenuItem(text = { HarnessProfileLabel(profile) }, onClick = {
+                            harnessProfile = profile
+                            harnessMenuOpen = false
+                        })
+                    }
+                }
+            }
+        }
         ComposerBar(
             draft = draft,
             images = emptyList(),
@@ -345,7 +362,7 @@ internal fun CreateSessionScreen(
                 if (CreateSessionPresenter.canSubmit(draft, deviceId, busy)) {
                     onIntent(
                         RemoteSessionIntent.CreateSession(
-                            agentType = CreateSessionPresenter.agentType(workspacePath),
+                            agentType = if (workspacePath.isNullOrBlank()) CreateSessionPresenter.agentType(workspacePath) else HarnessProfilePolicy.creationAgent(harnessProfile, ready?.hostCapabilities.orEmpty()),
                             title = "",
                             instruction = draft,
                             modelId = selectedModelId,

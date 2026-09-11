@@ -105,21 +105,24 @@ async fn remote_connect_stop_delegates_concrete_cleanup_to_host() {
 }
 
 #[tokio::test]
-async fn remote_connect_start_failure_rolls_back_started_host() {
+async fn preparation_starts_a_local_host_but_never_grants_unauthenticated_control() {
     let port = unused_port().await;
-
     let host = Arc::new(RecordingEmbeddedRelayHost::default());
-    let service = RemoteConnectService::new(lan_config(port), host.clone())
-        .expect("remote connect service should initialize");
-
-    service
+    let service = RemoteConnectService::new(lan_config(port), host.clone()).unwrap();
+    assert_eq!(
+        service.prepare_relay(&lan_method()).await.unwrap(),
+        format!("http://127.0.0.1:{port}")
+    );
+    assert!(service
         .start(lan_method())
         .await
-        .expect_err("downstream relay connection should fail without a real host listener");
-
+        .unwrap_err()
+        .to_string()
+        .contains("Sign in with GitHub"));
     assert_eq!(host.start_calls.load(Ordering::SeqCst), 1);
+    assert!(host.active.load(Ordering::SeqCst));
+    service.stop_relay().await;
     assert_eq!(host.cleanup_stops.load(Ordering::SeqCst), 1);
-    assert!(!host.active.load(Ordering::SeqCst));
 }
 
 #[tokio::test]
@@ -132,7 +135,7 @@ async fn concurrent_relay_starts_do_not_cleanup_or_enter_the_host_concurrently()
 
     let first = tokio::spawn({
         let service = service.clone();
-        async move { service.start(lan_method()).await }
+        async move { service.prepare_relay(&lan_method()).await }
     });
     tokio::time::timeout(
         std::time::Duration::from_secs(1),
@@ -143,7 +146,7 @@ async fn concurrent_relay_starts_do_not_cleanup_or_enter_the_host_concurrently()
 
     let second = tokio::spawn({
         let service = service.clone();
-        async move { service.start(lan_method()).await }
+        async move { service.prepare_relay(&lan_method()).await }
     });
     assert!(
         tokio::time::timeout(
@@ -164,15 +167,15 @@ async fn concurrent_relay_starts_do_not_cleanup_or_enter_the_host_concurrently()
         .expect("serialized starts should complete");
     first_result
         .expect("first start task should join")
-        .expect_err("fake host does not create a relay listener");
+        .expect("endpoint preparation should succeed");
     second_result
         .expect("second start task should join")
-        .expect_err("fake host does not create a relay listener");
+        .expect("endpoint preparation should succeed");
 
-    assert_eq!(host.start_calls.load(Ordering::SeqCst), 2);
+    assert_eq!(host.start_calls.load(Ordering::SeqCst), 1);
     assert_eq!(host.overlapping_starts.load(Ordering::SeqCst), 0);
     assert_eq!(host.stop_while_starting.load(Ordering::SeqCst), 0);
-    assert!(!host.active.load(Ordering::SeqCst));
+    assert!(host.active.load(Ordering::SeqCst));
 }
 
 #[tokio::test]
@@ -185,7 +188,7 @@ async fn relay_stop_waits_for_an_in_progress_start_to_settle() {
 
     let start = tokio::spawn({
         let service = service.clone();
-        async move { service.start(lan_method()).await }
+        async move { service.prepare_relay(&lan_method()).await }
     });
     tokio::time::timeout(
         std::time::Duration::from_secs(1),
@@ -218,9 +221,103 @@ async fn relay_stop_waits_for_an_in_progress_start_to_settle() {
         .expect("start and stop should complete after release");
     start_result
         .expect("start task should join")
-        .expect_err("fake host does not create a relay listener");
+        .expect("endpoint preparation should succeed");
     stop_result.expect("stop task should join");
 
     assert_eq!(host.stop_while_starting.load(Ordering::SeqCst), 0);
     assert!(!host.active.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn official_invitation_requires_device_auth_without_starting_an_anonymous_room() {
+    let host = Arc::new(RecordingEmbeddedRelayHost::default());
+    let service = RemoteConnectService::new(RemoteConnectConfig::default(), host.clone()).unwrap();
+    let error = tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        service.start(ConnectionMethod::OpenBitFunServer),
+    )
+    .await
+    .expect("must fail immediately without waiting for RoomCreated")
+    .unwrap_err();
+    assert!(error.to_string().contains("Sign in with GitHub"));
+    assert_eq!(host.start_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(host.stop_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn official_and_lan_invitations_use_the_same_authenticated_device_protocol() {
+    for method in [ConnectionMethod::OpenBitFunServer, lan_method()] {
+        let host = Arc::new(RecordingEmbeddedRelayHost::default());
+        let service = RemoteConnectService::new(lan_config(9700), host.clone()).unwrap();
+        let url = service.prepare_relay(&method).await.unwrap();
+        *service.authenticated_device_id.write().await = Some("authenticated-host-1".into());
+        *service.device_relay_url.write().await = Some(url.clone());
+        let result = service.start(method.clone()).await.unwrap();
+        assert_eq!(
+            result.qr_url,
+            Some(format!("{url}/#/pair?did=authenticated-host-1"))
+        );
+        assert!(result
+            .qr_data
+            .as_ref()
+            .is_some_and(|value| !value.is_empty()));
+        assert_eq!(
+            host.start_calls.load(Ordering::SeqCst),
+            usize::from(matches!(method, ConnectionMethod::Lan { .. }))
+        );
+        service.stop_device_connection().await;
+        assert!(service.start(method).await.is_err());
+    }
+}
+
+#[tokio::test]
+async fn switching_endpoint_invalidates_the_previous_invitation() {
+    let host = Arc::new(RecordingEmbeddedRelayHost::default());
+    let service = RemoteConnectService::new(lan_config(9700), host.clone()).unwrap();
+    let local = service.prepare_relay(&lan_method()).await.unwrap();
+    *service.authenticated_device_id.write().await = Some("device-1".into());
+    *service.device_relay_url.write().await = Some(local);
+    assert!(service.start(lan_method()).await.is_ok());
+    service
+        .prepare_relay(&ConnectionMethod::OpenBitFunServer)
+        .await
+        .unwrap();
+    assert!(service.start(lan_method()).await.is_err());
+    assert!(service
+        .start(ConnectionMethod::OpenBitFunServer)
+        .await
+        .is_err());
+    assert!(!host.active.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn every_bot_provider_requires_an_active_github_account() {
+    let service = RemoteConnectService::new(
+        RemoteConnectConfig::default(),
+        Arc::new(RecordingEmbeddedRelayHost::default()),
+    )
+    .unwrap();
+    for method in [
+        ConnectionMethod::BotFeishu,
+        ConnectionMethod::BotTelegram,
+        ConnectionMethod::BotWeixin,
+    ] {
+        let error = service.start(method).await.unwrap_err();
+        assert!(error.to_string().contains("Sign in with GitHub"));
+    }
+    service.set_bot_account(Some("account-a".into())).await;
+    let epoch = service.bot_account_identity_epoch.load(Ordering::SeqCst);
+    service.set_bot_account(Some("account-a".into())).await;
+    assert_eq!(
+        service.bot_account_identity_epoch.load(Ordering::SeqCst),
+        epoch
+    );
+    service.set_bot_account(None).await;
+    assert!(service.bot_account_identity_epoch.load(Ordering::SeqCst) > epoch);
+    assert!(service
+        .start(ConnectionMethod::BotTelegram)
+        .await
+        .unwrap_err()
+        .to_string()
+        .contains("Sign in with GitHub"));
 }

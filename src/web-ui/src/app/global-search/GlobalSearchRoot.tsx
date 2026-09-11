@@ -10,7 +10,7 @@ import React, {
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
 import { OverflowText,
   ActionCard,
-  Button,
+  TabGroup,
   Icon,
   KeyHint,
   SearchField,
@@ -387,13 +387,13 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
                 inputRef.current?.focus();
               } : undefined}
               clearLabel={query ? tCommon('nav.search.clear') : undefined}
-              leadingIcon={<Icon name="search" size="lg" />}
+              leadingIcon={<Icon name="search" />}
               shortcut={query ? undefined : (
                 <KeyHint icon={searchShortcutHint.modifier}>
                   {searchShortcutHint.key}
                 </KeyHint>
               )}
-              size="md"
+              size={variant === 'modal' ? 'sm' : 'md'}
               placeholder={tCommon('nav.search.inputPlaceholder')}
               aria-label={tCommon('nav.search.inputLabel')}
               role="combobox"
@@ -407,28 +407,20 @@ export const GlobalSearchContent: React.FC<GlobalSearchContentProps> = ({
           </div>
 
           <div className="global-search__scope-bar" data-openbitfun-component="global-search" data-openbitfun-part="scopeBar">
-            <div className="global-search__scopes">
-              {(['all', 'actions', 'content'] as const).map((candidate) => {
-                const selected = effectiveScope === candidate;
-                return (
-                  <Button
-                    key={candidate}
-                    size="sm"
-                    variant={selected ? 'fill' : 'outline'}
-                    className={`global-search__scope global-search__scope--system${selected ? ' is-selected' : ''}`}
-                    aria-pressed={selected}
-                    disabled={parsedQuery.scopeForcedByPrefix && candidate !== 'actions'}
-                    onClick={() => {
-                      setScope(candidate);
-                      setDrilldownGroup(null);
-                      inputRef.current?.focus();
-                    }}
-                  >
-                    {tCommon(`nav.search.scopes.${candidate}`)}
-                  </Button>
-                );
-              })}
-            </div>
+            <TabGroup
+              className="global-search__scopes"
+              size="sm"
+              value={effectiveScope}
+              items={(['all', 'actions', 'content'] as const).map((candidate) => ({
+                value: candidate,
+                label: tCommon(`nav.search.scopes.${candidate}`),
+                disabled: parsedQuery.scopeForcedByPrefix && candidate !== 'actions',
+              }))}
+              onValueChange={(candidate) => {
+                setScope(candidate as GlobalSearchScope);
+                setDrilldownGroup(null);
+              }}
+            />
           </div>
         </header>
 

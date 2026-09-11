@@ -97,7 +97,7 @@ function addToolCard(toolId: string): void {
         startTime: 900,
       }],
       status: 'idle',
-      config: { agentType: 'agentic' },
+      config: { agentType: 'Standard' },
       createdAt: 800,
       lastActiveAt: 1000,
       error: null,

@@ -48,7 +48,7 @@ describe('UserMessageEditService', () => {
       turnId: 'turn-7',
       originalContent: 'original',
       editedContent: 'edited',
-      agentType: 'agentic',
+      agentType: 'Standard',
       rerun,
     });
 
@@ -58,7 +58,7 @@ describe('UserMessageEditService', () => {
     expect(rollbackSessionToTurn).toHaveBeenCalledWith(expect.objectContaining({
       lease: expect.objectContaining({ leaseId: mutation?.leaseId }),
     }));
-    expect(rerun).toHaveBeenCalledWith('edited', 'agentic', mutation?.leaseId);
+    expect(rerun).toHaveBeenCalledWith('edited', 'Standard', mutation?.leaseId);
     expect(() => assertSessionSubmissionAllowed('session-1')).toThrow('history mutation');
     expect(() => assertSessionSubmissionAllowed('session-1', mutation?.leaseId)).not.toThrow();
 

@@ -2588,7 +2588,7 @@ impl PersistenceManager {
             session_id: metadata.session_id.clone(),
             session_name: metadata.session_name.clone(),
             agent_type: if legacy_minimal {
-                "minimal".to_string()
+                "Minimal".to_string()
             } else {
                 metadata.agent_type.clone()
             },
@@ -2959,7 +2959,7 @@ impl PersistenceManager {
                 session_id: metadata.session_id,
                 session_name: metadata.session_name,
                 agent_type: if legacy_minimal {
-                    "minimal".to_string()
+                    "Minimal".to_string()
                 } else {
                     metadata.agent_type
                 },
@@ -4674,7 +4674,7 @@ mod tests {
                 &SessionMetadata::new(
                     session_id.to_string(),
                     "Hidden suffix".to_string(),
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     "model-a".to_string(),
                 ),
             )
@@ -4785,7 +4785,7 @@ mod tests {
         let session = Session::new_with_id(
             format!("model-summary-{}", Uuid::new_v4()),
             "Model summary".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 model_id: Some("fast".to_string()),
@@ -5509,7 +5509,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Catalog persistence".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -5589,7 +5589,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Catalog restore".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -5680,7 +5680,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Legacy catalog window".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -5770,7 +5770,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Catalog missing file".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -5825,7 +5825,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Incremental catalog repair".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -5934,7 +5934,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Catalog rebuild fallback".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -6003,7 +6003,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Catalog staged revert".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -6078,7 +6078,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Turn window".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -6374,7 +6374,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Concurrent metadata".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -6526,7 +6526,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Transactional deletion".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -6598,7 +6598,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Transactional session deletion".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -6644,7 +6644,7 @@ mod tests {
         let session = Session::new_with_id(
             session_id.clone(),
             "Canonical metadata lock".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                 ..Default::default()
@@ -7584,7 +7584,7 @@ mod tests {
         let historical = Session::new_with_id(
             historical_id.clone(),
             "Historical remote session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             config.clone(),
         );
         manager
@@ -7645,7 +7645,7 @@ mod tests {
         let new_session = Session::new_with_id(
             new_session_id.clone(),
             "New remote session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             config,
         );
         manager
@@ -7738,5 +7738,73 @@ mod tests {
             .await
             .expect("context snapshot reload should succeed")
             .is_none());
+    }
+}
+
+#[cfg(test)]
+mod image_persistence_tests {
+    use super::*;
+    use crate::agentic::image_analysis::{attachments, process_image_contexts_for_provider};
+    use crate::agentic::tools::framework::ToolUseContext;
+    use crate::agentic::workspace::WorkspaceBinding;
+
+    #[tokio::test]
+    async fn persisted_image_messages_reopen_after_inline_pixels_are_redacted() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut context = ToolUseContext::for_tool_listing(
+            Some(WorkspaceBinding::new(
+                Some("workspace".into()),
+                dir.path().to_path_buf(),
+            )),
+            None,
+        );
+        context.custom_data.insert(
+            "__openbitfun_test_runtime_root".into(),
+            serde_json::json!(dir.path()),
+        );
+        let mut images = vec![attachments::test_image()];
+        attachments::prepare_inline_image_attachments(&mut images, &context)
+            .await
+            .unwrap();
+        let original = Message::user_multimodal("Read the screenshot".into(), images);
+        let persisted = PersistenceManager::sanitize_message_for_persistence(&original);
+        let json = serde_json::to_value(persisted.as_ref()).unwrap();
+        assert!(!json.to_string().contains("data:image/"));
+        let restored: Message = serde_json::from_value(json).unwrap();
+        let MessageContent::Multimodal { images, .. } = restored.content else {
+            panic!("image message")
+        };
+        assert!(images[0].data_url.is_none());
+        assert!(images[0].metadata.as_ref().unwrap()["has_data_url"]
+            .as_bool()
+            .unwrap());
+        let processed = process_image_contexts_for_provider(&images, "openai", None)
+            .await
+            .unwrap();
+        assert_eq!((processed[0].width, processed[0].height), (8, 6));
+        let MessageContent::Multimodal {
+            images: live_images,
+            ..
+        } = &original.content
+        else {
+            panic!("live image")
+        };
+        assert!(live_images[0].data_url.is_some());
+
+        // A pre-upgrade image record has no new required fields or migration marker.
+        let legacy: crate::agentic::image_analysis::ImageContextData =
+            serde_json::from_value(serde_json::json!({
+                "id": "old-image", "image_path": images[0].image_path,
+                "data_url": null, "mime_type": "image/png", "metadata": {"has_data_url": true}
+            }))
+            .unwrap();
+        let round_trip = serde_json::from_value(serde_json::to_value(legacy).unwrap()).unwrap();
+        assert_eq!(
+            process_image_contexts_for_provider(&[round_trip], "anthropic", None)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
     }
 }

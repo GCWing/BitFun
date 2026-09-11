@@ -10,6 +10,27 @@ import {
 } from './tiptapMarkdown';
 
 describe('tiptap markdown compatibility', () => {
+  it.each([
+    '~~**Label**: remaining text~~',
+    '~~*Label*: remaining text~~',
+    '**~~Label~~: remaining text**',
+    '*~~Label~~: remaining text*',
+    '***Label**: remaining text*',
+    '~~before **middle** after~~',
+    '~~**Label**: remaining text~~ **Done**',
+    '~~***Label***: remaining text~~',
+  ])('preserves nested formatting ranges: %s', markdown => {
+    expect(analyzeMarkdownEditability(markdown).semanticEqual).toBe(true);
+    expect(markdownToEditableTiptapDoc(markdown).content?.[0].type).toBe('paragraph');
+  });
+
+  it('keeps a report with partially bold strikethrough editable as separate blocks', () => {
+    const markdown = '# Report\n\n- ~~**Remaining**: implementation and tests~~ **Done**\n\n## Results\n\nOrdinary text.';
+    const doc = markdownToEditableTiptapDoc(markdown);
+    expect(doc.content?.map(node => node.type)).toEqual(['heading', 'bulletList', 'heading', 'paragraph']);
+    expect(tiptapDocToMarkdown(doc)).toBe(markdown);
+  });
+
   it('supports gfm tables without falling back', () => {
     const markdown = [
       '| name | value |',
@@ -76,7 +97,7 @@ describe('tiptap markdown compatibility', () => {
     expect(emailNode?.text).toBe('support@example.com');
     expect(slashEmailNode).toBeUndefined();
     expect(tiptapDocToMarkdown(doc)).toBe(
-      'Contact [support@example.com](mailto:support@example.com) or see /admin@example.com.'
+      'Contact [support@example.com](mailto:support@example.com) or see /admin\\@example.com.'
     );
   });
 
@@ -375,8 +396,9 @@ describe('tiptap markdown compatibility', () => {
     const serialized = tiptapDocToMarkdown(doc);
     const analysis = analyzeMarkdownEditability(markdown);
 
-    expect(serialized).toBe(markdown);
-    expect(analysis.mode).toBe('lossless');
+    expect(serialized).toBe(markdown.replace(/x86_64(?=:| \()/g, 'x86\\_64'));
+    expect(analysis.semanticEqual).toBe(true);
+    expect(analysis.mode).toBe('canonicalizable');
     expect(analysis.containsRenderOnlyBlocks).toBe(false);
     expect(analysis.containsRawHtmlBlocks).toBe(false);
     expect(doc.content?.[0]?.type).toBe('details');

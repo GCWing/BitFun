@@ -34,7 +34,7 @@ export default function appRootRuntimeStartupUnitTest() {
       expect(runtime.remotePageState.accountUsername).assertEqual('alice');
       expect(runtime.remotePageState.controlTargetType).assertEqual('none');
       expect(runtime.remotePageState.controlTargetDeviceId).assertEqual('');
-      expect(runtime.appShellViewModel.currentRoute()).assertEqual(AppRoute.ChatHome);
+      expect(runtime.appShellViewModel.currentRoute()).assertEqual(AppRoute.RemoteHome);
     });
   });
 }

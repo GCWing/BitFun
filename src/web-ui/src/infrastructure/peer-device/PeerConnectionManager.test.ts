@@ -26,6 +26,7 @@ describe('PeerConnectionManager attach', () => {
       health: 'ready',
       capabilities: {
         idempotentDialogSubmit: true,
+        inlineImageAttachmentsV1: true,
         targetedSessionRollback: false,
         tokenUsageStatistics: true,
         miniAppAgentContextFilesV1: true,
@@ -125,6 +126,7 @@ describe('PeerConnectionManager attach', () => {
 
     const desktop = await makeManager('desktop').connect('peer-1', 'Studio');
     expect(desktop.getState().capabilities.hostKind).toBe('desktop');
+    expect(desktop.getState().capabilities.inlineImageAttachmentsV1).toBe(false);
 
     const cli = await makeManager('cli').connect('peer-2', 'Studio');
     expect(cli.getState().capabilities.hostKind).toBe('cli');
@@ -601,6 +603,7 @@ function createRpc(options: { failCommands?: Set<string> } = {}) {
           host_type: 'desktop',
           capabilities: {
             idempotent_dialog_submit: true,
+            inline_image_attachments_v1: true,
             token_usage_statistics: true,
             miniapp_agent_context_files_v1: true,
             wsl_workspaces_v1: true,

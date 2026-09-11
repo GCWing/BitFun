@@ -24,7 +24,7 @@ function observerJob(overrides: Partial<DispatchObserverJob>): DispatchObserverJ
     },
     sourceWorkspacePath: '/controller/repo',
     title: 'job',
-    agentType: 'agentic',
+    agentType: 'Standard',
     approvalPolicy: 'remote',
     cursor: 0,
     state: 'submitting',

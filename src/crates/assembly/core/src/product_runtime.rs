@@ -3080,7 +3080,7 @@ mod tests {
         let root = SessionMetadata::new(
             "root".to_string(),
             "Root".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         );
         let mut child = SessionMetadata::new(
@@ -3257,7 +3257,7 @@ mod tests {
         let root = SessionMetadata::new(
             "root".to_string(),
             "Root".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         );
         let mut child = SessionMetadata::new(
@@ -3434,7 +3434,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Reload test".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 crate::agentic::core::SessionConfig {
                     workspace_path: Some(workspace.path().to_string_lossy().to_string()),
                     ..Default::default()
@@ -3706,7 +3706,7 @@ mod tests {
             let source = crate::agentic::core::Session::new_with_id(
                 source_session_id.clone(),
                 format!("Remote fork {host}"),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 crate::agentic::core::SessionConfig {
                     workspace_path: Some(remote_path.clone()),
                     remote_connection_id: Some(connection_id.to_string()),
@@ -3997,7 +3997,7 @@ mod tests {
         let source = crate::agentic::core::Session::new_with_id(
             "remote-source".into(),
             "Remote source".into(),
-            "agentic".into(),
+            "Standard".into(),
             crate::agentic::core::SessionConfig {
                 workspace_path: Some("/workspace/repo".into()),
                 remote_connection_id: Some("ssh-source".into()),
@@ -4120,7 +4120,7 @@ mod tests {
         let mut metadata = SessionMetadata::new(
             session_id.to_string(),
             "Latest fork".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model-a".to_string(),
         );
         metadata.workspace_path = Some(workspace_root.to_string_lossy().into_owned());
@@ -4208,7 +4208,7 @@ mod tests {
             .create_transient_session_with_id_and_details(
                 Some("session-transient-settlement".to_string()),
                 "Transient settlement".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 crate::agentic::core::SessionConfig {
                     workspace_path: Some(workspace_root.to_string_lossy().into_owned()),
                     ..Default::default()
@@ -4221,7 +4221,7 @@ mod tests {
         let transient_turn_id = session_manager
             .start_dialog_turn(
                 &transient.session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "finish transiently".to_string(),
                 Some("turn-transient-settlement".to_string()),
                 None,
@@ -4255,7 +4255,7 @@ mod tests {
         );
 
         assert_ne!(result.session_id, session_id);
-        assert_eq!(result.agent_type, "agentic");
+        assert_eq!(result.agent_type, "Standard");
         assert_eq!(
             persistence
                 .load_session_turns(&storage_path, &result.session_id)
@@ -4483,7 +4483,7 @@ mod tests {
                 &SessionMetadata::new(
                     session_id.to_string(),
                     "Usage session".to_string(),
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     "model-a".to_string(),
                 ),
             )
@@ -4659,7 +4659,7 @@ mod tests {
                 &SessionMetadata::new(
                     runtime_session_id.to_string(),
                     "Runtime owned".to_string(),
-                    "agentic".to_string(),
+                    "Standard".to_string(),
                     "model-a".to_string(),
                 ),
             )

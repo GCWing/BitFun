@@ -48,7 +48,7 @@
     "builtin": "內建",
     "user": "用戶級",
     "project": "項目級",
-    "suite": "套件"
+    "groups": "技能分組"
   },
   "categories": {
     "all": "查看所有已安裝的技能，包含內建、用戶與項目級。",
@@ -56,7 +56,7 @@
     "user": "為目前帳戶全域安裝的 OpenBitFun 用戶級技能。",
     "project": "目前工作區底下的 OpenBitFun 項目級技能。",
     "source": "從 {{source}} 掃描到的技能，包含用戶級及目前工作區的項目級技能。",
-    "suite": "依模式分組的內建技能套件，可一鍵控制可見性。"
+    "groups": "建立和整理可重複使用的技能分組。"
   },
   "section": {
     "user": {
@@ -105,15 +105,57 @@
       "linkLabel": "鏈接"
     }
   },
-  "suite": {
-    "title": "技能套件",
-    "subtitle": "選擇一個模式後，可一鍵控制各組 Skill 的可見性；也可逐個調整 Skill 後按組儲存",
-    "modeLabel": "模式",
-    "refreshTooltip": "重新整理目前模式",
-    "refreshAction": "重新整理",
-    "loading": "正在載入技能套件...",
-    "empty": "目前沒有可用的 Skill",
-    "groups": {
+  "groups": {
+    "title": "技能分組",
+    "subtitle": "建立和整理可重複使用的技能分組。",
+    "create": "新增分組",
+    "edit": "編輯分組",
+    "copy": "複製分組",
+    "copyName": "{{name}} 副本",
+    "copyNameNumbered": "{{name}} {{count}}",
+    "delete": "刪除分組",
+    "deleteTitle": "刪除技能分組",
+    "deleteMessage": "刪除「{{name}}」？技能和既有智慧體設定將保留。",
+    "moveUp": "上移",
+    "moveDown": "下移",
+    "actions": "{{name}} 的操作",
+    "refresh": "重新整理分組和技能",
+    "search": "搜尋分組或技能…",
+    "searchSkills": "搜尋技能…",
+    "name": "分組名稱",
+    "namePlaceholder": "例如：日常開發",
+    "save": "儲存分組",
+    "cancel": "關閉",
+    "selectedOnly": "僅看已選",
+    "memberCount": "{{count}} 個技能",
+    "unavailableCount": "{{count}} 個無法使用",
+    "myGroups": "我的分組",
+    "builtinGroups": "內建分組",
+    "emptyGroup": "尚未新增技能",
+    "unresolvedMembers": "目前目錄中無法取得成員資訊",
+    "noGroups": "還沒有技能分組。",
+    "noMatch": "沒有符合的分組。",
+    "noMatchingSkills": "沒有符合的技能。",
+    "loading": "正在載入技能分組…",
+    "catalogUnavailable": "技能目錄尚未完整載入，既有成員參照會保留。",
+    "unavailableMember": "目前環境無法使用",
+    "unresolvedMember": "暫時無法取得技能詳情",
+    "globalDisabled": "已全域停用",
+    "discardTitle": "捨棄分組修改？",
+    "discardMessage": "此分組尚未儲存的修改將被捨棄。",
+    "discard": "捨棄修改",
+    "keepEditing": "繼續編輯",
+    "errors": {
+      "invalidConfig": "無法讀取已儲存的分組資料，原始資料已保留。",
+      "unsupportedVersion": "這些分組使用了更新的格式，請更新 OpenBitFun 後編輯。",
+      "nameRequired": "請輸入分組名稱。",
+      "nameDuplicate": "已存在同名分組。",
+      "conflict": "此分組已在其他位置修改，請關閉編輯器並重新整理後再次編輯。",
+      "notReady": "請等待分組載入完成，或重新整理後再試。",
+      "loadFailed": "載入技能分組失敗，請重新整理後再試。",
+      "saveFailed": "儲存分組失敗，修改已保留，請重試。"
+    },
+    "builtin": {
       "office": "Office",
       "computerUse": "Computer Use",
       "meta": "Meta",
@@ -122,61 +164,7 @@
       "debugging": "偵錯",
       "coordination": "協作調度",
       "planning": "規劃",
-      "gstack": "gstack",
-      "other": "其他"
-    },
-    "sections": {
-      "myGroups": "我的分組",
-      "builtin": "內置分組",
-      "otherSkills": "其他 Skill"
-    },
-    "manageGroups": "管理 Skill 分組",
-    "modes": {
-      "agentic": "agentic",
-      "cowork": "Cowork"
-    },
-    "modeDescriptions": {
-      "agentic": "偏編碼的預設模式",
-      "cowork": "辦公協作模式",
-      "claw": "助理模式"
-    },
-    "modeActions": {
-      "reset": "重設 {{mode}}",
-      "resetShort": "重設"
-    },
-    "groupActions": {
-      "save": "儲存",
-      "enableGroup": "啟用分組",
-      "disableGroup": "停用分組"
-    },
-    "resetDialog": {
-      "title": "重設 {{mode}}？",
-      "message": "這會將該模式的技能可見性恢復為預設狀態。",
-      "messageWithUnsaved": "這會將該模式的技能可見性恢復為預設狀態，並丟棄目前未儲存的改動。",
-      "confirm": "重設",
-      "cancel": "取消"
-    },
-    "groupState": {
-      "enabled": "可見",
-      "disabled": "隱藏",
-      "partial": "部分"
-    },
-    "skillState": {
-      "enabled": "已為此模式啟用",
-      "disabled": "已為此模式停用",
-      "pending": "未儲存",
-      "covered": "已覆蓋 · {{source}}",
-      "coveredDetail": "已啟用，但此模式會使用 {{source}} 中的同名技能。",
-      "globalDisabled": "已全域停用"
-    },
-    "groupCount": "{{total}} 個",
-    "messages": {
-      "saveSuccess": "已更新 {{mode}} 套件可見性",
-      "saveFailed": "更新套件失敗: {{error}}",
-      "resetSuccess": "已恢復 {{mode}} 套件預設設定",
-      "resetFailed": "重設套件失敗: {{error}}",
-      "refreshFailed": "重新整理套件失敗: {{error}}",
-      "saveFirst": "請先儲存目前技能改動。"
+      "gstack": "gstack"
     }
   },
   "form": {

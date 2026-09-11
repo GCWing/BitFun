@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
+import { VoiceCallPreview, VoiceParticlePreview } from "../components/VoiceCallPreview";
 import { Clipboard, List } from "lucide-react";
 import {
   ActionCard,
@@ -349,14 +350,14 @@ export function ComponentDetailPage({
   const [fieldShowControlTrailing, setFieldShowControlTrailing] = useState(false);
   const [pageHeaderAlign, setPageHeaderAlign] = useState<PageHeaderAlign>("start");
   const [cardContentAlign, setCardContentAlign] = useState<CardContentAlignment>("start");
-  const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("lg");
+  const [pageHeaderSize, setPageHeaderSize] = useState<PageHeaderSize>("md");
   const [scrollAreaOrientation, setScrollAreaOrientation] = useState<ScrollAreaOrientation>("vertical");
   const [activityItemAppearance, setActivityItemAppearance] = useState<ActivityItemAppearance>("surface");
   const [activityShowDetail, setActivityShowDetail] = useState(false);
   const [pageHeaderRequired, setPageHeaderRequired] = useState(false);
   const [actionItemShowMetadata, setActionItemShowMetadata] = useState(false);
-  const [actionCardSize, setActionCardSize] = useState<ActionCardSize>("sm");
-  const [tabGroupSize, setTabGroupSize] = useState<TabGroupSize>("md");
+  const [actionCardSize, setActionCardSize] = useState<ActionCardSize>("md");
+  const [tabGroupSize, setTabGroupSize] = useState<TabGroupSize>("sm");
   const [toolbarSize, setToolbarSize] = useState<ToolbarSize>("sm");
   const [previewState, setPreviewState] = useState(
     component.name === "Card"
@@ -497,6 +498,12 @@ export function ComponentDetailPage({
     if (component.name === "LauncherButton") {
       return 'import { Icon, LauncherButton } from "@openbitfun/ui";\n\n<LauncherButton leadingIcon={<Icon name="mic" />}>\n  Hello\n</LauncherButton>';
     }
+    if (component.name === "VoiceParticleLogo") {
+      return 'import { VoiceParticleLogo } from "@openbitfun/ui";\n\n// Return live FFT byte bins from fftSize=256 analysers.\n<VoiceParticleLogo readAudio={() => ({\n  user: microphoneFrequencyData,\n  assistant: playbackFrequencyData,\n  assistantSpeaking: isAudioPlaying,\n})} />';
+    }
+    if (component.name === "VoiceCallPanel") {
+      return 'import { VoiceCallPanel } from "@openbitfun/ui";\n\n<VoiceCallPanel\n  title="Live Call"\n  labels={{ back: "Back to chat", close: "Close", mute: "Mute",\n    unmute: "Unmute", settings: "Settings", end: "End call" }}\n  phase="live"\n  muted={muted}\n  userTranscript={userTranscript}\n  assistantTranscript={assistantTranscript}\n  readAudio={readAudio}\n  onBack={returnToChat}\n  onClose={closeWindow}\n  onToggleMute={toggleMute}\n  onOpenSettings={openVoiceSettings}\n  onEnd={endCall}\n/>';
+    }
     if (component.name === "ActionItem") {
       const metadataProp = actionItemShowMetadata ? `\n  metadata="12"` : "";
       return `import { Icon, ActionItem, KeyHint } from "@openbitfun/ui";\n\n<ActionItem\n  actions={[\n    { id: "add", icon: <Icon name="plus" />, label: "${t("components.preview.add")}" },\n    { id: "more", icon: <Icon name="more" />, label: "${t("components.preview.more")}" },\n  ]}\n  leading={<Icon name="session" />}${metadataProp}\n  shortcut={<KeyHint>K</KeyHint>}\n>\n  ${t("components.preview.assistant")}\n</ActionItem>`;
@@ -615,10 +622,10 @@ export function ComponentDetailPage({
     }
     if (component.name === "SegmentedControl") {
       const defaultMode = previewState === "unselected" ? "agent" : "chat";
-      return `import { Icon, SegmentedControl } from "@openbitfun/ui";\n\n<SegmentedControl\n  aria-label="${t("components.preview.segmentedLabel")}"\n  defaultValue="${defaultMode}"\n  onValueChange={setMode}\n  options={[\n    { icon: <Icon name="session" />, label: "${t("components.preview.segmentedChat")}", value: "chat" },\n    { label: "${t("components.preview.segmentedAgent")}", value: "agent" },\n  ]}\n/>`;
+      return `import { Icon, SegmentedControl } from "@openbitfun/ui";\n\n<SegmentedControl\n  size="md"\n  aria-label="${t("components.preview.segmentedLabel")}"\n  defaultValue="${defaultMode}"\n  onValueChange={setMode}\n  options={[\n    { icon: <Icon name="session" />, label: "${t("components.preview.segmentedChat")}", value: "chat" },\n    { label: "${t("components.preview.segmentedAgent")}", value: "agent" },\n  ]}\n/>`;
     }
     if (component.name === "StatusPill") {
-      return `import { Icon, StatusPill } from "@openbitfun/ui";\n\n<StatusPill leading={<Icon name="unselected" />} tone="${previewState}">\n  Ask\n</StatusPill>`;
+      return `import { Icon, StatusPill } from "@openbitfun/ui";\n\n<StatusPill emphasis leading={<Icon name="unselected" />} tone="${previewState}">\n  Ask\n</StatusPill>`;
     }
     if (component.name === "Disclosure") {
       const stateProps = previewState === "open" ? " defaultOpen" : previewState === "disabled" ? " disabled" : "";
@@ -817,7 +824,7 @@ export function ComponentDetailPage({
             </DialogHeading>
             <DialogClose />
           </DialogHeader>
-          <DialogBody className="component-dialog-example__body">{renderDialogConfigurationContent()}</DialogBody>
+          <DialogBody>{renderDialogConfigurationContent()}</DialogBody>
           <DialogFooter appearance="floating">
             <Button onClick={closePreview} variant="fill">
               {t("components.preview.modalCancel")}
@@ -892,6 +899,8 @@ export function ComponentDetailPage({
     previewVariant = variant,
     applyInspectorControls = false,
   ) {
+    if (component.name === "VoiceCallPanel") return <VoiceCallPreview key={state} state={state} />;
+    if (component.name === "VoiceParticleLogo") return <VoiceParticlePreview active={state !== "paused" && state !== "reduced-motion"} />;
     if (isFlowChatComponent) {
       return (
         <FlowChatComponentPreview
@@ -1149,6 +1158,7 @@ export function ComponentDetailPage({
     if (component.name === "StatusPill") {
       return (
         <StatusPill
+          emphasis
           leading={<Icon name="unselected" />}
           tone={state as StatusPillTone}
         >
@@ -1886,8 +1896,9 @@ export function ComponentDetailPage({
       const defaultMode = state === "unselected" ? "agent" : "chat";
       return (
         <SegmentedControl
+          size="md"
           aria-label={t("components.preview.segmentedLabel")}
-          data-openbitfun-preview-state={state === "hover" ? "hover" : undefined}
+          data-openbitfun-preview-state={state === "hover" || state === "active" ? state : undefined}
           defaultValue={defaultMode}
           disabled={state === "disabled"}
           key={state}
@@ -1915,7 +1926,7 @@ export function ComponentDetailPage({
       return (
         <TabGroup
           aria-label={t("components.preview.tabGroupLabel")}
-          data-openbitfun-preview-state={state === "hover" ? "hover" : undefined}
+          data-openbitfun-preview-state={state === "hover" || state === "active" ? state : undefined}
           defaultValue={defaultTab}
           items={[
             {

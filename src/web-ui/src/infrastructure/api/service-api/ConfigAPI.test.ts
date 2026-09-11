@@ -126,7 +126,7 @@ describe('ConfigAPI batch config reads', () => {
 
     await configAPI.getSkillConfigs({ workspacePath: '/remote/project' });
     await configAPI.getModeSkillConfigs({
-      modeId: 'agentic',
+      modeId: 'Standard',
       workspacePath: '/remote/project',
     });
 
@@ -140,7 +140,7 @@ describe('ConfigAPI batch config reads', () => {
       2,
       'get_mode_skill_configs',
       {
-        modeId: 'agentic',
+        modeId: 'Standard',
         forceRefresh: undefined,
         workspacePath: '/remote/project',
       },

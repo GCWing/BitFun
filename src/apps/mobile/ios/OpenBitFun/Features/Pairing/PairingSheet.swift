@@ -8,11 +8,8 @@ struct PairingSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var step: Step = .intro
     @State private var pairingURL = MobileLaunchConfiguration.pairingAccountPreview
-        ? "https://relay.example.com/#/pair?room=preview-room&pk=preview-key&auth=account&user=preview"
+        ? "https://remote.openbitfun.com/v/1.0.0/#/pair?did=preview-device"
         : ""
-    @State private var pairingUserID = ""
-    // Intentionally transient: pairing passwords must never enter saved scene state.
-    @State private var pairingPassword = ""
     @State private var manualOpen = false
     @State private var scanError: String?
     @State private var switchingDeviceID: String?
@@ -265,7 +262,7 @@ struct PairingSheet: View {
             Spacer(minLength: 12)
             SignedOutConnectionActions(
                 scanTitle: model.localized("扫码连接"),
-                accountTitle: model.localized("登录 OpenBitFun 账号"),
+                accountTitle: model.localized("使用 GitHub 登录"),
                 onScan: {
                     scanError = nil
                     step = .scan
@@ -387,12 +384,7 @@ struct PairingSheet: View {
     private func handleScannedCode(_ code: String) {
         pairingURL = code
         scanError = nil
-        if PairingLinkHintsKt.inspectPairingLink(url: code).requiresAccount {
-            manualOpen = true
-            focused = true
-        } else {
-            model.submitPairing(url: code)
-        }
+        model.submitPairing(url: code)
     }
 
     private func scanCornerAlignment(_ index: Int) -> Alignment {
@@ -432,31 +424,21 @@ struct PairingSheet: View {
     }
 
     private var manualPairingOverlay: some View {
-        let hints = PairingLinkHintsKt.inspectPairingLink(url: pairingURL)
-        let effectiveUserID = pairingUserID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? hints.suggestedUserId
-            : pairingUserID.trimmingCharacters(in: .whitespacesAndNewlines)
         let canSubmit = !model.pairingBusy &&
-            !pairingURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-            (!hints.requiresAccount || (!effectiveUserID.isEmpty && !pairingPassword.isEmpty))
+            !pairingURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
         return ZStack {
             OpenBitFunTheme.scrim
                 .ignoresSafeArea()
                 .onTapGesture {
                     if !model.pairingBusy {
-                        pairingPassword = ""
                         manualOpen = false
                     }
                 }
             VStack(alignment: .leading, spacing: 20) {
-                Text(model.localized(hints.requiresAccount ? "账号认证配对" : "手动输入配对码"))
+                Text(model.localized("手动输入配对码"))
                     .font(.system(size: 24, weight: .bold)).foregroundStyle(OpenBitFunTheme.ink)
-                Text(model.localized(
-                    hints.requiresAccount
-                        ? "此桌面要求使用 OpenBitFun 账号验证身份。"
-                        : "输入桌面端显示的配对链接或代码。"
-                ))
+                Text(model.localized("输入桌面端显示的配对链接或代码。"))
                     .font(.system(size: 17)).foregroundStyle(OpenBitFunTheme.muted).lineSpacing(5)
                 TextField(model.localized("配对码或连接链接"), text: $pairingURL)
                     .textInputAutocapitalization(.never)
@@ -467,51 +449,16 @@ struct PairingSheet: View {
                     .padding(.horizontal, 20).frame(minHeight: 62)
                     .background(OpenBitFunTheme.soft).clipShape(Capsule())
                     .focused($focused)
-                if hints.requiresAccount {
-                    TextField(
-                        hints.suggestedUserId.isEmpty
-                            ? model.localized("OpenBitFun 用户名")
-                            : hints.suggestedUserId,
-                        text: $pairingUserID
-                    )
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .textContentType(.username)
-                    .font(.system(size: 18)).foregroundStyle(OpenBitFunTheme.ink)
-                    .padding(.horizontal, 20).frame(minHeight: 56)
-                    .background(OpenBitFunTheme.soft).clipShape(Capsule())
-
-                    SecureField(model.localized("OpenBitFun 密码"), text: $pairingPassword)
-                        .textContentType(.password)
-                        .font(.system(size: 18)).foregroundStyle(OpenBitFunTheme.ink)
-                        .padding(.horizontal, 20).frame(minHeight: 56)
-                        .background(OpenBitFunTheme.soft).clipShape(Capsule())
-
-                    Text(model.localized("账号凭据只用于本次加密配对，不会保存。"))
-                        .font(.system(size: 13))
-                        .foregroundStyle(OpenBitFunTheme.muted)
-                        .lineSpacing(3)
-                }
                 if let error = model.pairingError {
                     Text(error).font(.system(size: 13)).foregroundStyle(OpenBitFunTheme.statusDanger)
                 }
                 HStack(spacing: 12) {
                     pairingButton("取消", primary: false) {
-                        pairingPassword = ""
                         manualOpen = false
                         focused = false
                     }
                     pairingButton(model.pairingBusy ? "正在连接" : "配对", primary: true) {
-                        if hints.requiresAccount {
-                            model.submitPairing(
-                                url: pairingURL,
-                                userID: effectiveUserID,
-                                password: pairingPassword
-                            )
-                            pairingPassword = ""
-                        } else {
-                            model.submitPairing(url: pairingURL)
-                        }
+                        model.submitPairing(url: pairingURL)
                         focused = false
                     }
                     .disabled(!canSubmit)

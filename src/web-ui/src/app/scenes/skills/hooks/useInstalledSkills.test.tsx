@@ -8,7 +8,11 @@ import { useInstalledSkills } from './useInstalledSkills';
 import type { InstalledFilter } from '../skillsSceneStore';
 
 const getSkillConfigsMock = vi.hoisted(() => vi.fn());
-const diagnosticsMock = vi.hoisted(() => ({ items: [] as Array<{path: string; sourceId: string; message: string}> }));
+const translateMock = vi.hoisted(() => (key: string) => key);
+const diagnosticsMock = vi.hoisted(() => ({
+  items: [] as Array<{path: string; sourceId: string; message: string}>,
+  available: true,
+}));
 const getGlobalSkillSettingsMock = vi.hoisted(() => vi.fn());
 const setGlobalSkillDisabledMock = vi.hoisted(() => vi.fn());
 const deleteSkillMock = vi.hoisted(() => vi.fn());
@@ -16,16 +20,17 @@ const validateSkillPathMock = vi.hoisted(() => vi.fn());
 const notificationMocks = vi.hoisted(() => ({
   success: vi.fn(),
   warning: vi.fn(),
+  info: vi.fn(),
   error: vi.fn(),
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ t: translateMock }),
 }));
 vi.mock('@/infrastructure/api', () => ({
   configAPI: {
-    getSkillScanReport: async (...args: unknown[]) => ({ skills: await getSkillConfigsMock(...args), diagnostics: diagnosticsMock.items, diagnosticsAvailable: true }),
+    getSkillScanReport: async (...args: unknown[]) => ({ skills: await getSkillConfigsMock(...args), diagnostics: diagnosticsMock.items, diagnosticsAvailable: diagnosticsMock.available }),
     getGlobalSkillSettings: getGlobalSkillSettingsMock,
     setGlobalSkillDisabled: setGlobalSkillDisabledMock,
     validateSkillPath: validateSkillPathMock,
@@ -79,9 +84,11 @@ describe('useInstalledSkills', () => {
     validateSkillPathMock.mockReset().mockResolvedValue({ valid: true, name: 'test' });
     notificationMocks.success.mockReset();
     notificationMocks.warning.mockReset();
+    notificationMocks.info.mockReset();
     notificationMocks.error.mockReset();
     currentInstalled = null;
     diagnosticsMock.items = [];
+    diagnosticsMock.available = true;
   });
 
   afterEach(async () => {
@@ -98,6 +105,56 @@ describe('useInstalledSkills', () => {
     expect(currentInstalled?.skills).toEqual(skills);
     expect(currentInstalled?.diagnostics).toEqual(diagnosticsMock.items);
     expect(currentInstalled?.error).toBeNull();
+    expect(notificationMocks.warning).toHaveBeenCalledExactlyOnceWith('list.scanIncomplete', {
+      title: 'nav.title',
+      metadata: { diagnostics: '/skills/bad/SKILL.md: missing description' },
+    });
+  });
+
+  it('does not repeat unchanged scan warnings on refresh, but reports changes and recurrence', async () => {
+    diagnosticsMock.items = [
+      { path: '/skills/first', sourceId: 'codex', message: 'missing target' },
+      { path: '/skills/second', sourceId: 'opencode', message: 'permission denied' },
+    ];
+    await act(async () => root.render(<Harness enabled />));
+    expect(notificationMocks.warning).toHaveBeenCalledTimes(1);
+
+    diagnosticsMock.items = [...diagnosticsMock.items].reverse();
+    await act(async () => { await currentInstalled?.loadSkills(true); });
+    expect(notificationMocks.warning).toHaveBeenCalledTimes(1);
+
+    diagnosticsMock.items = [{ ...diagnosticsMock.items[0], message: 'missing target' }];
+    await act(async () => { await currentInstalled?.loadSkills(true); });
+    expect(notificationMocks.warning).toHaveBeenCalledTimes(2);
+
+    const failures = diagnosticsMock.items;
+    diagnosticsMock.items = [];
+    await act(async () => { await currentInstalled?.loadSkills(true); });
+    expect(notificationMocks.warning).toHaveBeenCalledTimes(2);
+    diagnosticsMock.items = failures;
+    await act(async () => { await currentInstalled?.loadSkills(true); });
+    expect(notificationMocks.warning).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not claim skills are available when every scanned skill failed', async () => {
+    diagnosticsMock.items = [{ path: '/skills/broken', sourceId: 'opencode', message: 'missing target' }];
+    await act(async () => root.render(<Harness enabled />));
+    expect(currentInstalled?.skills).toEqual([]);
+    expect(notificationMocks.warning).toHaveBeenCalledExactlyOnceWith('list.loadFailed', {
+      title: 'nav.title',
+      metadata: { diagnostics: '/skills/broken: missing target' },
+    });
+  });
+
+  it('reports hosts without scan diagnostics once as informational feedback', async () => {
+    diagnosticsMock.available = false;
+    await act(async () => root.render(<Harness enabled />));
+    await act(async () => { await currentInstalled?.loadSkills(true); });
+    expect(currentInstalled?.diagnosticsAvailable).toBe(false);
+    expect(notificationMocks.warning).not.toHaveBeenCalled();
+    expect(notificationMocks.info).toHaveBeenCalledExactlyOnceWith('list.diagnosticsUnavailable', {
+      title: 'nav.title',
+    });
   });
 
   it('does not query desktop skill configuration during a remote connection' , async () => {
@@ -143,7 +200,7 @@ describe('useInstalledSkills', () => {
       { id: 'source:codex', label: 'Codex' },
     ]);
     expect(currentInstalled?.counts).toEqual({
-      all: 7, builtin: 1, suite: 1, user: 1, project: 1,
+      all: 7, builtin: 1, user: 1, project: 1,
       'source:codex': 2, 'source:claude-code': 1, 'source:agent-skills': 1,
     });
     await act(async () => root.render(<Harness enabled activeFilter="source:codex" searchQuery="remote" />));
@@ -158,6 +215,7 @@ describe('useInstalledSkills', () => {
   });
 
   it('ignores a desktop skill load that finishes after switching away', async () => {
+    diagnosticsMock.items = [{ path: '/skills/broken', sourceId: 'opencode', message: 'missing target' }];
     let resolveLoad: ((skills: SkillInfo[]) => void) | undefined;
     getSkillConfigsMock.mockReturnValueOnce(new Promise<SkillInfo[]>((resolve) => {
       resolveLoad = resolve;
@@ -188,6 +246,8 @@ describe('useInstalledSkills', () => {
 
     expect(currentInstalled?.skills).toEqual([]);
     expect(container.textContent).toBe('idle');
+    expect(notificationMocks.warning).not.toHaveBeenCalled();
+    expect(notificationMocks.info).not.toHaveBeenCalled();
   });
 
   it('does not notify or reload after a pending delete loses desktop capability', async () => {

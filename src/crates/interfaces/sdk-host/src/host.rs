@@ -40,7 +40,7 @@ use crate::protocol::{
 };
 
 const DEFAULT_SESSION_NAME: &str = "OpenBitFun SDK query";
-const DEFAULT_AGENT: &str = "agentic";
+const DEFAULT_AGENT: &str = "Standard";
 const DEFAULT_TURN_SETTLEMENT_TIMEOUT_MS: u64 = 5_000;
 const PERMISSION_REJECTION_TIMEOUT_MS: u64 = 2_000;
 const DEFAULT_PERMISSION_RESPONSE_TIMEOUT_MS: u64 = 120_000;

@@ -97,5 +97,16 @@
     "loadFailed": "載入 Hook 設定失敗",
     "loadFailedLocked": "無法讀取 Hook 設定。為避免誤啟用命令執行，相關開關已鎖定。",
     "retry": "重新載入"
+  },
+  "discovery": {
+    "title": "探索到的外部 Hook",
+    "description": "檢視 DeepSeek Harness、PI 和 OpenCode 的本機 Hook 宣告。探索不會執行或匯入這些 Hook。",
+    "disabled": "來源中已停用",
+    "unsupported": "來源橋接不支援",
+    "opaque": "需要原生執行階段確認",
+    "nativeOnly": "原生事件，啟用狀態未確認",
+    "readOnly": "唯讀",
+    "loading": "正在探索外部 Hook…",
+    "empty": "未探索到外部 Hook 宣告。"
   }
 }

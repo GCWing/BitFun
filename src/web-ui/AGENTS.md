@@ -29,9 +29,10 @@ Peer Device Mode (same-account remote full client) is documented in
 sessions/chat shells; enter peer mode from the device list (Remote Connect →
 My OpenBitFun) instead.
 
-One-click relay deploy wizard: `src/features/relay-deploy/` (see its README).
-The Remote Connect account group (My OpenBitFun) login form and the Remote Connect
-Self-Hosted entries must open `RelayDeployWizard`, not an external README.
+Remote Connect uses the global GitHub account and the official versioned Relay.
+Account controls use the shared account-identity service; do not expose a separate
+Relay account, custom server field, or self-hosted deployment entry. SSH and Docker
+workspace connections remain independent of Relay sign-in.
 
 ## Local rules
 

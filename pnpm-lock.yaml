@@ -262,9 +262,6 @@ importers:
       '@openbitfun/ui':
         specifier: workspace:^
         version: link:../../design-system/packages/ui
-      qr-scanner:
-        specifier: ^1.4.2
-        version: 1.4.2
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -417,6 +414,9 @@ importers:
       '@xterm/addon-webgl':
         specifier: ^0.20.0-beta.100
         version: 0.20.0-beta.140(@xterm/xterm@6.1.0-beta.141)
+      '@xterm/headless':
+        specifier: 6.1.0-beta.141
+        version: 6.1.0-beta.141
       '@xterm/xterm':
         specifier: ^6.1.0-beta.101
         version: 6.1.0-beta.141
@@ -453,6 +453,9 @@ importers:
       morphdom:
         specifier: ^2.7.8
         version: 2.7.8
+      parse-entities:
+        specifier: ^4.0.2
+        version: 4.0.2
       partial-json:
         specifier: ^0.1.7
         version: 0.1.7
@@ -507,6 +510,9 @@ importers:
       remark-rehype:
         specifier: ^11.1.2
         version: 11.1.2
+      remark-stringify:
+        specifier: ^11.0.0
+        version: 11.0.0
       unified:
         specifier: ^11.0.5
         version: 11.0.5
@@ -523,6 +529,9 @@ importers:
       '@eslint/js':
         specifier: ^9.24.0
         version: 9.39.4
+      '@types/mdast':
+        specifier: ^4.0.4
+        version: 4.0.4
       '@types/node':
         specifier: ^20.10.0
         version: 20.19.37
@@ -2328,9 +2337,6 @@ packages:
   '@types/normalize-package-data@2.4.4':
     resolution: {integrity: sha512-37i+OaWTh9qeK4LSHPsyRC7NahnGotNuZvjLSgcPzblpHB3rrCJxAOgI5gCdKm7coonsaX1Of0ILiTcnZjbfxA==}
 
-  '@types/offscreencanvas@2019.7.3':
-    resolution: {integrity: sha512-ieXiYmgSRXUDeOntE1InxjWyvEelZGP63M+cGuquuRLuIKKT1osnkXjxev9B7d1nXSug5vpunx+gNlbVxMlC9A==}
-
   '@types/path-browserify@1.0.3':
     resolution: {integrity: sha512-ZmHivEbNCBtAfcrFeBCiTjdIc2dey0l7oCGNGpSuRTy8jP6UVND7oUowlvDujBy8r2Hoa8bfFUOCiPWfmtkfxw==}
 
@@ -2609,6 +2615,9 @@ packages:
     resolution: {integrity: sha512-2SJk70XXnlZwHP15GX/KZ8I8E7hSoseIjRdKzwN13kPhJH9GXtgBC4XklDlo0eXYjG0ftJUQ6BnsdCwXMUprnw==}
     peerDependencies:
       '@xterm/xterm': ^6.1.0-beta.141
+
+  '@xterm/headless@6.1.0-beta.141':
+    resolution: {integrity: sha512-rtImooDtMMY1ejT+FqpAjipD9NKqbbnPuHikEUVOru9VfqfCAYwW3/wyGO50r/ldI1Tc1PL8T2zxc6Fhp82oGw==}
 
   '@xterm/xterm@6.1.0-beta.141':
     resolution: {integrity: sha512-dwcmHvdFfekzNkb6lirSZnkSET21LKBwlwyRENTsIeU2U+4u0MFztUjO44e+MpDR0y+Mv/eeQza0mvhnkmC1Mg==}
@@ -4922,9 +4931,6 @@ packages:
   puppeteer-core@21.11.0:
     resolution: {integrity: sha512-ArbnyA3U5SGHokEvkfWjW+O8hOxV1RSJxOgriX/3A4xZRqixt9ZFHD0yPgZQF05Qj0oAqi8H/7stDorjoHY90Q==}
     engines: {node: '>=16.13.2'}
-
-  qr-scanner@1.4.2:
-    resolution: {integrity: sha512-kV1yQUe2FENvn59tMZW6mOVfpq9mGxGf8l6+EGaXUOd4RBOLg7tRC83OrirM5AtDvZRpdjdlXURsHreAOSPOUw==}
 
   qrcode.react@4.2.0:
     resolution: {integrity: sha512-QpgqWi8rD9DsS9EP3z7BT+5lY5SFhsqGjpgW5DY/i3mK4M9DTBNz3ErMi8BWYEfI3L0d8GIbGmcdFAS1uIRGjA==}
@@ -7574,8 +7580,6 @@ snapshots:
 
   '@types/normalize-package-data@2.4.4': {}
 
-  '@types/offscreencanvas@2019.7.3': {}
-
   '@types/path-browserify@1.0.3': {}
 
   '@types/prismjs@1.26.5': {}
@@ -8134,6 +8138,8 @@ snapshots:
   '@xterm/addon-webgl@0.20.0-beta.140(@xterm/xterm@6.1.0-beta.141)':
     dependencies:
       '@xterm/xterm': 6.1.0-beta.141
+
+  '@xterm/headless@6.1.0-beta.141': {}
 
   '@xterm/xterm@6.1.0-beta.141': {}
 
@@ -10975,10 +10981,6 @@ snapshots:
       - react-native-b4a
       - supports-color
       - utf-8-validate
-
-  qr-scanner@1.4.2:
-    dependencies:
-      '@types/offscreencanvas': 2019.7.3
 
   qrcode.react@4.2.0(react@18.3.1):
     dependencies:

@@ -1,3 +1,4 @@
+import { canonicalAgentId } from '@/shared/agents/identity';
 /**
  * Mode state reducer
  */
@@ -35,7 +36,7 @@ export type ModeAction =
   | { type: 'TOGGLE_DROPDOWN' };
 
 export const initialModeState: ModeState = {
-  current: 'agentic',
+  current: 'Standard',
   available: [],
   dropdownOpen: false,
 };
@@ -43,7 +44,7 @@ export const initialModeState: ModeState = {
 export function modeReducer(state: ModeState, action: ModeAction): ModeState {
   switch (action.type) {
     case 'SET_CURRENT_MODE':
-      return { ...state, current: action.payload };
+      return { ...state, current: canonicalAgentId(action.payload) };
       
     case 'SET_AVAILABLE_MODES':
       return { ...state, available: action.payload };

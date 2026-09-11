@@ -108,7 +108,7 @@
   opacity: 0;
   transition:
     grid-template-rows 180ms var(--openbitfun-motion-easing-standard),
-    opacity 120ms ease;
+    opacity 180ms var(--openbitfun-motion-easing-standard);
 
   &[data-open='true'] {
     grid-template-rows: 1fr;
@@ -116,9 +116,13 @@
   }
 }
 
-.openbitfun-collection-item__details {
+// Keep padding and borders inside the clipped grid item so 0fr reaches zero.
+.openbitfun-collection-item__details-clip {
   min-height: 0;
   overflow: hidden;
+}
+
+.openbitfun-collection-item__details {
   padding: var(--openbitfun-space-4);
   border-top: 1px dashed var(--openbitfun-collection-details-border);
   background: var(--openbitfun-collection-details-bg);

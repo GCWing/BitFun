@@ -8,6 +8,7 @@ use super::layout::SessionStorageLayout;
 use super::metadata::{
     build_session_index_snapshot, remove_session_index_entry, upsert_session_index_entry,
 };
+use super::ordinal;
 use super::page::{build_session_metadata_page, empty_session_metadata_page};
 use super::types::{SessionMetadata, StoredSessionIndexFile, StoredSessionMetadataFile};
 use super::SessionMetadataPage;
@@ -62,6 +63,8 @@ pub enum SessionMetadataStoreError {
     },
     #[error("Invalid session ID: {0}")]
     InvalidSessionId(String),
+    #[error("Workspace session number capacity has been exhausted")]
+    SessionNumberExhausted,
     #[error("Failed to resolve session storage path {path}: {source}")]
     ResolveSessionStoragePath {
         path: PathBuf,
@@ -449,15 +452,17 @@ impl SessionMetadataStore {
             .map_err(SessionMetadataStoreError::InvalidSessionId)?;
         self.ensure_session_dir(&metadata.session_id).await?;
         let metadata_path = self.metadata_path(&metadata.session_id);
-        let file = StoredSessionMetadataFile::new(metadata.clone());
-
         let lock = self.get_index_lock().await;
         let _guard = lock.lock().await;
         let _file_guard = self.lock_index_file().await?;
         let metadata_file_created = !metadata_path.exists();
+        let mut metadata = metadata.clone();
+        self.assign_workspace_session_number_locked(&mut metadata)
+            .await?;
+        let file = StoredSessionMetadataFile::new(metadata.clone());
         self.write_json_atomic(&metadata_path, &file).await?;
         if !metadata.should_hide_from_user_lists() {
-            self.upsert_index_entry_locked(metadata, metadata_file_created)
+            self.upsert_index_entry_locked(&metadata, metadata_file_created)
                 .await
         } else {
             self.remove_index_entry_locked(
@@ -466,6 +471,39 @@ impl SessionMetadataStore {
             )
             .await
         }
+    }
+
+    async fn assign_workspace_session_number_locked(
+        &self,
+        metadata: &mut SessionMetadata,
+    ) -> Result<(), SessionMetadataStoreError> {
+        if !ordinal::occupies_slot(metadata) {
+            return Ok(());
+        }
+        let existing = self.load_metadata(&metadata.session_id).await?;
+        let existing_number = existing
+            .as_ref()
+            .filter(|existing| {
+                ordinal::occupies_slot(existing)
+                    && ordinal::workspace_key(existing) == ordinal::workspace_key(metadata)
+            })
+            .and_then(ordinal::number);
+        let number = if let Some(number) = existing_number {
+            number
+        } else {
+            // Read authoritative metadata only when claiming a new slot. A
+            // released title or deleted session immediately makes its number
+            // reusable; surviving defaults keep their existing numbers.
+            ordinal::next_available_number(metadata, &self.scan_metadata_dirs().await?)
+                .ok_or(SessionMetadataStoreError::SessionNumberExhausted)?
+        };
+        metadata
+            .custom_metadata
+            .get_or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .expect("default title descriptor requires an object")
+            .insert(ordinal::METADATA_KEY.to_owned(), number.into());
+        Ok(())
     }
 
     pub async fn load_metadata(
@@ -543,6 +581,228 @@ fn current_unix_ms() -> u64 {
 mod tests {
     use super::*;
     use crate::session::{SessionStatus, StoredSessionIndexFile};
+
+    fn default_title_metadata(id: &str, created_at: u64) -> SessionMetadata {
+        let mut result = metadata(id, created_at);
+        result.session_name = "New Session".into();
+        result.workspace_path = Some("/project".into());
+        result.custom_metadata = Some(serde_json::json!({
+            "titleSource": "i18n", "titleKey": "flow-chat:session.new",
+            "titleParams": { "defaultTitleText": "New Session" }
+        }));
+        result
+    }
+
+    #[tokio::test]
+    async fn workspace_numbers_are_atomic_durable_and_independent_of_mode() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SessionMetadataStore::new(dir.path());
+        let other_writer = SessionMetadataStore::new(dir.path());
+        let a = default_title_metadata("number-a", 1);
+        let mut unclaimed = a.clone();
+        unclaimed.custom_metadata = None;
+        store.save_metadata(&unclaimed).await.unwrap();
+        assert_eq!(
+            ordinal::number(&store.load_metadata(&a.session_id).await.unwrap().unwrap()),
+            None
+        );
+        let mut b = default_title_metadata("number-b", 2);
+        b.agent_type = "Cowork".into();
+        let (left, right) = tokio::join!(store.save_metadata(&a), other_writer.save_metadata(&b));
+        left.unwrap();
+        right.unwrap();
+        let a_number =
+            ordinal::number(&store.load_metadata(&a.session_id).await.unwrap().unwrap()).unwrap();
+        let b_number =
+            ordinal::number(&store.load_metadata(&b.session_id).await.unwrap().unwrap()).unwrap();
+        assert_ne!(a_number, b_number);
+        assert_eq!(a_number + b_number, 3);
+
+        store.save_metadata(&a).await.unwrap();
+        assert_eq!(
+            ordinal::number(&store.load_metadata(&a.session_id).await.unwrap().unwrap()),
+            Some(a_number)
+        );
+        let reopened = SessionMetadataStore::new(dir.path());
+        let mut c = default_title_metadata("number-c", 3);
+        c.workspace_path = Some("/worktree".into());
+        c.project_workspace_path = Some("/project".into());
+        reopened.save_metadata(&c).await.unwrap();
+        assert_eq!(
+            ordinal::number(
+                &reopened
+                    .load_metadata(&c.session_id)
+                    .await
+                    .unwrap()
+                    .unwrap()
+            ),
+            Some(3)
+        );
+        let mut d = default_title_metadata("number-d", 4);
+        d.workspace_path = Some("/another-project".into());
+        reopened.save_metadata(&d).await.unwrap();
+        assert_eq!(
+            ordinal::number(
+                &reopened
+                    .load_metadata(&d.session_id)
+                    .await
+                    .unwrap()
+                    .unwrap()
+            ),
+            Some(1)
+        );
+    }
+
+    #[tokio::test]
+    async fn vacant_slots_are_reused_without_renumbering_survivors_after_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SessionMetadataStore::new(dir.path());
+        let a = default_title_metadata("slot-a", 1);
+        let mut b = default_title_metadata("slot-b", 2);
+        let mut c = default_title_metadata("slot-c", 3);
+        for session in [&a, &b, &c] {
+            store.save_metadata(session).await.unwrap();
+        }
+        store
+            .delete_session_dir_and_index(&a.session_id)
+            .await
+            .unwrap();
+        b.session_name = "Fix login".into();
+        store.save_metadata(&b).await.unwrap();
+
+        let reopened = SessionMetadataStore::new(dir.path());
+        reopened.rebuild_index().await.unwrap();
+        for (id, expected) in [("slot-d", 1), ("slot-e", 2)] {
+            reopened
+                .save_metadata(&default_title_metadata(id, 4))
+                .await
+                .unwrap();
+            assert_eq!(
+                ordinal::number(&reopened.load_metadata(id).await.unwrap().unwrap()),
+                Some(expected)
+            );
+        }
+        c.last_active_at = 99;
+        c.custom_metadata.as_mut().unwrap()[ordinal::METADATA_KEY] = 99.into();
+        reopened.save_metadata(&c).await.unwrap();
+        assert_eq!(
+            ordinal::number(
+                &reopened
+                    .load_metadata(&c.session_id)
+                    .await
+                    .unwrap()
+                    .unwrap()
+            ),
+            Some(3)
+        );
+    }
+
+    #[tokio::test]
+    async fn leaving_the_default_title_releases_its_slot() {
+        for transition in ["renamed", "started", "archived", "literal-default", "child"] {
+            let dir = tempfile::tempdir().unwrap();
+            let store = SessionMetadataStore::new(dir.path());
+            let a = default_title_metadata("slot-a", 1);
+            store.save_metadata(&a).await.unwrap();
+            let mut saved = store.load_metadata(&a.session_id).await.unwrap().unwrap();
+            match transition {
+                "renamed" => saved.session_name = "Fix login".into(),
+                "started" => saved.turn_count = 1,
+                "archived" => saved.status = SessionStatus::Archived,
+                "literal-default" => super::super::metadata::apply_session_title_metadata(
+                    &mut saved,
+                    &metadata("slot-a", 1),
+                ),
+                "child" => saved.session_kind = openbitfun_core_types::SessionKind::Subagent,
+                _ => unreachable!(),
+            }
+            store.save_metadata(&saved).await.unwrap();
+            store
+                .save_metadata(&default_title_metadata("slot-b", 2))
+                .await
+                .unwrap();
+            assert_eq!(
+                ordinal::number(&store.load_metadata("slot-b").await.unwrap().unwrap()),
+                Some(1),
+                "{transition}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn unarchiving_claims_a_free_slot_when_the_old_number_was_reused() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SessionMetadataStore::new(dir.path());
+        store
+            .save_metadata(&default_title_metadata("slot-a", 1))
+            .await
+            .unwrap();
+        let mut a = store.load_metadata("slot-a").await.unwrap().unwrap();
+        a.status = SessionStatus::Archived;
+        store.save_metadata(&a).await.unwrap();
+        store
+            .save_metadata(&default_title_metadata("slot-b", 2))
+            .await
+            .unwrap();
+        a.status = SessionStatus::Active;
+        store.save_metadata(&a).await.unwrap();
+        assert_eq!(
+            ordinal::number(&store.load_metadata("slot-a").await.unwrap().unwrap()),
+            Some(2)
+        );
+        assert_eq!(
+            ordinal::number(&store.load_metadata("slot-b").await.unwrap().unwrap()),
+            Some(1)
+        );
+    }
+
+    #[tokio::test]
+    async fn legacy_text_metadata_is_not_numbered_or_rewritten_as_a_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SessionMetadataStore::new(dir.path());
+        let mut legacy = metadata("legacy-number", 1);
+        legacy.session_name = "New Code Session 8".into();
+        legacy.custom_metadata = Some(serde_json::json!({
+            "titleSource": "i18n", "titleKey": "flow-chat:session.newCodeWithIndex", "titleParams": {"count": 8}
+        }));
+        store.ensure_session_dir(&legacy.session_id).await.unwrap();
+        store
+            .write_json_atomic(
+                &store.metadata_path(&legacy.session_id),
+                &StoredSessionMetadataFile::new(legacy.clone()),
+            )
+            .await
+            .unwrap();
+        store.save_metadata(&legacy).await.unwrap();
+        let restored = store
+            .load_metadata(&legacy.session_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(restored.session_name, legacy.session_name);
+        assert_eq!(restored.custom_metadata, legacy.custom_metadata);
+        assert_eq!(ordinal::number(&restored), None);
+    }
+
+    #[tokio::test]
+    async fn workspace_slots_normalize_local_roots_and_keep_remote_roots_case_sensitive() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SessionMetadataStore::new(dir.path());
+        for (id, path, expected) in [
+            ("win-a", "D:/Project", 1),
+            ("win-b", "d:\\project\\", 2),
+            ("posix-a", "/Project", 1),
+            ("posix-b", "/project", 1),
+        ] {
+            let mut session = default_title_metadata(id, 1);
+            session.workspace_path = Some(path.into());
+            store.save_metadata(&session).await.unwrap();
+            assert_eq!(
+                ordinal::number(&store.load_metadata(id).await.unwrap().unwrap()),
+                Some(expected)
+            );
+        }
+    }
     use tempfile::tempdir;
 
     #[test]
@@ -624,7 +884,7 @@ mod tests {
         let mut metadata = SessionMetadata::new(
             session_id.to_string(),
             format!("Session {session_id}"),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         );
         metadata.last_active_at = last_active_at;

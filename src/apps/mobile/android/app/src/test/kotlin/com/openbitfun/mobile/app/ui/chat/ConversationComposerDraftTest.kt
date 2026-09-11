@@ -10,25 +10,25 @@ class ConversationComposerDraftTest {
     }
 
     @Test
-    fun trimsBothSidesBeforeJoining() {
-        assertEquals("existing spoken", mergeComposerDraft("  existing  ", "  spoken  "))
+    fun preservesExistingWhitespaceWhileTrimmingRecognition() {
+        assertEquals("  existing  spoken", mergeComposerDraft("  existing  ", "  spoken  "))
     }
 
     @Test
-    fun dropsABlankExistingDraft() {
+    fun keepsExistingWhitespaceDraft() {
         assertEquals("spoken", mergeComposerDraft("", "  spoken  "))
-        assertEquals("spoken", mergeComposerDraft("   ", "spoken"))
+        assertEquals("   spoken", mergeComposerDraft("   ", "spoken"))
     }
 
     @Test
     fun dropsABlankSpokenFragment() {
-        assertEquals("existing", mergeComposerDraft("  existing  ", ""))
+        assertEquals("  existing  ", mergeComposerDraft("  existing  ", ""))
         assertEquals("existing", mergeComposerDraft("existing", "   "))
     }
 
     @Test
-    fun bothBlankProducesEmptyDraft() {
+    fun blankRecognitionDoesNotEraseDraftWhitespace() {
         assertEquals("", mergeComposerDraft("", ""))
-        assertEquals("", mergeComposerDraft("   ", "   "))
+        assertEquals("   ", mergeComposerDraft("   ", "   "))
     }
 }

@@ -67,7 +67,7 @@ describe('BtwThreadService', () => {
     sessions.clear();
     sessions.set('parent-1', {
       sessionId: 'parent-1',
-      mode: 'agentic',
+      mode: 'Standard',
       workspacePath: '/workspace',
       remoteConnectionId: 'remote-1',
       remoteSshHost: 'host-1',
@@ -160,7 +160,7 @@ describe('BtwThreadService', () => {
     expect(mockAddExternalSession).toHaveBeenCalledWith(
       result.childSessionId,
       'Side question',
-      'agentic',
+      'Standard',
       '/workspace',
       expect.objectContaining({
         parentSessionId: 'parent-1',

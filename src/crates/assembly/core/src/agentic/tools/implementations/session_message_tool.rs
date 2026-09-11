@@ -272,7 +272,7 @@ impl SessionMessageTool {
 
 #[derive(Debug, Clone, Deserialize)]
 enum SessionMessageAgentType {
-    #[serde(rename = "agentic", alias = "Agentic", alias = "AGENTIC")]
+    #[serde(rename = "Standard", alias = "Standard", alias = "AGENTIC")]
     Agentic,
     #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
     Cowork,
@@ -287,7 +287,7 @@ enum SessionMessageAgentType {
 impl SessionMessageAgentType {
     fn as_str(&self) -> &'static str {
         match self {
-            Self::Agentic => "agentic",
+            Self::Agentic => "Standard",
             Self::Cowork => "Cowork",
             Self::DeepResearch => "DeepResearch",
         }
@@ -318,7 +318,7 @@ Usage:
 - Reusing an existing session: provide "session_id" and "message". You may omit "workspace"; the tool will resolve it from the target session when possible.
 
 Allowed agent types when creating a session:
-- "agentic": Coding-focused agent for implementation, debugging, and code changes.
+- "Standard": Coding-focused agent for implementation, debugging, and code changes.
 - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc.
 - "DeepResearch": Research agent for systematic investigation and evidence-driven reports.
 "#
@@ -356,7 +356,7 @@ Allowed agent types when creating a session:
                 },
                 "agent_type": {
                     "type": "string",
-                    "enum": ["agentic", "Cowork", "DeepResearch"],
+                    "enum": ["Standard", "Cowork", "DeepResearch"],
                     "description": "Required when session_id is omitted. Not allowed when sending to an existing session."
                 }
             },
@@ -905,9 +905,9 @@ mod tests {
     #[test]
     fn target_agent_type_uses_resolved_agent_type() {
         assert_eq!(
-            SessionMessageTool::target_agent_type_from_resolution(Some("agentic".to_string()))
+            SessionMessageTool::target_agent_type_from_resolution(Some("Standard".to_string()))
                 .as_deref(),
-            Some("agentic")
+            Some("Standard")
         );
     }
 
@@ -916,7 +916,7 @@ mod tests {
         let sessions = vec![AgentSessionSummary {
             session_id: "worker_1".to_string(),
             session_name: "Worker".to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             model_id: None,
             reasoning_preset: None,
             last_user_dialog_agent_type: None,
@@ -928,7 +928,7 @@ mod tests {
 
         assert_eq!(
             SessionMessageTool::target_agent_type_from_sessions(&sessions, "worker_1").as_deref(),
-            Some("agentic")
+            Some("Standard")
         );
     }
 
@@ -987,7 +987,7 @@ mod tests {
                 &json!({
                     "workspace": workspace.as_string(),
                     "message": "hello",
-                    "agent_type": "agentic",
+                    "agent_type": "Standard",
                 }),
                 Some(&session_context("source_1")),
             )
@@ -1069,7 +1069,7 @@ mod tests {
                 &json!({
                     "message": "hello",
                     "session_name": "Worker Session",
-                    "agent_type": "agentic",
+                    "agent_type": "Standard",
                 }),
                 Some(&session_context("source_1")),
             )

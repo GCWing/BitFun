@@ -249,40 +249,12 @@ wait_for_relay_health() {
   return 1
 }
 
-print_add_user_command() {
-  echo "  docker exec -it ${CONTAINER_NAME} /app/relay-admin --db ${RELAY_ADMIN_DB} add-user --username <name>"
-}
-
+# Identities are created only after GitHub verification; an empty database is valid.
 check_relay_accounts_or_remind() {
   if ! container_running; then
-    echo "Warning: container '${CONTAINER_NAME}' is not running; skipped account check."
-    echo "After it is up, create an account with:"
-    print_add_user_command
+    echo "Warning: container '${CONTAINER_NAME}' is not running."
     return 0
   fi
-
-  local user_list
-  user_list="$(
-    docker_cmd exec "$CONTAINER_NAME" /app/relay-admin --db "$RELAY_ADMIN_DB" list-users 2>/dev/null || true
-  )"
-
-  local empty=0
-  if echo "$user_list" | grep -q '^No accounts found\.'; then
-    empty=1
-  elif ! echo "$user_list" | grep -q '^USERNAME'; then
-    empty=1
-  fi
-
-  if [ "$empty" -eq 1 ]; then
-    echo "No relay accounts yet. Account login will not work until you create one."
-    echo "Run:"
-    print_add_user_command
-    echo "(omit --password to enter the password interactively)"
-  else
-    local user_count
-    user_count="$(
-      echo "$user_list" | awk 'NR>2 && NF { count++ } END { print count+0 }'
-    )"
-    echo "Relay accounts found: ${user_count}"
-  fi
+  echo "Sign in with GitHub from a client built for this Relay endpoint."
+  echo "No password accounts need to be provisioned."
 }

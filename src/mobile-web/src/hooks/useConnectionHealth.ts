@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { isDelegatedIdentityChangedError } from '../services/RelayHttpClient';
+import { isAccountIdentityChangedError } from '../services/RelayHttpClient';
 import {
   isRemoteControlTargetChangedError,
   RemoteSessionManager,
@@ -54,7 +54,7 @@ export function useConnectionHealth(sessionMgr: RemoteSessionManager | null) {
         if (cancelled || generation !== loopGeneration) return;
         if (
           isRemoteControlTargetChangedError(error)
-          || isDelegatedIdentityChangedError(error)
+          || isAccountIdentityChangedError(error)
         ) {
           setConnectionHealth('checking');
           schedule(generation, OWNERSHIP_RETRY_DELAY);

@@ -118,6 +118,7 @@ openbitfun-runtime-services = { path = "../../execution/runtime-services", optio
 
 # Reviewed product-full plugin composition root.
 openbitfun-opencode-adapter = { path = "../../adapters/opencode-adapter", optional = true }
+openbitfun-pi-adapter = { path = "../../adapters/pi-adapter", optional = true }
 openbitfun-dsh-adapter = { path = "../../adapters/dsh-adapter", optional = true }
 openbitfun-opencode-plugin-host = { path = "../../adapters/opencode-plugin-host", optional = true }
 openbitfun-claude-code-adapter = { path = "../../adapters/claude-code-adapter", optional = true }
@@ -269,6 +270,7 @@ external-sources = [
     "script-tool-runtime",
     "dep:openbitfun-opencode-adapter",
     "dep:openbitfun-dsh-adapter",
+    "dep:openbitfun-pi-adapter",
     "dep:openbitfun-claude-code-adapter",
     "dep:openbitfun-codex-adapter",
     "dep:openbitfun-external-sources",

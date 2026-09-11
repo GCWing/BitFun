@@ -42,8 +42,8 @@ internal const val SIDEBAR_SETTINGS_TEST_TAG: String = "app-sidebar-settings"
  * down the history a user has gone.
  */
 @Composable
-internal fun SidebarAuthenticatedFooter(onNewChat: () -> Unit, onOpenSettings: () -> Unit) {
-    val newChatLabel = stringResource(R.string.sidebar_new_chat)
+internal fun SidebarAuthenticatedFooter(onConnect: () -> Unit, onOpenSettings: () -> Unit) {
+    val newChatLabel = stringResource(R.string.sidebar_add_connection)
     Row(
         modifier = Modifier.fillMaxWidth().height(56.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -56,7 +56,7 @@ internal fun SidebarAuthenticatedFooter(onNewChat: () -> Unit, onOpenSettings: (
                 .clip(RoundedCornerShape(23.dp))
                 .background(MaterialTheme.colorScheme.surface)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(23.dp))
-                .clickable(role = Role.Button, onClick = onNewChat)
+                .clickable(role = Role.Button, onClick = onConnect)
                 .semantics(mergeDescendants = true) {
                     contentDescription = newChatLabel
                 }

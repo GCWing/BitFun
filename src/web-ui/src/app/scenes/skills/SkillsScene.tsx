@@ -2,30 +2,37 @@ import {
   Button,
   Checkbox,
   ConfirmDialog,
+  Empty,
   Field,
   Icon,
   IconButton,
   Input,
+  LoadingState,
+  NavigationPanel,
+  NavigationPanelBody,
+  NavigationPanelContent,
+  NavigationPanelHeader,
   NavigationPanelItem,
+  NavigationPanelSection,
   OverflowText,
   ScrollArea,
   SearchField,
   Select,
   StatusPill,
   Switch,
-  TabGroup,
   Dialog,
   DialogBody,
   DialogClose,
   DialogHeader,
   DialogHeading,
   DialogTitle,
+  type IconSource,
 } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FolderOpen, Layers, Package, ShieldAlert, ShieldCheck, TrendingUp, Zap } from 'lucide-react';
+import { FolderOpen, Layers, Package, ShieldAlert, ShieldCheck, TrendingUp } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 
-import { GalleryDetailModal, GalleryPageHeader } from '@/app/components';
+import { GalleryDetailModal } from '@/app/components';
 import type { SkillInfo, SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
 import { installedSkillMarketIds, isSkillMarketItemInstalled } from '@/infrastructure/config/skillMarketInstallation';
 import {
@@ -45,9 +52,11 @@ import { getCardGradient } from '@/shared/utils/cardGradients';
 import { useInstalledSkills } from './hooks/useInstalledSkills';
 import { useSkillMarket } from './hooks/useSkillMarket';
 import SkillCard from './components/SkillCard';
-import SkillsSuiteView from './components/SkillsSuiteView';
+import SkillGroupsView from './components/SkillGroupsView';
+import { useUserSkillGroups } from '@/features/skill-groups/useUserSkillGroups';
+import { resolveSkillGroups } from '@/features/skill-groups/skillGroups';
 import './SkillsScene.scss';
-import { useSkillsSceneStore, type InstalledFilter } from './skillsSceneStore';
+import { useSkillsSceneStore, type SkillsView } from './skillsSceneStore';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
 
 const log = createLogger('SkillsScene');
@@ -55,8 +64,8 @@ const log = createLogger('SkillsScene');
 type SkillTab = 'installed' | 'discover';
 
 interface CategoryInfo {
-  id: InstalledFilter;
-  icon: React.ReactNode;
+  id: SkillsView;
+  icon: IconSource;
   labelKey: string;
   titleKey: string;
   descKey: string;
@@ -66,38 +75,38 @@ interface CategoryInfo {
 const CATEGORIES: CategoryInfo[] = [
   {
     id: 'all',
-    icon: <Icon glyph={Layers} size="sm" />,
+    icon: { glyph: Layers },
     labelKey: 'filters.all',
     titleKey: 'installed.titleListAll',
     descKey: 'categories.all',
   },
   {
     id: 'builtin',
-    icon: <Icon glyph={ShieldCheck} size="sm" />,
+    icon: { glyph: ShieldCheck },
     labelKey: 'filters.builtin',
     titleKey: 'installed.titleBuiltin',
     descKey: 'categories.builtin',
   },
   {
     id: 'user',
-    icon: <Icon name="user" size="sm" />,
+    icon: { name: 'user' },
     labelKey: 'filters.user',
     titleKey: 'installed.titleUser',
     descKey: 'categories.user',
   },
   {
     id: 'project',
-    icon: <Icon glyph={FolderOpen} size="sm" />,
+    icon: { glyph: FolderOpen },
     labelKey: 'filters.project',
     titleKey: 'installed.titleProject',
     descKey: 'categories.project',
   },
   {
-    id: 'suite',
-    icon: <Icon glyph={Zap} size="sm" />,
-    labelKey: 'filters.suite',
-    titleKey: 'suite.title',
-    descKey: 'categories.suite',
+    id: 'groups',
+    icon: { glyph: Layers },
+    labelKey: 'filters.groups',
+    titleKey: 'groups.title',
+    descKey: 'categories.groups',
   },
 ];
 
@@ -111,12 +120,12 @@ const SkillsScene: React.FC = () => {
   const {
     searchDraft,
     marketQuery,
-    installedFilter,
+    installedView,
     hideDuplicates,
     isAddFormOpen,
     setSearchDraft,
     submitMarketQuery,
-    setInstalledFilter,
+    setInstalledView,
     setHideDuplicates,
     setAddFormOpen,
     toggleAddForm,
@@ -133,9 +142,21 @@ const SkillsScene: React.FC = () => {
 
   const installed = useInstalledSkills({
     searchQuery: installedSearch,
-    activeFilter: installedFilter,
+    activeFilter: installedView === 'groups' ? 'all' : installedView,
     enabled: desktopConfigAvailable,
   });
+
+  const skillGroups = useUserSkillGroups(desktopConfigAvailable);
+  const groupSkills = useMemo(() => installed.catalogReady ? installed.skills.map(skill => ({
+    ...skill,
+    sourceLabel: getSkillSourceLabel(skill, t('list.item.unknownSource')),
+    runtimeStatus: installed.globallyDisabledSkillKeys.has(skill.key)
+      ? t('groups.globalDisabled')
+      : skill.isShadowed ? t('list.item.shadowed') : undefined,
+  })) : [], [installed.catalogReady, installed.skills, installed.globallyDisabledSkillKeys, t]);
+  const skillGroupCount = useMemo(() => resolveSkillGroups(groupSkills, skillGroups.groups, {
+    builtin: key => key, other: '',
+  }).length, [groupSkills, skillGroups.groups]);
 
   const installedMarketIds = useMemo(
     () => installedSkillMarketIds(installed.skills),
@@ -206,8 +227,8 @@ const SkillsScene: React.FC = () => {
   }, [coverageSourceBySkillKey, installed.globallyDisabledSkillKeys, market.isRemoteWorkspace, t]);
 
   const refetchSkillsScene = useCallback(async () => {
-    await Promise.all([installed.loadSkills(true), market.refresh()]);
-  }, [installed, market]);
+    await Promise.all([installed.loadSkills(true), market.refresh(), skillGroups.reload()]);
+  }, [installed, market, skillGroups]);
 
   useGallerySceneAutoRefresh({
     sceneId: 'skills',
@@ -246,130 +267,192 @@ const SkillsScene: React.FC = () => {
     return list;
   }, [hideDuplicates, installed.filteredSkills]);
 
-  const installedCategories: CategoryInfo[] = [
-    ...CATEGORIES.filter((category) => category.id !== 'suite'),
-    ...installed.sourceGroups.map((group) => ({
-      id: group.id,
-      icon: <Icon name="extension" size="sm" />,
-      labelKey: 'filters.source',
-      titleKey: 'installed.titleSource',
-      descKey: 'categories.source',
-      sourceLabel: group.label,
-    })),
-    ...CATEGORIES.filter((category) => category.id === 'suite'),
+  const installedLoadFailed = Boolean(installed.error)
+    || (installed.skills.length === 0 && installed.diagnostics.length > 0);
+
+  const sourceCategories: CategoryInfo[] = installed.sourceGroups.map((group) => ({
+    id: group.id,
+    icon: { name: 'extension' },
+    labelKey: 'filters.source',
+    titleKey: 'installed.titleSource',
+    descKey: 'categories.source',
+    sourceLabel: group.label,
+  }));
+  const installedCategories = [...CATEGORIES, ...sourceCategories];
+  const categorySections = [
+    { title: t('nav.categories.installed'), categories: CATEGORIES },
+    { title: t('list.columns.source'), categories: sourceCategories },
   ];
-  const activeInstalledCategory = installedCategories.find((category) => category.id === installedFilter)
+  const activeInstalledCategory = installedCategories.find((category) => category.id === installedView)
     ?? CATEGORIES[0];
 
   useEffect(() => {
-    if (!installed.loading && !installed.error && installedFilter.startsWith('source:')
-      && !installed.sourceGroups.some((group) => group.id === installedFilter)) {
-      setInstalledFilter('all');
+    if (!installed.loading && !installed.error && installedView.startsWith('source:')
+      && !installed.sourceGroups.some((group) => group.id === installedView)) {
+      setInstalledView('all');
     }
-  }, [installed.loading, installed.error, installed.sourceGroups, installedFilter, setInstalledFilter]);
+  }, [installed.loading, installed.error, installed.sourceGroups, installedView, setInstalledView]);
+
+  const installedListHeader = (
+    <div
+      className="skills-main__list-header"
+      role="row"
+      data-openbitfun-scene="skills"
+      data-openbitfun-part="installedListHeader"
+    >
+      <div className="skills-main__list-heading" role="columnheader">
+        <span data-openbitfun-scene="skills" data-openbitfun-part="installedListTitle">{t('nav.title')}</span>
+        {!installed.loading && (
+          <span className="skills-main__list-count" data-openbitfun-scene="skills" data-openbitfun-part="installedListCount">
+            {formatNumber(installedFiltered.length)}
+          </span>
+        )}
+      </div>
+      <span className="skills-main__column-label" role="columnheader">{t('list.columns.source')}</span>
+      <span className="skills-main__column-label" role="columnheader">{t('list.columns.status')}</span>
+      <span className="skills-main__column-label skills-main__column-label--actions" role="columnheader">{t('list.columns.actions')}</span>
+    </div>
+  );
 
   return (
     <div className="openbitfun-skills-scene" data-testid="agent-skill-panel" data-openbitfun-scene="skills" data-openbitfun-part="root" data-openbitfun-tab={activeTab}>
-      <GalleryPageHeader
-        title={t('nav.title')}
-        subtitle={t('page.subtitle')}
-        actions={desktopConfigAvailable && activeTab === 'installed' && installedFilter !== 'suite' ? (
-          <Button
-            variant="primary"
-            size="sm"
-            leadingIcon={<Icon name="plus" size="sm" />}
-            onClick={toggleAddForm}
-            data-testid="skills-add-skill-btn"
-          >
-            {t('toolbar.addTooltip')}
-          </Button>
-        ) : undefined}
-      />
-      <div className="skills-tabs-bar" data-testid="skills-tabs" data-openbitfun-scene="skills" data-openbitfun-part="header" data-openbitfun-tab={activeTab}>
-        <div className="skills-tabs-bar__tabs" data-openbitfun-scene="skills" data-openbitfun-part="tabs">
-          <TabGroup
-            size="sm"
-            value={activeTab}
-            onValueChange={(value) => setActiveTab(value as SkillTab)}
-            aria-label={t('nav.title')}
-            items={(['installed', 'discover'] as const).map((tab) => ({
-              value: tab,
-              id: `skills-tab-${tab}`,
-              panelId: `skills-panel-${tab}`,
-              disabled: tab === 'discover' && !desktopConfigAvailable,
-              icon: <Icon glyph={tab === 'installed' ? Layers : Package} size="sm" />,
-              label: (
-                <span
-                  data-openbitfun-scene="skills"
-                  data-openbitfun-part="tab"
-                  data-openbitfun-tab={tab}
-                  data-openbitfun-state={activeTab === tab ? 'active' : undefined}
-                >
-                  {t(tab === 'installed' ? 'installed.titleAll' : 'market.title')}
-                </span>
-              ),
-            }))}
-          />
-          <span className="skills-tabs-bar__divider" data-openbitfun-scene="skills" data-openbitfun-part="tabDivider" />
-        </div>
-      </div>
-
-      <div className="skills-page" data-openbitfun-scene="skills" data-openbitfun-part="content" data-openbitfun-tab={activeTab}>
-
-        {activeTab === 'installed' && (
-          <div className="skills-installed" id="skills-panel-installed" role="tabpanel" aria-labelledby="skills-tab-installed" data-openbitfun-scene="skills" data-openbitfun-part="installed">
-            {desktopConfigAvailable && <ScrollArea className="skills-sidebar" data-openbitfun-scene="skills" data-openbitfun-part="sidebar">
-              <div className="skills-sidebar__header" data-openbitfun-scene="skills" data-openbitfun-part="sidebarHeader">
-                <h2 className="skills-sidebar__title" data-openbitfun-scene="skills" data-openbitfun-part="sidebarTitle">{t('installed.titleAll')}</h2>
-              </div>
-              <nav className="skills-sidebar__nav" aria-label={t('installed.titleAll')} data-openbitfun-scene="skills" data-openbitfun-part="sidebarNav">
-                {installedCategories.map((cat) => {
-                  const count = installed.counts[cat.id] ?? 0;
-                  const isEmpty = count === 0;
-                  return (
-                    <div
-                      key={cat.id}
-                      className="skills-sidebar__item"
-                      data-openbitfun-scene="skills"
-                      data-openbitfun-part="sidebarItem"
-                      data-openbitfun-category={cat.id}
-                      data-openbitfun-state={[
-                        installedFilter === cat.id && 'active',
-                        isEmpty && 'empty',
-                      ].filter(Boolean).join(' ') || undefined}
-                    >
-                      <NavigationPanelItem
-                        selected={installedFilter === cat.id}
-                        onClick={() => setInstalledFilter(cat.id)}
-                        title={t(cat.descKey, { source: cat.sourceLabel })}
-                        leading={<span data-openbitfun-scene="skills" data-openbitfun-part="sidebarItemIcon">{cat.icon}</span>}
-                        metadata={(
-                          <span className="skills-sidebar__item-count" data-openbitfun-scene="skills" data-openbitfun-part="sidebarItemCount">
-                            {formatNumber(count)}
-                          </span>
-                        )}
+      <NavigationPanel className="skills-sidebar" aria-label={t('nav.title')} data-openbitfun-scene="skills" data-openbitfun-part="sidebar">
+        <NavigationPanelHeader className="skills-sidebar__header">
+          <div data-openbitfun-scene="skills" data-openbitfun-part="sidebarHeader">
+            <div className="skills-sidebar__title" data-openbitfun-scene="skills" data-openbitfun-part="sidebarTitle">{t('nav.title')}</div>
+          </div>
+          <div className="skills-sidebar__compact-picker">
+            <Select
+              size="sm"
+              value={activeTab === 'discover' ? 'discover' : installedView}
+              disabled={!desktopConfigAvailable}
+              aria-label={t('nav.title')}
+              options={[
+                ...categorySections.flatMap((section) => section.categories.map((category) => ({
+                  value: category.id,
+                  label: t(category.labelKey, { source: category.sourceLabel }),
+                  group: section.title,
+                }))),
+                { value: 'discover', label: t('market.title'), group: t('nav.categories.discover') },
+              ]}
+              onValueChange={(value) => {
+                if (value === 'discover') {
+                  setActiveTab('discover');
+                  return;
+                }
+                const category = installedCategories.find((candidate) => candidate.id === value);
+                if (category) {
+                  setInstalledView(category.id);
+                  setActiveTab('installed');
+                }
+              }}
+            />
+          </div>
+        </NavigationPanelHeader>
+        <NavigationPanelBody>
+          <div data-openbitfun-scene="skills" data-openbitfun-part="sidebarNav">
+            <NavigationPanelContent>
+              {categorySections.filter((section) => section.categories.length > 0).map((section) => (
+                <NavigationPanelSection key={section.title} title={section.title}>
+                  {section.categories.map((cat) => {
+                    const count = cat.id === 'groups' ? skillGroupCount : installed.counts[cat.id] ?? 0;
+                    const countAvailable = cat.id !== 'groups' || (skillGroups.ready && installed.catalogReady);
+                    const isEmpty = count === 0;
+                    const selected = activeTab === 'installed' && installedView === cat.id;
+                    return (
+                      <div
+                        key={cat.id}
+                        className="skills-sidebar__item"
+                        data-openbitfun-scene="skills"
+                        data-openbitfun-part="sidebarItem"
+                        data-openbitfun-category={cat.id}
+                        data-openbitfun-state={[
+                          selected && 'active',
+                          isEmpty && 'empty',
+                        ].filter(Boolean).join(' ') || undefined}
                       >
-                        <span data-openbitfun-scene="skills" data-openbitfun-part="sidebarItemLabel">{t(cat.labelKey, { source: cat.sourceLabel })}</span>
-                      </NavigationPanelItem>
-                    </div>
-                  );
-                })}
-              </nav>
-              <div className="skills-sidebar__footer" data-openbitfun-scene="skills" data-openbitfun-part="sidebarFooter">
-                <p className="skills-sidebar__hint" data-openbitfun-scene="skills" data-openbitfun-part="sidebarHint">
-                  {t(activeInstalledCategory.descKey, { source: activeInstalledCategory.sourceLabel })}
-                </p>
-              </div>
-            </ScrollArea>}
+                        <NavigationPanelItem
+                          selected={selected}
+                          disabled={!desktopConfigAvailable}
+                          onClick={() => {
+                            setInstalledView(cat.id);
+                            setActiveTab('installed');
+                          }}
+                          title={t(cat.descKey, { source: cat.sourceLabel })}
+                          leading={<span data-openbitfun-scene="skills" data-openbitfun-part="sidebarItemIcon"><Icon {...cat.icon} size="sm" /></span>}
+                          metadata={countAvailable ? (
+                            <span className="skills-sidebar__item-count" data-openbitfun-scene="skills" data-openbitfun-part="sidebarItemCount">
+                              {formatNumber(count)}
+                            </span>
+                          ) : undefined}
+                        >
+                          <span data-openbitfun-scene="skills" data-openbitfun-part="sidebarItemLabel">{t(cat.labelKey, { source: cat.sourceLabel })}</span>
+                        </NavigationPanelItem>
+                      </div>
+                    );
+                  })}
+                </NavigationPanelSection>
+              ))}
+              <NavigationPanelSection title={t('nav.categories.discover')}>
+                <NavigationPanelItem
+                  selected={activeTab === 'discover'}
+                  disabled={!desktopConfigAvailable}
+                  onClick={() => setActiveTab('discover')}
+                  leading={<Icon glyph={Package} size="sm" />}
+                >
+                  {t('market.title')}
+                </NavigationPanelItem>
+              </NavigationPanelSection>
+            </NavigationPanelContent>
+          </div>
+        </NavigationPanelBody>
+      </NavigationPanel>
 
+      <main className="skills-page" data-openbitfun-scene="skills" data-openbitfun-part="content" data-openbitfun-tab={activeTab}>
+        {activeTab === 'installed' && (
+          <div className="skills-installed" id="skills-panel-installed" role="region" aria-label={t('installed.titleAll')} data-openbitfun-scene="skills" data-openbitfun-part="installed">
             <div className="skills-main" data-openbitfun-scene="skills" data-openbitfun-part="main">
+              {(!desktopConfigAvailable || installedView !== 'groups') && (
+                <header className="skills-content-header" data-openbitfun-scene="skills" data-openbitfun-part="header">
+                  <div className="skills-content-header__identity">
+                    <div className="skills-content-header__copy">
+                      <h1 className="skills-content-header__title">
+                        <OverflowText>{t(activeInstalledCategory.titleKey, { source: activeInstalledCategory.sourceLabel })}</OverflowText>
+                      </h1>
+                      <p className="skills-content-header__description">
+                        {t(activeInstalledCategory.descKey, { source: activeInstalledCategory.sourceLabel })}
+                      </p>
+                    </div>
+                  </div>
+                  {desktopConfigAvailable && (
+                    <Button
+                      className="skills-content-header__action"
+                      variant="outline"
+                      size="sm"
+                      leadingIcon={<Icon name="plus" size="sm" />}
+                      onClick={toggleAddForm}
+                      data-testid="skills-add-skill-btn"
+                    >
+                      {t('toolbar.addTooltip')}
+                    </Button>
+                  )}
+                </header>
+              )}
               {!desktopConfigAvailable ? (
                 <div className="skills-main__empty" data-testid="skills-management-unavailable" data-openbitfun-scene="skills" data-openbitfun-part="empty">
                   <Icon glyph={Package} size="lg" />
                   <span>{t(remoteConnectionActive ? 'list.remoteUnavailable' : 'list.desktopUnavailable')}</span>
                 </div>
-              ) : installedFilter === 'suite' ? (
-                <SkillsSuiteView />
+              ) : installedView === 'groups' ? (
+                <SkillGroupsView
+                  key={installed.catalogContextKey}
+                  skills={groupSkills}
+                  collection={skillGroups}
+                  catalogReady={installed.catalogReady}
+                  catalogLoading={installed.loading}
+                  catalogIncomplete={installed.diagnostics.length > 0 || !installed.diagnosticsAvailable}
+                  onRefresh={() => { void installed.loadSkills(true); void skillGroups.reload(); }}
+                />
               ) : (
                 <>
                   <div className="skills-main__toolbar" data-openbitfun-scene="skills" data-openbitfun-part="toolbar">
@@ -400,52 +483,40 @@ const SkillsScene: React.FC = () => {
                   </div>
 
                   <div className="skills-main__list-shell">
-                    <div
-                      className="skills-main__list-header"
-                      data-openbitfun-scene="skills"
-                      data-openbitfun-part="installedListHeader"
-                    >
-                      <div className="skills-main__list-heading">
-                        <span data-openbitfun-scene="skills" data-openbitfun-part="installedListTitle">
-                          {t(activeInstalledCategory.titleKey, { source: activeInstalledCategory.sourceLabel })}
-                        </span>
-                        <span
-                          className="skills-main__list-count"
-                          data-openbitfun-scene="skills"
-                          data-openbitfun-part="installedListCount"
-                        >
-                          {formatNumber(installedFiltered.length)}
-                        </span>
-                      </div>
-                      <span className="skills-main__column-label skills-main__column-label--source">
-                        {t('list.columns.source')}
-                      </span>
-                      <span className="skills-main__column-label skills-main__column-label--level">
-                        {t('list.columns.level')}
-                      </span>
-                      <span className="skills-main__column-label skills-main__column-label--status">
-                        {t('list.columns.status')}
-                      </span>
-                      <span className="skills-main__column-label skills-main__column-label--actions">
-                        {t('list.columns.actions')}
-                      </span>
-                    </div>
-
                     {installed.loading && (
-                      <ScrollArea className="skills-main__loading" aria-busy="true" aria-label={t('list.loading')}>
-                        {Array.from({ length: 8 }).map((_, i) => (
-                          <div
-                            key={`ins-sk-${i}`}
-                            className="skills-card-skeleton"
-                            style={{ '--surface-stagger-index': i } as React.CSSProperties}
-                            data-openbitfun-scene="skills"
-                            data-openbitfun-part="skeleton"
-                          />
-                        ))}
-                      </ScrollArea>
+                      <div className="skills-main__table" role="table" aria-busy="true" aria-label={t('list.loading')} data-openbitfun-scene="skills" data-openbitfun-part="installedTable">
+                        {installedListHeader}
+                        <ScrollArea className="skills-main__loading" role="rowgroup">
+                          {Array.from({ length: 8 }).map((_, i) => (
+                            <div
+                              key={`ins-sk-${i}`}
+                              className="skills-card-skeleton"
+                              style={{ '--surface-stagger-index': i } as React.CSSProperties}
+                              aria-hidden="true"
+                              data-openbitfun-scene="skills"
+                              data-openbitfun-part="skeleton"
+                            >
+                              <div className="skills-card__top">
+                                <span className="skills-card-skeleton__icon" />
+                                <div className="skills-card__info">
+                                  <span className="skills-card-skeleton__line skills-card-skeleton__line--title" />
+                                  <span className="skills-card-skeleton__line" />
+                                  <span className="skills-card-skeleton__line skills-card-skeleton__line--short" />
+                                </div>
+                              </div>
+                              <div className="skills-card__meta">
+                                <span className="skills-card-skeleton__line skills-card-skeleton__line--title" />
+                                <span className="skills-card-skeleton__line skills-card-skeleton__line--short" />
+                              </div>
+                              <div className="skills-card__global-toggle"><span className="skills-card-skeleton__line skills-card-skeleton__line--short" /></div>
+                              <div className="skills-card__actions"><span className="skills-card-skeleton__line skills-card-skeleton__line--short" /></div>
+                            </div>
+                          ))}
+                        </ScrollArea>
+                      </div>
                     )}
 
-                    {!installed.loading && installed.error && (
+                    {!installed.loading && installedLoadFailed && (
                       <div className="skills-main__empty skills-main__empty--error" data-openbitfun-scene="skills" data-openbitfun-part="error">
                         <Icon glyph={Package} size="lg" />
                         <span>{t('list.loadFailed')}</span>
@@ -459,14 +530,7 @@ const SkillsScene: React.FC = () => {
                       </div>
                     )}
 
-                    {!installed.loading && !installed.error && (
-                      installed.diagnostics.length > 0 ? <details className="skills-main__diagnostics">
-                        <summary>{t('list.scanIncomplete')}</summary>
-                        {installed.diagnostics.map((item, index) => <p key={index}>{item.path}: {item.message}</p>)}
-                      </details> : !installed.diagnosticsAvailable && <p role="status">{t('list.diagnosticsUnavailable')}</p>
-                    )}
-
-                    {!installed.loading && !installed.error && installedFiltered.length === 0 && installed.diagnostics.length === 0 && (
+                    {!installed.loading && !installedLoadFailed && installedFiltered.length === 0 && (
                       <div className="skills-main__empty" data-testid="skill-list-empty" data-openbitfun-scene="skills" data-openbitfun-part="empty">
                         <Icon glyph={Package} size="lg" />
                         <span>
@@ -477,170 +541,180 @@ const SkillsScene: React.FC = () => {
                       </div>
                     )}
 
-                    {!installed.loading && !installed.error && installedFiltered.length > 0 && (
-                      <ScrollArea
-                        className="skills-main__grid"
-                        data-testid="skill-list"
+                    {!installed.loading && !installedLoadFailed && installedFiltered.length > 0 && (
+                      <div
+                        className="skills-main__table"
+                        role="table"
+                        aria-label={t(activeInstalledCategory.titleKey, { source: activeInstalledCategory.sourceLabel })}
                         data-openbitfun-scene="skills"
-                        data-openbitfun-part="list"
+                        data-openbitfun-part="installedTable"
                       >
-                        {installedFiltered.map((skill, index) => (
-                          <div
-                            key={skill.key}
-                            className={[
-                              'skills-card',
-                              skill.isShadowed && 'is-shadowed',
-                              skill.level === 'user'
-                                && installed.globallyDisabledSkillKeys.has(skill.key)
-                                && 'is-globally-disabled',
-                            ].filter(Boolean).join(' ')}
-                            style={{ '--surface-stagger-index': index } as React.CSSProperties}
-                            onClick={() => setSelectedDetail({ type: 'installed', skillKey: skill.key })}
-                            role="button"
-                            tabIndex={0}
-                            data-overflow-trigger
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                setSelectedDetail({ type: 'installed', skillKey: skill.key });
-                              }
-                            }}
-                            aria-label={installedSkillAriaLabel(skill)}
-                            data-testid="skill-list-item"
-                            data-skill-key={skill.key}
-                            data-skill-id={skill.key}
-                            data-skill-name={skill.name}
-                            data-skill-level={skill.level}
-                            data-skill-builtin={skill.isBuiltin ? 'true' : 'false'}
-                            data-openbitfun-scene="skills"
-                            data-openbitfun-part="installedCard"
-                            data-openbitfun-level={skill.level}
-                            data-openbitfun-state={[
-                              skill.isShadowed && 'shadowed',
-                              skill.isBuiltin && 'builtin',
-                            ].filter(Boolean).join(' ') || undefined}
-                          >
-                            <div className="skills-card__top" data-openbitfun-scene="skills" data-openbitfun-part="installedCardTop">
-                              <div className="skills-card__icon" data-openbitfun-scene="skills" data-openbitfun-part="installedCardIcon">
-                                <Icon name="extension" size="md" />
-                              </div>
-                              <div className="skills-card__info" data-openbitfun-scene="skills" data-openbitfun-part="installedCardInfo">
-                                <span className="skills-card__name" data-testid="skill-list-item-title" data-openbitfun-scene="skills" data-openbitfun-part="installedCardName">
-                                  <OverflowText behavior="marquee" title="">{skill.name}</OverflowText>
-                                </span>
-                                {skill.description?.trim() && (
-                                  <OverflowText lines={2} title="" className="skills-card__desc" data-testid="skill-list-item-description" data-openbitfun-scene="skills" data-openbitfun-part="installedCardDescription">{skill.description}</OverflowText>
-                                )}
-                                <div className="skills-card__status-badges">
-                                  {skill.isBuiltin && (
-                                    <StatusPill tone="accent" leading={<Icon glyph={ShieldCheck} />}>
-                                      {t('list.item.builtin')}
-                                    </StatusPill>
-                                  )}
-                                  {skill.level === 'user'
-                                    && installed.globallyDisabledSkillKeys.has(skill.key) && (
-                                    <StatusPill tone="neutral">
-                                      {t('list.item.globalDisabled')}
-                                    </StatusPill>
-                                  )}
-                                  {skill.isShadowed && (
-                                    <StatusPill tone="warning" leading={<Icon glyph={ShieldAlert} />}>
-                                      {t('list.item.shadowed')}
-                                    </StatusPill>
+                        {installedListHeader}
+                        <ScrollArea
+                          className="skills-main__grid"
+                          role="rowgroup"
+                          data-testid="skill-list"
+                          data-openbitfun-scene="skills"
+                          data-openbitfun-part="list"
+                        >
+                          {installedFiltered.map((skill) => (
+                            <div
+                              key={skill.key}
+                              className={[
+                                'skills-card',
+                                skill.isShadowed && 'is-shadowed',
+                                skill.level === 'user'
+                                  && installed.globallyDisabledSkillKeys.has(skill.key)
+                                  && 'is-globally-disabled',
+                              ].filter(Boolean).join(' ')}
+                              role="row"
+                              data-overflow-trigger
+                              data-testid="skill-list-item"
+                              data-skill-key={skill.key}
+                              data-skill-id={skill.key}
+                              data-skill-name={skill.name}
+                              data-skill-level={skill.level}
+                              data-skill-builtin={skill.isBuiltin ? 'true' : 'false'}
+                              data-openbitfun-scene="skills"
+                              data-openbitfun-part="installedCard"
+                              data-openbitfun-level={skill.level}
+                              data-openbitfun-state={[
+                                skill.isShadowed && 'shadowed',
+                                skill.isBuiltin && 'builtin',
+                              ].filter(Boolean).join(' ') || undefined}
+                            >
+                              <div className="skills-card__top" role="cell" data-openbitfun-scene="skills" data-openbitfun-part="installedCardTop">
+                                <button
+                                  type="button"
+                                  className="skills-card__open"
+                                  aria-label={installedSkillAriaLabel(skill)}
+                                  onClick={() => setSelectedDetail({ type: 'installed', skillKey: skill.key })}
+                                  data-openbitfun-scene="skills"
+                                  data-openbitfun-part="installedCardOpen"
+                                />
+                                <div className="skills-card__icon" aria-hidden="true" data-openbitfun-scene="skills" data-openbitfun-part="installedCardIcon">
+                                  <Icon name="extension" size="sm" />
+                                </div>
+                                <div className="skills-card__info" data-openbitfun-scene="skills" data-openbitfun-part="installedCardInfo">
+                                  <div className="skills-card__title-row">
+                                    <span className="skills-card__name" data-testid="skill-list-item-title" data-openbitfun-scene="skills" data-openbitfun-part="installedCardName">
+                                      <OverflowText behavior="marquee" title="">{skill.name}</OverflowText>
+                                    </span>
+                                    {skill.isBuiltin && (
+                                      <StatusPill tone="neutral">
+                                        {t('list.item.builtin')}
+                                      </StatusPill>
+                                    )}
+                                  </div>
+                                  {skill.description?.trim() && (
+                                    <OverflowText lines={2} title="" className="skills-card__desc" data-testid="skill-list-item-description" data-openbitfun-scene="skills" data-openbitfun-part="installedCardDescription">{skill.description}</OverflowText>
                                   )}
                                 </div>
                               </div>
-                            </div>
 
-                            <div
-                              className="skills-card__meta"
-                              data-openbitfun-scene="skills"
-                              data-openbitfun-part="installedCardMeta"
-                            >
-                              <span
-                                className="skills-card__source"
+                              <div
+                                className="skills-card__meta"
+                                role="cell"
                                 data-openbitfun-scene="skills"
-                                data-openbitfun-part="installedCardSource"
+                                data-openbitfun-part="installedCardMeta"
                               >
-                                <StatusPill className="skills-card__source-pill" tone="neutral">
-                                  {getSkillSourceLabel(skill, t('list.item.unknownSource'))}
-                                </StatusPill>
-                              </span>
-                            </div>
+                                <span
+                                  className="skills-card__source"
+                                  data-openbitfun-scene="skills"
+                                  data-openbitfun-part="installedCardSource"
+                                >
+                                  <OverflowText title="">
+                                    {getSkillSourceLabel(skill, t('list.item.unknownSource'))}
+                                  </OverflowText>
+                                </span>
+                                <span
+                                  className="skills-card__level"
+                                  data-openbitfun-scene="skills"
+                                  data-openbitfun-part="installedCardLevel"
+                                >
+                                  {skill.level === 'user'
+                                    ? <Icon name="user" size="xs" />
+                                    : <Icon glyph={FolderOpen} size="xs" />}
+                                  <OverflowText title="">
+                                    {market.isRemoteWorkspace
+                                      ? skill.level === 'user'
+                                        ? t('list.item.localUser')
+                                        : t('list.item.remoteProject')
+                                      : skill.level === 'user'
+                                        ? t('list.item.user')
+                                        : t('list.item.project')}
+                                  </OverflowText>
+                                </span>
+                              </div>
 
-                            <div
-                              className="skills-card__level"
-                              data-openbitfun-scene="skills"
-                              data-openbitfun-part="installedCardLevel"
-                            >
-                              {skill.level === 'user'
-                                ? <Icon name="user" size="xs" />
-                                : <Icon glyph={FolderOpen} size="xs" />}
-                              <OverflowText title="">
-                                {market.isRemoteWorkspace
-                                  ? skill.level === 'user'
-                                    ? t('list.item.localUser')
-                                    : t('list.item.remoteProject')
-                                  : skill.level === 'user'
-                                    ? t('list.item.user')
-                                    : t('list.item.project')}
-                              </OverflowText>
-                            </div>
-
-                            <div
-                              className="skills-card__global-toggle"
-                              onClick={(e) => e.stopPropagation()}
-                              onKeyDown={(e) => e.stopPropagation()}
-                              data-openbitfun-scene="skills"
-                              data-openbitfun-part="installedCardStatus"
-                            >
-                              {skill.level === 'user' ? (
-                                <Switch
-                                  checked={!installed.globallyDisabledSkillKeys.has(skill.key)}
-                                  disabled={installed.savingGlobalSkillKey !== null}
-                                  aria-busy={installed.savingGlobalSkillKey === skill.key}
-                                  aria-label={t('list.item.globalToggleLabel', { name: skill.name })}
-                                  onChange={(event) => {
-                                    void installed.handleGlobalSkillToggle(skill, event.target.checked);
-                                  }}
-                                />
-                              ) : (
-                                <span className="skills-card__status-unavailable" aria-hidden="true">—</span>
-                              )}
-                            </div>
-
-                            <div
-                              className="skills-card__actions"
-                              onClick={(e) => e.stopPropagation()}
-                              onKeyDown={(e) => e.stopPropagation()}
-                              data-openbitfun-scene="skills"
-                              data-openbitfun-part="installedCardActions"
-                            >
-                              <IconButton
-                                size="sm"
-                                onClick={() => setSelectedDetail({ type: 'installed', skillKey: skill.key })}
-                                aria-label={t('list.item.detail')}
-                                title={t('list.item.detail')}
+                              <div
+                                className="skills-card__global-toggle"
+                                role="cell"
                                 data-openbitfun-scene="skills"
-                                data-openbitfun-part="installedCardDetails"
-                                icon={<Icon name="arrow-right" size="sm" />}
-                              />
-                              {canDeleteSkill(skill) && (
+                                data-openbitfun-part="installedCardStatus"
+                              >
+                                {skill.level === 'user' ? (
+                                  <div className="skills-card__availability" title={t(installed.globallyDisabledSkillKeys.has(skill.key) ? 'list.item.globalDisabled' : 'list.item.globalEnabled')}>
+                                    <Switch
+                                      checked={!installed.globallyDisabledSkillKeys.has(skill.key)}
+                                      disabled={installed.savingGlobalSkillKey !== null}
+                                      aria-busy={installed.savingGlobalSkillKey === skill.key}
+                                      aria-label={t('list.item.globalToggleLabel', { name: skill.name })}
+                                      onChange={(event) => {
+                                        void installed.handleGlobalSkillToggle(skill, event.target.checked);
+                                      }}
+                                    />
+                                    <span className="skills-card__availability-label">
+                                      {t(installed.globallyDisabledSkillKeys.has(skill.key) ? 'messages.disabled' : 'messages.enabled')}
+                                    </span>
+                                  </div>
+                                ) : !skill.isShadowed && (
+                                  <span className="skills-card__status-unavailable" aria-hidden="true">—</span>
+                                )}
+                                {skill.isShadowed && (
+                                  <StatusPill tone="warning" title={t('list.item.shadowedTooltip', {
+                                    source: coverageSourceBySkillKey.get(skill.key) ?? t('list.item.unknownSource'),
+                                  })} leading={<Icon glyph={ShieldAlert} />}>
+                                    {t('list.item.shadowed')}
+                                  </StatusPill>
+                                )}
+                              </div>
+
+                              <div
+                                className="skills-card__actions"
+                                role="cell"
+                                data-openbitfun-scene="skills"
+                                data-openbitfun-part="installedCardActions"
+                              >
                                 <IconButton
                                   size="sm"
-                                  tone="danger"
-                                  onClick={() => setDeleteTarget(skill)}
-                                  aria-label={t('list.item.deleteTooltip')}
-                                  title={t('list.item.deleteTooltip')}
+                                  variant="quiet"
+                                  tabIndex={-1}
+                                  onClick={() => setSelectedDetail({ type: 'installed', skillKey: skill.key })}
+                                  aria-label={t('list.item.detail')}
+                                  title={t('list.item.detail')}
                                   data-openbitfun-scene="skills"
-                                  data-openbitfun-part="installedCardDelete"
-                                  icon={<Icon name="delete" size="sm" />}
+                                  data-openbitfun-part="installedCardDetails"
+                                  icon={<Icon name="arrow-right" size="sm" />}
                                 />
-                              )}
+                                {canDeleteSkill(skill) && (
+                                  <IconButton
+                                    size="sm"
+                                    variant="quiet"
+                                    tone="danger"
+                                    onClick={() => setDeleteTarget(skill)}
+                                    aria-label={t('list.item.deleteTooltip')}
+                                    title={t('list.item.deleteTooltip')}
+                                    data-openbitfun-scene="skills"
+                                    data-openbitfun-part="installedCardDelete"
+                                    icon={<Icon name="delete" size="sm" />}
+                                  />
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </ScrollArea>
+                          ))}
+                        </ScrollArea>
+                      </div>
                     )}
                   </div>
 
@@ -651,91 +725,76 @@ const SkillsScene: React.FC = () => {
         )}
 
         {desktopConfigAvailable && activeTab === 'discover' && (
-          <div className="skills-discover" id="skills-panel-discover" role="tabpanel" aria-labelledby="skills-tab-discover" data-openbitfun-scene="skills" data-openbitfun-part="discover">
-            <div className="skills-discover__hero" data-openbitfun-scene="skills" data-openbitfun-part="discoverHero">
-              <div className="skills-discover__hero-content" data-openbitfun-scene="skills" data-openbitfun-part="discoverHeroContent">
-                <h3 className="skills-discover__title" data-openbitfun-scene="skills" data-openbitfun-part="discoverTitle">{t('market.title')}</h3>
-                <p className="skills-discover__subtitle" data-openbitfun-scene="skills" data-openbitfun-part="discoverSubtitle">
-                  {t('market.subtitle')}
-                </p>
-                <div className="skills-discover__search-wrapper" data-openbitfun-scene="skills" data-openbitfun-part="discoverSearch">
-                  <SearchField
-                    className="skills-discover__search"
-                    value={searchDraft}
-                    onValueChange={setSearchDraft}
-                    onSearch={submitMarketQuery}
-                    leadingIcon={<Icon name="search" size="sm" aria-hidden />}
-                    placeholder={t('market.searchPlaceholder')}
-                    aria-label={t('market.searchPlaceholder')}
-                    size="md"
-                    clearLabel={searchDraft ? tComponents('search.clear') : undefined}
-                    onClear={searchDraft ? () => {
-                      setSearchDraft('');
-                      submitMarketQuery();
-                    } : undefined}
-                  />
+          <div className="skills-discover" id="skills-panel-discover" role="region" aria-label={t('market.title')} data-openbitfun-scene="skills" data-openbitfun-part="discover">
+            <header className="skills-content-header skills-discover__hero" data-openbitfun-scene="skills" data-openbitfun-part="discoverHero">
+              <div className="skills-content-header__identity" data-openbitfun-scene="skills" data-openbitfun-part="discoverHeroContent">
+                <div className="skills-content-header__copy">
+                  <h1 className="skills-content-header__title" data-openbitfun-scene="skills" data-openbitfun-part="discoverTitle"><OverflowText>{t('market.title')}</OverflowText></h1>
+                  <p className="skills-content-header__description" data-openbitfun-scene="skills" data-openbitfun-part="discoverSubtitle">
+                    {t('market.subtitle')}
+                  </p>
                 </div>
               </div>
+            </header>
+            <div className="skills-discover__toolbar" data-openbitfun-scene="skills" data-openbitfun-part="discoverSearch">
+              <SearchField
+                className="skills-discover__search"
+                value={searchDraft}
+                onValueChange={setSearchDraft}
+                onSearch={submitMarketQuery}
+                leadingIcon={<Icon name="search" size="sm" aria-hidden />}
+                placeholder={t('market.searchPlaceholder')}
+                aria-label={t('market.searchPlaceholder')}
+                size="sm"
+                clearLabel={searchDraft ? tComponents('search.clear') : undefined}
+                onClear={searchDraft ? () => {
+                  setSearchDraft('');
+                  submitMarketQuery();
+                } : undefined}
+              />
+              {!market.marketLoading && !market.marketError && marketQuery && market.totalLoaded > 0 && (
+                <div className="skills-discover__results-info" data-openbitfun-scene="skills" data-openbitfun-part="resultsInfo" role="status">
+                  <OverflowText>{t('market.resultsInfo', { query: marketQuery, count: market.totalLoaded })}</OverflowText>
+                </div>
+              )}
             </div>
 
             <ScrollArea className="skills-discover__content">
-              {market.marketLoading && (
-                <div className="skills-discover__grid" aria-busy="true" aria-label={t('list.loading')} data-openbitfun-scene="skills" data-openbitfun-part="loading">
-                  {Array.from({ length: 12 }).map((_, i) => (
-                    <div
-                      key={`mkt-sk-${i}`}
-                      className="skills-discover__skeleton-card"
-                      style={{ '--surface-stagger-index': i } as React.CSSProperties}
-                      data-openbitfun-scene="skills"
-                      data-openbitfun-part="skeleton"
-                    />
-                  ))}
-                </div>
+              {(market.marketLoading || (!market.marketError && market.loadingMore)) && (
+                <LoadingState className="skills-discover__state" role="status" size="sm" data-openbitfun-scene="skills" data-openbitfun-part="loading">
+                  {t('market.loading')}
+                </LoadingState>
               )}
 
               {!market.marketLoading && market.marketError && (
-                <div className="skills-discover__empty skills-discover__empty--error" data-openbitfun-scene="skills" data-openbitfun-part="error">
-                  <Icon glyph={Package} size="lg" />
-                  <span>{market.marketError}</span>
-                </div>
-              )}
-
-              {!market.marketLoading && !market.marketError && market.loadingMore && (
-                <div className="skills-discover__grid" aria-busy="true" aria-label={t('list.loading')} data-openbitfun-scene="skills" data-openbitfun-part="loading">
-                  {Array.from({ length: 12 }).map((_, i) => (
-                    <div
-                      key={`mkt-page-sk-${i}`}
-                      className="skills-discover__skeleton-card"
-                      style={{ '--surface-stagger-index': i } as React.CSSProperties}
-                      data-openbitfun-scene="skills"
-                      data-openbitfun-part="skeleton"
-                    />
-                  ))}
-                </div>
+                <Empty
+                  className="skills-discover__state"
+                  role="alert"
+                  icon={<Icon glyph={Package} size="lg" />}
+                  description={market.marketError}
+                  actions={<Button variant="outline" size="sm" onClick={() => void market.refresh()}>{t('list.retry')}</Button>}
+                  data-openbitfun-scene="skills"
+                  data-openbitfun-part="error"
+                />
               )}
 
               {!market.marketLoading && !market.marketError && !market.loadingMore && market.marketSkills.length === 0 && (
-                <div className="skills-discover__empty" data-testid="skill-list-empty" data-openbitfun-scene="skills" data-openbitfun-part="empty">
-                  <Icon glyph={Package} size="lg" />
-                  <span>{marketQuery ? t('market.empty.noMatch') : t('market.empty.noSkills')}</span>
-                </div>
+                <Empty
+                  className="skills-discover__state"
+                  icon={<Icon glyph={Package} size="lg" />}
+                  description={marketQuery ? t('market.empty.noMatch') : t('market.empty.noSkills')}
+                  data-testid="skill-list-empty"
+                  data-openbitfun-scene="skills"
+                  data-openbitfun-part="empty"
+                />
               )}
 
               {!market.marketLoading && !market.marketError && !market.loadingMore && market.marketSkills.length > 0 && (
-                <>
-                  {marketQuery && (
-                    <div className="skills-discover__results-info" data-openbitfun-scene="skills" data-openbitfun-part="resultsInfo">
-                      <span>
-                        {t('market.resultsInfo', { query: marketQuery, count: market.totalLoaded })}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="skills-discover__grid" data-testid="skill-list" data-openbitfun-scene="skills" data-openbitfun-part="list">
-                    {market.marketSkills.map((skill, index) => {
-                      const isInstalled = isSkillMarketItemInstalled(skill, installedMarketIds);
-                      const isDownloading = market.downloadingPackage === skill.installId;
-                      return (
+                <div className="skills-discover__grid" data-testid="skill-list" data-openbitfun-scene="skills" data-openbitfun-part="list">
+                  {market.marketSkills.map((skill, index) => {
+                    const isInstalled = isSkillMarketItemInstalled(skill, installedMarketIds);
+                    const isDownloading = market.downloadingPackage === skill.installId;
+                    return (
                         <SkillCard
                           key={skill.installId}
                           data-testid="skills-market-card"
@@ -745,18 +804,14 @@ const SkillsScene: React.FC = () => {
                           data-skill-installed={isInstalled ? 'true' : 'false'}
                           name={skill.name}
                           description={skill.description || t('market.item.noDescription')}
+                          source={skill.source}
                           index={index}
                           accentSeed={skill.installId}
                           iconKind="market"
-                          badges={isInstalled ? (
-                            <StatusPill tone="success" leading={<Icon name="check-circle" size="2xs" />}>
-                              {t('market.item.installed')}
-                            </StatusPill>
-                          ) : null}
                           meta={(
                             <span className="openbitfun-skills-scene__market-meta" title={t('market.item.installs', { count: skill.installs ?? 0 })}>
-                              <Icon glyph={TrendingUp} size="xs" />
-                              {formatNumber(skill.installs ?? 0)}
+                              <span>{t('market.detail.installsLabel')}</span>
+                              <span>{formatNumber(skill.installs ?? 0)}</span>
                             </span>
                           )}
                           actions={[
@@ -774,53 +829,54 @@ const SkillsScene: React.FC = () => {
                                 || !market.hasWorkspace
                                 || market.isRemoteWorkspace
                                 || isInstalled,
-                              tone: isInstalled ? 'success' : 'primary',
+                              tone: isInstalled ? 'muted' : 'primary',
                               onClick: () => void market.handleDownload(skill, 'project'),
                             },
                           ]}
                           onOpenDetails={() => setSelectedDetail({ type: 'market', skill })}
                         />
-                      );
-                    })}
-                  </div>
-
-                  {(market.totalPages > 1 || market.hasMore) && (
-                    <div className="skills-discover__pagination" data-openbitfun-scene="skills" data-openbitfun-part="pagination">
-                      <IconButton
-                        size="sm"
-                        variant="fill"
-                        className="skills-discover__page-btn"
-                        onClick={market.goToPrevPage}
-                        disabled={market.currentPage === 0 || market.loadingMore}
-                        aria-label={t('market.pagination.prev')}
-                        data-openbitfun-scene="skills"
-                        data-openbitfun-part="pageButton"
-                        icon={<Icon name="chevron-left" size="sm" />}
-                      />
-                      <span className="skills-discover__page-info" data-openbitfun-scene="skills" data-openbitfun-part="pageInfo">
-                        {market.hasMore
-                          ? t('market.pagination.infoMore', { current: market.currentPage + 1 })
-                          : t('market.pagination.info', { current: market.currentPage + 1, total: market.totalPages })}
-                      </span>
-                      <IconButton
-                        size="sm"
-                        variant="fill"
-                        className="skills-discover__page-btn"
-                        onClick={() => void market.goToNextPage()}
-                        disabled={(!market.hasMore && market.currentPage >= market.totalPages - 1) || market.loadingMore}
-                        aria-label={t('market.pagination.next')}
-                        data-openbitfun-scene="skills"
-                        data-openbitfun-part="pageButton"
-                        icon={<Icon name="chevron-right" size="sm" />}
-                      />
-                    </div>
-                  )}
-                </>
+                    );
+                  })}
+                </div>
               )}
             </ScrollArea>
+
+            {!market.marketLoading && !market.marketError && (market.totalPages > 1 || market.hasMore) && (
+              <div className="skills-discover__pagination" data-openbitfun-scene="skills" data-openbitfun-part="pagination">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="skills-discover__page-btn"
+                  onClick={market.goToPrevPage}
+                  disabled={market.currentPage === 0 || market.loadingMore}
+                  data-openbitfun-scene="skills"
+                  data-openbitfun-part="pageButton"
+                  leadingIcon={<Icon name="chevron-left" size="sm" />}
+                >
+                  {t('market.pagination.prev')}
+                </Button>
+                <span className="skills-discover__page-info" data-openbitfun-scene="skills" data-openbitfun-part="pageInfo" aria-live="polite">
+                  {market.hasMore
+                    ? t('market.pagination.infoMore', { current: market.currentPage + 1 })
+                    : t('market.pagination.info', { current: market.currentPage + 1, total: market.totalPages })}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="skills-discover__page-btn"
+                  onClick={() => void market.goToNextPage()}
+                  disabled={(!market.hasMore && market.currentPage >= market.totalPages - 1) || market.loadingMore}
+                  data-openbitfun-scene="skills"
+                  data-openbitfun-part="pageButton"
+                  trailingIcon={<Icon name="chevron-right" size="sm" />}
+                >
+                  {t('market.pagination.next')}
+                </Button>
+              </div>
+            )}
           </div>
         )}
-      </div>
+      </main>
 
       <GalleryDetailModal
         isOpen={desktopConfigAvailable && Boolean(selectedDetail)}

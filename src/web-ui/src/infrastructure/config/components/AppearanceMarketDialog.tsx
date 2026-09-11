@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, PackageCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
-import { MarketAccountControls } from '@/features/market-account';
+import { AccountIdentityControls } from '@/features/market-account';
 import {
   appearanceMarketAPI,
   type AppearanceMarketBrowseRequest,
@@ -35,7 +35,7 @@ import {
   useAppearance,
   type AppearanceCatalogEntry,
 } from '@/infrastructure/appearance';
-import { useMarketAccount } from '@/infrastructure/market-account';
+import { useAccountIdentity } from '@/infrastructure/account-identity';
 import { notificationService } from '@/shared/notification-system';
 import { getVersionInfo } from '@/shared/utils/version';
 import {
@@ -105,7 +105,7 @@ function requiresNewerOpenBitFun(minimum: string): boolean {
 
 export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDialogProps) {
   const { t } = useTranslation('settings/appearance');
-  const account = useMarketAccount();
+  const account = useAccountIdentity();
   const {
     appearances,
     selectedAppearanceId,
@@ -457,7 +457,7 @@ export function AppearanceMarketDialog({ isOpen, onClose }: AppearanceMarketDial
     >
       <DialogHeader>
         <DialogHeading>
-          <DialogTitle>{t('package.market.title')}{<MarketAccountControls />}</DialogTitle>
+          <DialogTitle>{t('package.market.title')}{<AccountIdentityControls />}</DialogTitle>
         </DialogHeading>
         <DialogClose />
       </DialogHeader>

@@ -4,7 +4,7 @@ export const assistantDefaultsPageAppearanceDescriptor: AppearanceSurfaceDescrip
   id: 'assistant-defaults-page',
   parts: [
     { id: 'root' }, { id: 'toolbar' }, { id: 'content' }, { id: 'shell' },
-    { id: 'main' }, { id: 'header' }, { id: 'summary' }, { id: 'tabs' },
+    { id: 'main' }, { id: 'header' }, { id: 'tabs' },
     { id: 'filters' }, { id: 'list' }, { id: 'listHeader' },
     { id: 'skillList' }, { id: 'skill' }, { id: 'toolList' }, { id: 'tool' },
     { id: 'group' }, { id: 'groupHeader' }, { id: 'detail' },

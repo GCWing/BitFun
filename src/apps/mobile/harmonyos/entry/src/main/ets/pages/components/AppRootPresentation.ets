@@ -170,7 +170,7 @@ export struct AppRootPresentation {
   @Builder
   NavigationContent() {
     Stack() {
-      Navigation(this.navigationStack) { this.RouteContent(AppRoute.ChatHome) }
+      Navigation(this.navigationStack) { this.RouteContent(AppRoute.RemoteHome) }
         .id('openbitfunHomeNavigation')
         .width('100%').height('100%').hideTitleBar(true)
         .mode(NavigationMode.Stack)

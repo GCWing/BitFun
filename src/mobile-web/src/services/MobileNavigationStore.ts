@@ -1,3 +1,4 @@
+import { canonicalAgentId } from '../../../shared/agent-harness/contract.generated';
 const STORAGE_KEY = 'openbitfun.mobile.navigation.v1';
 
 export interface MobileNavigationScope {
@@ -44,7 +45,7 @@ export function loadMobileNavigation(
       deviceId: record.deviceId,
       session: session && typeof session.id === 'string' && session.id.trim()
         && typeof session.name === 'string' && typeof session.agentType === 'string'
-        ? { id: session.id, name: session.name, agentType: session.agentType }
+        ? { id: session.id, name: session.name, agentType: canonicalAgentId(session.agentType) }
         : undefined,
     };
   } catch {

@@ -103,13 +103,6 @@
       opacity 120ms ease;
   }
   
-  // ========== Active state ==========
-  &:active {
-    .scroll-to-latest-bar__btn {
-      transform: scale(0.97);
-    }
-  }
-  
   // ========== Focus state ==========
   &:focus-visible {
     outline: none;

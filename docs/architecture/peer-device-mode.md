@@ -284,8 +284,8 @@ FS) and must not be mixed with Peer Device Mode.
   lifetime. Disconnect joins cancellation; replacing or dropping the client
   retires the old socket and its reconnect attempts. A generation fence prevents
   an old connection from publishing state into its replacement. Initial dial
-  failure returns to `Disconnected`. Reconnect restores room/account context,
-  including a server-assigned room id, before admitting new outgoing commands.
+  failure returns to `Disconnected`. Reconnect verifies the selected Relay account and device context before
+  admitting new outgoing commands. Anonymous room contexts are not supported.
   The outgoing queue holds at most 64 messages and reports saturation explicitly;
   its failed-socket contents are never replayed. Dial/write deadlines are 15s,
   heartbeat cadence is 30s, with due heartbeats taking priority over queued

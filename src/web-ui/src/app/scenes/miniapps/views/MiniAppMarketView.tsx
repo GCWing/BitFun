@@ -39,8 +39,8 @@ import {
   type MarketSort,
 } from '@/infrastructure/api/service-api/MiniAppMarketAPI';
 import { marketImageUrl, retryOriginalMarketImage } from '@/infrastructure/api/service-api/MarketImage';
-import { MarketAccountControls } from '@/features/market-account';
-import { useMarketAccount } from '@/infrastructure/market-account';
+import { AccountIdentityControls } from '@/features/market-account';
+import { useAccountIdentity } from '@/infrastructure/account-identity';
 import { createLogger } from '@/shared/utils/logger';
 import { useNotification } from '@/shared/notification-system';
 import { getMiniAppIconGradient, renderMiniAppIcon } from '../utils/miniAppIcons';
@@ -73,7 +73,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
   const { openScene, activateScene, openTabs } = useSceneManager();
   const upsertApp = useMiniAppStore((state) => state.upsertApp);
   const setMarketOrigin = useMiniAppStore((state) => state.setMarketOrigin);
-  const { me } = useMarketAccount();
+  const { me } = useAccountIdentity();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('all');
   const [sort, setSort] = useState<MarketSort>('newest');
@@ -283,7 +283,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
               placeholder={t('market.search')}
               size="sm"
             />
-            <MarketAccountControls
+            <AccountIdentityControls
               loginOpen={loginOpen}
               onLoginOpenChange={setLoginOpen}
               onIdentityChanged={refreshPersonalizedDetail}
@@ -312,7 +312,7 @@ const MiniAppMarketView: React.FC<MiniAppMarketViewProps> = ({ tabs }) => {
             />
           )}
         >
-          <SegmentedControl
+          <SegmentedControl size="md"
             className="miniapp-market-native__categories"
             options={CATEGORIES.map((value) => ({
               label: categoryLabel(value, t),

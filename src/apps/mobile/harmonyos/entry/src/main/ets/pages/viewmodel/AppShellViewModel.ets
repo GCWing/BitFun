@@ -42,7 +42,7 @@ export class AppShellViewModel {
 
   replaceRoute(route: AppRoute, sessionId: string = ''): void {
     this.navigationStack.clear();
-    if (route !== AppRoute.ChatHome) {
+    if (route !== AppRoute.RemoteHome) {
       this.pushRoute(route, sessionId);
     }
     this.syncActiveRoute();
@@ -65,7 +65,7 @@ export class AppShellViewModel {
       return;
     }
     this.navigationStack.clear(false);
-    if (route !== AppRoute.ChatHome) {
+    if (route !== AppRoute.RemoteHome) {
       this.pushRoute(route, sessionId, false);
     }
     this.syncActiveRoute();

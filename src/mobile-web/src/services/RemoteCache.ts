@@ -23,6 +23,7 @@ export interface RemoteCacheScope {
 export interface CachedSessionState {
   sessions: SessionInfo[];
   workspaces: RecentWorkspaceEntry[];
+  workspaceCatalogSource?: 'opened' | 'recent';
   updatedAt: number;
 }
 
@@ -149,6 +150,7 @@ export const remoteCache = {
     return {
       sessions: record.sessions,
       workspaces: record.workspaces,
+      workspaceCatalogSource: record.workspaceCatalogSource,
       updatedAt: record.updatedAt,
     };
   },
@@ -183,13 +185,18 @@ export const remoteCache = {
           options.replaceWorkspace ?? false,
         )).slice(0, MAX_SESSIONS_PER_DEVICE),
         workspaces: existing?.workspaces ?? [],
+        workspaceCatalogSource: existing?.workspaceCatalogSource,
         updatedAt: Date.now(),
       } satisfies SessionStateRecord);
       await transactionDone(transaction);
     });
   },
 
-  saveWorkspaceCatalog(scope: RemoteCacheScope | null, workspaces: RecentWorkspaceEntry[]): void {
+  saveWorkspaceCatalog(
+    scope: RemoteCacheScope | null,
+    workspaces: RecentWorkspaceEntry[],
+    workspaceCatalogSource: 'opened' | 'recent' = 'recent',
+  ): void {
     if (!scope) return;
     enqueueWrite(async () => {
       const db = await openDatabase();
@@ -202,6 +209,7 @@ export const remoteCache = {
         deviceId: scope.deviceId,
         sessions: existing?.sessions ?? [],
         workspaces,
+        workspaceCatalogSource,
         updatedAt: Date.now(),
       } satisfies SessionStateRecord);
       await transactionDone(transaction);

@@ -2,17 +2,17 @@ use crate::agentic::agents::{Agent, UserContextPolicy};
 use async_trait::async_trait;
 
 /// A focused Agent with a stable prompt and tool manifest.
-pub struct MinimalMode {
+pub struct MinimalHarness {
     default_tools: Vec<String>,
 }
 
-impl Default for MinimalMode {
+impl Default for MinimalHarness {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl MinimalMode {
+impl MinimalHarness {
     pub fn new() -> Self {
         let default_tools = [
             "Read",
@@ -30,13 +30,13 @@ impl MinimalMode {
 }
 
 #[async_trait]
-impl Agent for MinimalMode {
+impl Agent for MinimalHarness {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
     fn id(&self) -> &str {
-        "minimal"
+        "Minimal"
     }
 
     fn name(&self) -> &str {
@@ -44,7 +44,7 @@ impl Agent for MinimalMode {
     }
 
     fn description(&self) -> &str {
-        "Minimal coding mode with a stable, focused tool set."
+        "Minimal Harness for coding with a stable, focused tool set."
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
@@ -72,12 +72,12 @@ impl Agent for MinimalMode {
 
 #[cfg(test)]
 mod tests {
-    use super::MinimalMode;
+    use super::MinimalHarness;
     use crate::agentic::agents::Agent;
 
     #[test]
     fn minimal_manifest_is_stable_and_has_no_listing_tools() {
-        let mode = MinimalMode::new();
+        let mode = MinimalHarness::new();
         assert_eq!(
             mode.default_tools(),
             [

@@ -19,7 +19,7 @@ import { PAGE_BG } from './Theme';
 
 @ComponentV2
 export struct ConversationRouteSurface {
-  @Param route: AppRoute = AppRoute.ChatHome;
+  @Param route: AppRoute = AppRoute.RemoteHome;
   @Param remotePageState: RemotePageState = new RemotePageState();
   @Param generalPageState: GeneralChatPageState = new GeneralChatPageState();
   @Param filePreviewState: FilePreviewState = new FilePreviewState();
@@ -34,7 +34,7 @@ export struct ConversationRouteSurface {
 
   build() {
     Column() {
-      if (this.route === AppRoute.RemoteHome) {
+      if (this.route !== AppRoute.RemoteChat) {
         RemoteSurfaceHost({
           mode: RemoteSurfaceMode.CompactHome,
           remotePageState: this.remotePageState,

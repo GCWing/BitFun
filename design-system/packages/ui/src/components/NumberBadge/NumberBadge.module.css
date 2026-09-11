@@ -7,7 +7,7 @@
     justify-content: center;
     min-inline-size: var(--openbitfun-space-6);
     min-block-size: var(--openbitfun-space-6);
-    padding: calc(var(--openbitfun-space-1) / 2);
+    padding: 0;
     vertical-align: middle;
     color: var(--openbitfun-color-action-neutral-content);
     font-family: var(--openbitfun-type-meta-font-family);
@@ -24,11 +24,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-inline-size: var(--openbitfun-space-5);
-    min-block-size: var(--openbitfun-space-5);
+    min-inline-size: var(--openbitfun-space-6);
+    min-block-size: var(--openbitfun-space-6);
     padding-inline: calc(var(--openbitfun-space-1) / 2);
     border-radius: var(--openbitfun-radius-pill);
-    background: var(--openbitfun-color-action-neutral-surface);
+    background: var(--openbitfun-color-number-badge-background);
   }
 
   @media (forced-colors: active) {

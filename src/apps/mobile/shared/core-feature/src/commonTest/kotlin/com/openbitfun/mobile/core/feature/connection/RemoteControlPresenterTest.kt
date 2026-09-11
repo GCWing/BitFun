@@ -7,8 +7,6 @@ class RemoteControlPresenterTest {
     @Test
     fun withNothingPairedTheCardHasNoDesktopAndNoAction() {
         val summary = RemoteControlPresenter.summarize(
-            pairingPhase = ConnectionPhase.IDLE,
-            pairedRoomLabel = "",
             accountDeviceId = "",
             accountDeviceName = "",
             accountPhase = ConnectionPhase.IDLE,
@@ -20,36 +18,8 @@ class RemoteControlPresenterTest {
     }
 
     @Test
-    fun aLiveRoomOffersLeavingItAndAStalledOneOffersTryingAgain() {
-        val live = RemoteControlPresenter.summarize(
-            pairingPhase = ConnectionPhase.CONNECTED,
-            pairedRoomLabel = "ab12",
-            accountDeviceId = "",
-            accountDeviceName = "",
-            accountPhase = ConnectionPhase.IDLE,
-        )
-        assertEquals(RemoteControlSource.QR_PAIRING, live.source)
-        assertEquals("ab12", live.desktopName)
-        assertEquals(RemoteControlAction.DISCONNECT, live.action)
-
-        // A room that stopped answering is still paired, so the card keeps
-        // naming it and swaps the action rather than emptying itself.
-        val lost = RemoteControlPresenter.summarize(
-            pairingPhase = ConnectionPhase.FAILED,
-            pairedRoomLabel = "ab12",
-            accountDeviceId = "",
-            accountDeviceName = "",
-            accountPhase = ConnectionPhase.IDLE,
-        )
-        assertEquals(RemoteControlSource.QR_PAIRING, lost.source)
-        assertEquals(RemoteControlAction.RECONNECT, lost.action)
-    }
-
-    @Test
     fun aSelectedAccountDeviceIsTheDesktopWhenNoRoomIsPaired() {
         val summary = RemoteControlPresenter.summarize(
-            pairingPhase = ConnectionPhase.IDLE,
-            pairedRoomLabel = "",
             accountDeviceId = "device-1",
             accountDeviceName = "Studio",
             accountPhase = ConnectionPhase.CONNECTED,
@@ -64,8 +34,6 @@ class RemoteControlPresenterTest {
     @Test
     fun aDeviceTheRelayOnlyKnowsByIdIsNamedByThatId() {
         val summary = RemoteControlPresenter.summarize(
-            pairingPhase = ConnectionPhase.IDLE,
-            pairedRoomLabel = "",
             accountDeviceId = "device-1",
             accountDeviceName = "  ",
             accountPhase = ConnectionPhase.RECONNECTING,
@@ -75,24 +43,8 @@ class RemoteControlPresenterTest {
     }
 
     @Test
-    fun aPairedRoomWinsOverASelectedDevice() {
-        val summary = RemoteControlPresenter.summarize(
-            pairingPhase = ConnectionPhase.CONNECTED,
-            pairedRoomLabel = "ab12",
-            accountDeviceId = "device-1",
-            accountDeviceName = "Studio",
-            accountPhase = ConnectionPhase.FAILED,
-        )
-
-        assertEquals(RemoteControlSource.QR_PAIRING, summary.source)
-        assertEquals("ab12", summary.desktopName)
-    }
-
-    @Test
     fun aSelectedAccountDevicePublishesItsTransportPhase() {
         val summary = RemoteControlPresenter.summarize(
-            pairingPhase = ConnectionPhase.IDLE,
-            pairedRoomLabel = "",
             accountDeviceId = "device-1",
             accountDeviceName = "Studio",
             accountPhase = ConnectionPhase.RECONNECTING,

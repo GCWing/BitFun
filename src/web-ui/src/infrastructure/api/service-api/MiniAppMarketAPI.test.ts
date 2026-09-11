@@ -30,9 +30,10 @@ describe('MiniAppMarketAPI account bridge', () => {
     const started = await market.authStart();
     const status = await market.authPoll(started);
 
+    expect(mocks.invoke).toHaveBeenNthCalledWith(1, 'account_github_start', {});
     expect(started).not.toHaveProperty('transactionSecret');
     expect(status).toBe('authorized');
-    expect(mocks.invoke).toHaveBeenNthCalledWith(2, 'miniapp_market_auth_poll', {
+    expect(mocks.invoke).toHaveBeenNthCalledWith(2, 'account_github_poll', {
       request: { transactionId: 'transaction-1' },
     });
   });
@@ -41,6 +42,6 @@ describe('MiniAppMarketAPI account bridge', () => {
     const market = new MiniAppMarketAPI();
     const handler = vi.fn();
     market.onAccountChanged(handler);
-    expect(mocks.listen).toHaveBeenCalledWith('miniapp-market-account-changed', handler);
+    expect(mocks.listen).toHaveBeenCalledWith('account-identity-changed', handler);
   });
 });

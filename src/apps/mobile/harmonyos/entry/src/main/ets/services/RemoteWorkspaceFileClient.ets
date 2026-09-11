@@ -7,6 +7,7 @@ export interface RemoteWorkspaceFileClient {
   readFile(
     path: string,
     sessionId?: string,
-    onProgress?: (downloaded: number, total: number) => void
+    onProgress?: (downloaded: number, total: number) => void,
+    maxBytes?: number
   ): Promise<ReadFileResult>;
 }

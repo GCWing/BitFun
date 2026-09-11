@@ -472,3 +472,24 @@ curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" \
 
 每日备份保留 14 份，周备份保留 8 份。备份脚本的删除范围已经限制在市场专用
 backup root；不要放宽该保护。
+
+## 统一 GitHub 登录入口
+
+`https://auth.openbitfun.com` 是市场与远控共用的登录入口，桌面授权完成页为
+`/complete`，身份 API 为 `/api/v1`。它复用本服务和数据库；不新增账号库。
+安装同目录 `nginx-auth.openbitfun.com.conf` 前，先确认该域名的 DNS、TLS/WAF
+已覆盖，并配置当前可信 WAF 源网段。该配置只开放登录、身份、token 生命周期和
+页面静态资源，不代理市场写接口。
+
+GitHub OAuth App 的注册 callback 保持
+`https://market.openbitfun.com/miniapp/api/v1/auth/github/callback`。回调仍在市场
+host 上写入两组 host-only Cookie（`/miniapp` 与 `/skin`），然后桌面授权跳转到
+独立完成页；不要通过 `Domain=.openbitfun.com` 扩大 Cookie 信任范围。桌面
+poll token 仍受一次性 transaction secret 约束。旧市场 API 与旧完成页路径保留，
+已有安装无需手动迁移。
+
+发布顺序：先更新本服务及新增 auth vhost，验证 `/complete`、`/sign-in` 跳转、
+匿名 `/api/v1/me` 返回 401、desktop start/poll 和旧市场 API；再发布使用新身份
+API 的 Relay/客户端。两个市场各自的网页仍在所属 Compose 项目中构建发布。
+回滚时先让新客户端/Relay 恢复旧 API，再撤回 auth vhost；不能让已发布客户端的
+身份地址失效。旧 Relay 和已有市场业务数据均不在这个 vhost 的变更范围内。

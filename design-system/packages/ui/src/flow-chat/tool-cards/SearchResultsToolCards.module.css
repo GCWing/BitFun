@@ -89,7 +89,7 @@
   }
 
   .resultButton:is(:hover, :focus-visible) {
-    color: var(--openbitfun-color-action-primary-content);
+    color: var(--openbitfun-color-accent-hover);
     text-decoration: underline;
     text-underline-offset: 0.16em;
   }

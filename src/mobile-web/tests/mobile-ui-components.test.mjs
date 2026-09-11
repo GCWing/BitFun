@@ -84,9 +84,8 @@ test('pairing and settings styles follow component parts instead of obsolete nat
   const harmony = await readFile(path.join(sourceDirectory, 'styles/components/harmony-native.scss'), 'utf8');
   const overlays = await readFile(path.join(sourceDirectory, 'components/SessionOverlays.tsx'), 'utf8');
   const questions = await readFile(path.join(sourceDirectory, 'components/ChatAskQuestionCard.tsx'), 'utf8');
+  assert.doesNotMatch(harmony, /\.pairing-page(?:__|\s*\{)/, 'pairing layout has one owner in pairing.scss');
   assert.doesNotMatch(harmony, /\.pairing-page__advanced(?:\[open\])?\s+summary/);
-  assert.match(harmony, /\.pairing-page__advanced > \[data-openbitfun-part='trigger'\]\s*\{[^}]*min-height:\s*58px;[^}]*padding:\s*10px 18px;/);
-  assert.match(harmony, /\.pairing-page__advanced > \[data-openbitfun-part='body'\]\s*\{[^}]*padding:\s*0;/);
   assert.doesNotMatch(harmony, /\.harmony-sidebar__settings-row > span:nth-child/);
   assert.doesNotMatch(harmony, /\.chat-page__(?:back|theme-btn) > svg/);
   assert.doesNotMatch(harmony, /\.pairing-page__relay-field input\s*\{|\.qr-scanner-sheet__manual input\s*\{/);

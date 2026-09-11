@@ -451,7 +451,7 @@ export const useDispatchJobStore = create<DispatchJobStoreState>()(
               sourceWorkspacePath,
               sourceWorkspaceId: record.sourceWorkspaceId,
               title: record.title || record.promptPreview || record.sessionId.slice(0, 8),
-              agentType: record.agentType || 'agentic',
+              agentType: record.agentType || 'Standard',
               approvalPolicy: record.approvalPolicy || 'reject-and-report',
               branch: record.branch,
               baselineWorktreePath: record.baselineWorktreePath,

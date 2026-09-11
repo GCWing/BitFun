@@ -160,6 +160,53 @@ class ChatSessionControllerTest {
         assertTrue(callbacks.snapshots[1].shouldSyncAfterTurnEnded)
     }
 
+    @Test
+    fun exposesAuthoritativeHistorySnapshotAndRewriteFence() = runTest {
+        val replacement = listOf(message("rewritten", "assistant", "Rewritten"))
+        val poller = QueuePoller(
+            result(
+                version = 8,
+                changed = true,
+                count = 1,
+                messageSnapshot = replacement,
+            ),
+        )
+        val callbacks = RecordingCallbacks()
+        val controller = ChatSessionController.create(this, poller, callbacks)
+
+        controller.start("session-1", ChatSessionCursor(7, 3, 0))
+        runCurrent()
+        controller.stop(false)
+
+        val snapshot = callbacks.snapshots.single()
+        assertEquals(replacement, snapshot.messageSnapshot)
+        assertEquals(1, snapshot.cursor.knownMessageCount)
+        assertTrue(snapshot.historyRewritten)
+    }
+
+    @Test
+    fun authoritativeZeroCountCanReplaceANonEmptyCursor() = runTest {
+        val poller = QueuePoller(
+            result(
+                version = 8,
+                changed = true,
+                count = 0,
+                messageSnapshot = emptyList(),
+            ),
+        )
+        val callbacks = RecordingCallbacks()
+        val controller = ChatSessionController.create(this, poller, callbacks)
+
+        controller.start("session-1", ChatSessionCursor(7, 2, 0))
+        runCurrent()
+        controller.stop(false)
+
+        val snapshot = callbacks.snapshots.single()
+        assertEquals(0, snapshot.cursor.knownMessageCount)
+        assertEquals(emptyList(), snapshot.messageSnapshot)
+        assertTrue(snapshot.historyRewritten)
+    }
+
     private class QueuePoller(vararg initial: PollSessionResult) : ChatSessionPoller {
         val results = ArrayDeque(initial.toList())
 
@@ -193,6 +240,7 @@ class ChatSessionControllerTest {
         messages: List<ChatMessage> = emptyList(),
         count: Int = 1,
         activeTurn: ChatMessage? = null,
+        messageSnapshot: List<ChatMessage>? = null,
     ): PollSessionResult = PollSessionResult(
         version = version,
         changed = changed,
@@ -202,6 +250,8 @@ class ChatSessionControllerTest {
         totalMessageCount = count,
         activeTurn = activeTurn,
         modelCatalog = null,
+        messageSnapshot = messageSnapshot,
+        hasAuthoritativeMessageCount = true,
     )
 
     private fun message(

@@ -1,3 +1,4 @@
+import { translateAgentIdentityFields } from '../../../shared/agent-harness/wire';
 /**
  * Manages remote sessions by sending commands to the desktop via the relay.
  * All communication is request-response via RelayHttpClient (HTTP).
@@ -13,6 +14,7 @@ import {
   type ControlTargetSnapshot,
 } from './RelayHttpClient';
 import { getControlClientIdentity } from './controlClientIdentity';
+import { projectWorkspaceCatalog, type WorkspaceCatalog } from './workspaceIdentity';
 
 export class RemoteControlTargetChangedError extends Error {
   constructor() {
@@ -232,7 +234,7 @@ export class RemoteSessionManager {
   }
 
   get controlTargetDeviceId(): string | null {
-    return this.client.pairedDeviceId;
+    return this.client.targetDeviceId;
   }
 
   supportsHostCapability(capability: string): boolean {
@@ -272,30 +274,20 @@ export class RemoteSessionManager {
     const relayOptions = options.timeoutMs === undefined
       ? { retryable }
       : { retryable, timeoutMs: options.timeoutMs };
-    // The QR-paired desktop keeps the proven room channel. Only a switched
-    // control target (another same-account device) is reached through the
-    // relay device RPC API using the delegated identity.
     const targetDeviceId = target.deviceId;
-    const isRemoteTarget =
-      !!targetDeviceId
-      && targetDeviceId !== target.homeDeviceId;
+    if (!targetDeviceId) throw new Error('Select an account device to continue');
     try {
-      let resp: T;
-      if (isRemoteTarget && targetDeviceId) {
-        resp = await this.client.sendDeviceRpc<T>(
-          targetDeviceId,
-          cmdWithId,
-          relayOptions,
-        );
-      } else {
-        resp = await this.client.sendCommand<T>(cmdWithId, relayOptions);
-      }
+      const resp = await this.client.sendDeviceRpc<T>(
+        targetDeviceId,
+        translateAgentIdentityFields(cmdWithId, 'legacy'),
+        relayOptions,
+      );
       this.ensureControlTargetCurrent(target);
       const respAny = resp as any;
       if (respAny.resp === 'error') {
         throw new Error(respAny.message || 'Unknown error');
       }
-      return resp;
+      return translateAgentIdentityFields(resp, 'canonical');
     } catch (error: unknown) {
       // Suppress both successful and failed completions after a target switch.
       // The epoch check (rather than device id alone) also closes A -> B -> A
@@ -329,6 +321,21 @@ export class RemoteSessionManager {
       workspaces: RecentWorkspaceEntry[];
     }>({ cmd: 'list_recent_workspaces' });
     return resp.workspaces || [];
+  }
+
+  async listWorkspaceCatalog(): Promise<WorkspaceCatalog> {
+    const target = this.client.getControlTargetSnapshot();
+    const resp = await this.request<{
+      workspaces: RecentWorkspaceEntry[];
+      opened_workspaces?: RecentWorkspaceEntry[] | null;
+    }>({ cmd: 'list_recent_workspaces' }, target);
+    if (Array.isArray(resp.opened_workspaces)) return projectWorkspaceCatalog(resp);
+    // Older hosts only offer recent history. Preserve that fallback explicitly,
+    // and resolve assistant names through their existing supported command.
+    const { assistants } = await this.request<{ assistants: AssistantEntry[] }>(
+      { cmd: 'list_assistants' }, target,
+    );
+    return projectWorkspaceCatalog(resp, assistants);
   }
 
   async setWorkspace(
@@ -601,7 +608,7 @@ export class RemoteSessionManager {
   /**
    * Read a workspace file using chunked transfer.
    *
-   * Downloads the file in 4 MB chunks, reassembles the base64 pieces, and
+   * Downloads the file in bounded chunks, verifies and reassembles bytes, and
    * calls `onProgress(downloaded, total)` after each chunk so the UI can
    * display a progress bar.
    */
@@ -609,20 +616,20 @@ export class RemoteSessionManager {
     path: string,
     sessionId?: string,
     onProgress?: (downloaded: number, total: number) => void,
+    maxBytes?: number,
   ): Promise<{
     name: string;
     contentBase64: string;
     mimeType: string;
     size: number;
   }> {
-    // Must be divisible by 3 so intermediate base64 chunks have no `=` padding;
-    // joining padded chunks would produce invalid base64 for `atob()`.
     const CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB per request
     let offset = 0;
     const chunks: string[] = [];
     let fileName = '';
     let mimeType = '';
     let totalSize = 0;
+    let revision: string | undefined;
     const target = this.client.getControlTargetSnapshot();
 
     // eslint-disable-next-line no-constant-condition
@@ -631,6 +638,7 @@ export class RemoteSessionManager {
         resp: string;
         name: string;
         chunk_base64: string;
+        revision?: string;
         offset: number;
         chunk_size: number;
         total_size: number;
@@ -640,14 +648,30 @@ export class RemoteSessionManager {
         path,
         session_id: sessionId ?? undefined,
         offset,
-        limit: CHUNK_SIZE,
+        limit: Math.min(CHUNK_SIZE, maxBytes ?? CHUNK_SIZE),
       }, target);
       this.ensureControlTargetCurrent(target);
 
-      chunks.push(resp.chunk_base64);
+      if (!Number.isSafeInteger(resp.total_size) || resp.total_size < 0
+        || resp.offset !== offset || !Number.isSafeInteger(resp.chunk_size)
+        || resp.chunk_size < 0 || resp.chunk_size > CHUNK_SIZE
+        || resp.chunk_size > resp.total_size - offset
+        || (resp.chunk_size === 0 && offset < resp.total_size)) {
+        throw new Error('Invalid or incomplete file transfer. Please retry.');
+      }
+      if (maxBytes !== undefined && resp.total_size > maxBytes) {
+        throw new Error('File is too large for an inline preview. Download it to view.');
+      }
+      if (chunks.length > 0 && (resp.total_size !== totalSize || resp.name !== fileName || resp.mime_type !== mimeType || resp.revision !== revision)) {
+        throw new Error('File changed during transfer. Please retry.');
+      }
+      const bytes = atob(resp.chunk_base64);
+      if (bytes.length !== resp.chunk_size) throw new Error('File transfer byte count mismatch. Please retry.');
+      chunks.push(bytes);
       fileName = resp.name;
       mimeType = resp.mime_type;
       totalSize = resp.total_size;
+      revision = resp.revision;
       offset += resp.chunk_size;
 
       onProgress?.(Math.min(offset, totalSize), totalSize);
@@ -659,7 +683,7 @@ export class RemoteSessionManager {
 
     return {
       name: fileName,
-      contentBase64: chunks.join(''),
+      contentBase64: btoa(chunks.join('')),
       mimeType,
       size: totalSize,
     };

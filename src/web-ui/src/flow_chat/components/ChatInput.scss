@@ -266,10 +266,6 @@
   ):not(:disabled):hover {
     color: var(--openbitfun-color-content-primary);
   }
-
-  &:active:not(:disabled) {
-    transform: scale(0.97);
-  }
 }
 
 @keyframes openbitfun-voice-input-spin { to { transform: rotate(360deg); } }
@@ -349,7 +345,7 @@
     padding-top: 1px;
   }
 
-  // In capsule: vertically centre inside the 25px line height
+  // In capsule: vertically centre inside the 24px line height
   &--capsule &__placeholder {
     top: 50%;
     transform: translateY(-50%);
@@ -495,7 +491,7 @@
   }
 
   // Product controls fill the stable public ChatComposer slots. The package
-  // owns the 45px compact / 120px expanded surface geometry; Web UI owns concrete menus and
+  // owns the 42px compact / 120px expanded surface geometry; Web UI owns concrete menus and
   // lifecycle states.
   &__composer-surface {
     .openbitfun-chat-input__actions-left,
@@ -691,10 +687,6 @@
       color: var(--openbitfun-color-content-primary);
     }
 
-    &:active:not(:disabled) {
-      transform: scale(0.97);
-    }
-
     &:hover:not(#{&}--active) {
       color: var(--openbitfun-color-content-secondary);
       background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 4%, transparent);
@@ -836,10 +828,6 @@
       background: var(--openbitfun-color-action-neutral-surface-hover);
       color: var(--openbitfun-color-content-primary);
       opacity: 1;
-    }
-
-    &:active {
-      transform: scale(0.97);
     }
 
     &:focus-visible {
@@ -1001,10 +989,6 @@
 
     &--selected {
       background: var(--openbitfun-color-action-neutral-surface-hover);
-    }
-
-    &:active {
-      transform: scale(0.99);
     }
 
     &--active {

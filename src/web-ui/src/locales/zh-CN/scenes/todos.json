@@ -114,7 +114,7 @@
     "placeholders": {
       "name": "例如：每日站会总结",
       "workspace": "选择工作区",
-      "agentType": "例如：agentic 或 Cowork",
+      "agentType": "例如：Standard 或 Cowork",
       "anchor": "留空则以创建时间为准",
       "timezone": "例如：Asia/Shanghai",
       "prompt": "到点时希望 Agent 做什么？"

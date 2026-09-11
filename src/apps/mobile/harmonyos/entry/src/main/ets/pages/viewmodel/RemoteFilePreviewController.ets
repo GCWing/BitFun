@@ -49,7 +49,7 @@ export class RemoteFilePreviewController {
         return;
       }
       if (renderer === FilePreviewRendererKind.Image) {
-        const image = await this.client.readFile(target.remotePath, target.sessionId);
+        const image = await this.client.readFile(target.remotePath, target.sessionId, undefined, FilePreviewPolicy.IMAGE_MAX_BYTES);
         if (!this.isCurrentTarget(version, target) || this.failIfUnavailable()) {
           return;
         }

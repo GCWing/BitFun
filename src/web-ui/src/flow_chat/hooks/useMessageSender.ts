@@ -3,8 +3,8 @@
  * Encapsulates session creation, image uploads, and message assembly.
  *
  * Image handling is fully delegated to the backend coordinator which
- * decides whether to pre-analyse via a vision model or attach images
- * directly.  The frontend only uploads clipboard images and passes
+ * exposes a path to the image analysis tool or attaches pixels
+ * directly for a multimodal model. The frontend prepares compatible attachment payloads and passes
  * ImageContextData[] through to the backend.
  */
 
@@ -141,18 +141,18 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
       textLength: trimmedMessage.length,
       contextCount: contexts.length,
       hasSession: !!sessionId,
-      agentType: currentAgentType || 'agentic',
+      agentType: currentAgentType || 'Standard',
     });
 
     try {
       const flowChatManager = FlowChatManager.getInstance();
-      let agentTypeForSend = currentAgentType || 'agentic';
+      let agentTypeForSend = currentAgentType || 'Standard';
       if (options?.execution?.kind === 'fresh_external_subagent' && contexts.length > 0) {
         throw new Error('External subagent command delegation does not accept composer context');
       }
 
       if (!sessionId) {
-        const agentType = currentAgentType || 'agentic';
+        const agentType = currentAgentType || 'Standard';
         const sessionConfig = flowChatSessionConfigForCurrentWorkspace();
 
         sessionId = await flowChatManager.createChatSession(sessionConfig, agentType);
@@ -222,7 +222,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
           : aiTrimmedMessage;
       }
       // Always pass imageContexts to the backend; the coordinator decides
-      // whether to pre-analyse via a vision model or attach directly.
+      // whether to expose a path to analyze_image or attach pixels directly.
       await flowChatManager.sendMessage(
         fullMessage,
         sessionId || undefined,
@@ -286,7 +286,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
     } catch (error) {
       log.error('Failed to send message', {
         sessionId,
-        agentType: currentAgentType || 'agentic',
+        agentType: currentAgentType || 'Standard',
         contextCount: contexts.length,
         error: (error as Error)?.message ?? 'unknown',
       });

@@ -1,3 +1,4 @@
+import { ResourceFileContext, type ResourceFileAccess } from '@/infrastructure/api/ResourceFileContext';
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Node } from '@tiptap/core';
@@ -5,10 +6,12 @@ import { Selection, TextSelection } from '@tiptap/pm/state';
 import { closeHistory } from '@tiptap/pm/history';
 import { embeddedSource } from '../utils/embeddedSource';
 import { sourceBlockPreview } from '../utils/sourceBlockPreview';
+import { sanitizeDetailsSummaryHtml } from '../utils/sanitizeDetailsSummaryHtml';
 import { MarkdownRenderer } from '@/infrastructure/markdown';
 import { activeEditTargetService } from '@/tools/editor/services/ActiveEditTargetService';
 
 type SourceBackedBlockOptions = {
+  fileAccess?: ResourceFileAccess | null;
   basePath?: string;
   label?: string;
   editLabel?: string;
@@ -114,81 +117,6 @@ function parseDetailsSource(markdown: string): {
     summaryHtml,
     bodyMarkdown: normalizeDetailsBodyMarkdown(bodyRaw),
   };
-}
-
-function isSafePreviewUrl(value: string): boolean {
-  const normalized = value.trim().toLowerCase();
-  return !normalized.startsWith('javascript:') && !normalized.startsWith('vbscript:');
-}
-
-function sanitizeDetailsSummaryHtml(summaryHtml: string): string {
-  if (typeof document === 'undefined') {
-    return summaryHtml;
-  }
-
-  const template = document.createElement('template');
-  template.innerHTML = summaryHtml;
-  const allowedTags = new Set(['A', 'STRONG', 'B', 'EM', 'I', 'CODE', 'BR', 'IMG']);
-
-  const sanitizeNode = (node: globalThis.Node) => {
-    if (!(node instanceof HTMLElement)) {
-      return;
-    }
-
-    if (!allowedTags.has(node.tagName)) {
-      const parent = node.parentNode;
-      if (!parent) {
-        return;
-      }
-
-      while (node.firstChild) {
-        parent.insertBefore(node.firstChild, node);
-      }
-      parent.removeChild(node);
-      return;
-    }
-
-    Array.from(node.attributes).forEach((attr) => {
-      const name = attr.name.toLowerCase();
-      const value = attr.value;
-
-      if (name.startsWith('on')) {
-        node.removeAttribute(attr.name);
-        return;
-      }
-
-      if (node.tagName === 'A') {
-        if (!['href', 'title'].includes(name)) {
-          node.removeAttribute(attr.name);
-          return;
-        }
-        if (name === 'href' && !isSafePreviewUrl(value)) {
-          node.removeAttribute(attr.name);
-        }
-        return;
-      }
-
-      if (node.tagName === 'IMG') {
-        if (!['src', 'alt', 'title', 'width', 'height', 'align'].includes(name)) {
-          node.removeAttribute(attr.name);
-          return;
-        }
-        if (name === 'src' && !isSafePreviewUrl(value)) {
-          node.removeAttribute(attr.name);
-        }
-        return;
-      }
-
-      if (name !== 'class') {
-        node.removeAttribute(attr.name);
-      }
-    });
-
-    Array.from(node.children).forEach((child) => sanitizeNode(child));
-  };
-
-  Array.from(template.content.children).forEach((child) => sanitizeNode(child));
-  return template.innerHTML;
 }
 
 function executeTextareaAction(
@@ -347,6 +275,9 @@ function createSourceBackedBlock(
         preview.tabIndex = 0;
         preview.dataset.testid = 'md-embed-preview';
         previewRoot = createRoot(preview);
+        const renderPreviewRoot = (node: React.ReactNode) => previewRoot?.render(
+          React.createElement(ResourceFileContext.Provider, { value: this.options.fileAccess ?? null }, node),
+        );
 
         const sourceFallback = document.createElement('pre');
         sourceFallback.className = `${className}__source-fallback`;
@@ -474,7 +405,7 @@ function createSourceBackedBlock(
             ? typeof pos === 'number' ? sourceBlockPreview(editor.state.doc, pos, referencePrefix) : undefined
             : undefined;
           if (name === 'frontmatter') {
-            previewRoot?.render(
+            renderPreviewRoot(
               React.createElement(
                 'pre',
                 { className: `${className}__source` },
@@ -497,7 +428,7 @@ function createSourceBackedBlock(
               const hasVisibleContent = previewHasVisibleContent(preview);
 
               if (!hasVisibleContent && fallbackToMarkdownRenderer) {
-                previewRoot?.render(
+                renderPreviewRoot(
                   React.createElement(MarkdownRenderer, {
                     content: markdown,
                     basePath: this.options.basePath,
@@ -518,7 +449,7 @@ function createSourceBackedBlock(
           };
 
           if (detailsSource) {
-            previewRoot?.render(
+            renderPreviewRoot(
               React.createElement(
                 'details',
                 {
@@ -559,7 +490,7 @@ function createSourceBackedBlock(
             return;
           }
 
-          previewRoot?.render(
+          renderPreviewRoot(
             React.createElement(MarkdownRenderer, {
               content: markdown,
               ...referencePreview,

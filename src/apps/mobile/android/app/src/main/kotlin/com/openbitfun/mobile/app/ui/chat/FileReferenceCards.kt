@@ -48,10 +48,8 @@ internal const val FILE_DOWNLOAD_ACTION_TEST_TAG: String = "file-download-action
  * small targets, and because the projection dedupes: a turn that mentions one
  * file four times gets one card, not four links to hunt through.
  *
- * The source pairs each card with a download button. There is no download here,
- * and the button is left out rather than drawn dead: `RemoteWorkspaceIntent` has
- * no such intent and the desktop has no command behind it, so the whole path is
- * missing rather than merely unwired on this client.
+ * Preview and download both use the displayed session's file channel. Source
+ * references are preserved for the owning remote host to resolve.
  */
 @Composable
 internal fun FileReferenceCards(

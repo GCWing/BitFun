@@ -4,7 +4,7 @@
  * Semantic controls and surfaces participate automatically. Product-specific
  * motion can opt in without adding another keyframe:
  *
- *   data-motion="interactive"  press / hover feedback
+ *   data-motion="interactive"  color / opacity feedback
  *   data-motion="view"         page or panel entrance
  *   data-motion="popup"        menu, popover, or floating surface entrance
  *   data-motion="presence"     component owns its complete enter/exit lifecycle
@@ -76,18 +76,17 @@
 
 @media (prefers-reduced-motion: no-preference) {
   /**
-   * Buttons and button-like controls.
-   *
-   * Individual transform properties compose with component-owned `transform`
-   * (icons, drag handles, toggles) instead of replacing it.
+   * Buttons, button-like controls, and legacy interactive surfaces share paint
+   * transitions only. Pressing a control must not resize it or its contents.
+   * Geometry belongs to explicit state changes (toggles, drag, enter/exit),
+   * never to generic hover/press feedback. In particular, individual `scale`
+   * would multiply any component-owned `transform: scale(...)`.
    *
    * Override contract: this is a zero-specificity `:where()` default, so any
    * component that declares its own `transition` owns it completely. That is
-   * deliberate. The property list used to be re-asserted with `!important`,
-   * which forced all eight properties onto components that had chosen a longer
-   * duration for one of them — and made `transition: none` unattainable, so an
-   * element being dragged animated its way to the pointer. Opt out entirely
-   * with `[data-motion='none']`.
+   * deliberate: do not re-assert transition properties with `!important` or
+   * make `transition: none` unattainable for dragging. Opt out entirely with
+   * `[data-motion='none']`.
    */
   :where(
     button,
@@ -99,38 +98,19 @@
     [role='checkbox'],
     [role='radio'],
     [role='switch'],
-    [data-motion='interactive']
+    [data-motion='interactive'],
+    .v-card--interactive,
+    .openbitfun-context-card--interactive,
+    .openbitfun-nav-panel__section-header--interactive
   ):where(
     :not(:disabled):not([aria-disabled='true']):not([data-motion='none'])
   ) {
-    transform-origin: center;
     transition:
-      translate var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-      scale var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
-  }
-
-  :where(
-    button,
-    input[type='button'],
-    input[type='submit'],
-    input[type='reset'],
-    summary,
-    [role='button'],
-    [role='checkbox'],
-    [role='radio'],
-    [role='switch'],
-    [data-motion='interactive']
-  ):where(
-    :not(:disabled):not([aria-disabled='true']):not([data-motion='none'])
-  ):active {
-    translate: 0 0;
-    scale: 0.97;
   }
 
   /**
@@ -207,51 +187,6 @@
     body > [class$='__backdrop']
   ):where(:not([data-motion='none'])) {
     animation: openbitfun-motion-overlay-enter 160ms ease-out both;
-  }
-
-  /**
-   * A small, explicit set of reusable interactive surfaces that are not native
-   * buttons. New surfaces should prefer semantic roles or data-motion.
-   */
-  :where(
-    .v-card--interactive,
-    .openbitfun-context-card--interactive,
-    .openbitfun-nav-panel__section-header--interactive
-  ):where(:not([data-motion='none'])) {
-    transform-origin: center;
-    transition:
-      translate var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-      scale var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-      background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
-    transition-property:
-      translate,
-      scale,
-      transform,
-      background-color,
-      border-color,
-      box-shadow !important;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    :where(
-      .v-card--interactive,
-      .openbitfun-context-card--interactive,
-      .openbitfun-nav-panel__section-header--interactive
-    ):where(:not([data-motion='none'])):hover {
-      translate: 0 -1px;
-    }
-  }
-
-  :where(
-    .v-card--interactive,
-    .openbitfun-context-card--interactive,
-    .openbitfun-nav-panel__section-header--interactive
-  ):where(:not([data-motion='none'])):active {
-    translate: 0 0;
-    scale: 0.99;
   }
 }
 

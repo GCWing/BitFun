@@ -1,4 +1,6 @@
 import { common } from '@kit.AbilityKit';
+import { RemoteI18n } from '../../i18n/RemoteI18n';
+import { INK } from '../components/Theme';
 
 export interface AppRootHostPort {
   attach(context: Context, uiContext: UIContext): void;
@@ -6,6 +8,7 @@ export interface AppRootHostPort {
   animate(duration: number, callback: () => void): void;
   showToast(message: string, duration: number): boolean;
   openExternalLink?(link: string): Promise<boolean>;
+  offerTaskNotifications?(): Promise<boolean>;
 }
 
 export class ArkUiAppRootHostAdapter implements AppRootHostPort {
@@ -36,6 +39,18 @@ export class ArkUiAppRootHostAdapter implements AppRootHostPort {
     } catch (_err) {
       return false;
     }
+  }
+
+  async offerTaskNotifications(): Promise<boolean> {
+    const result = await this.uiContext.getPromptAction().showDialog({
+      title: RemoteI18n.t('notification.onboardingTitle'),
+      message: RemoteI18n.t('notification.onboardingBody'),
+      buttons: [
+        { text: RemoteI18n.t('notification.onboardingLater'), color: INK as Resource },
+        { text: RemoteI18n.t('notification.onboardingEnable'), color: INK as Resource }
+      ]
+    });
+    return result.index === 1;
   }
 
   async openExternalLink(link: string): Promise<boolean> {

@@ -19,22 +19,27 @@ import { DEFAULT_RESOURCE_LAYOUT, useWorkspaceResourceState } from './workspaceR
 import WorkspaceTerminals from './WorkspaceTerminals';
 import { useResourceSplit } from './useResourceSplit';
 import { showResourceMenu } from './resourceMenus';
+import { resolveResourceWorkspace, useNavSceneStore } from '../../stores/navSceneStore';
+import type { WorkspaceInfo } from '@/shared/types';
 import '../file-viewer/FileViewerNav.scss';
 
 export default function WorkspaceResourcePanel() {
-  const { activeWorkspace } = useWorkspaceContext();
+  const { activeWorkspace, openedWorkspaces } = useWorkspaceContext();
+  const target = useNavSceneStore(state => state.resourceWorkspace);
   const scope = useSyncExternalStore(onSurfaceActivated, getActiveSurfaceScope, getActiveSurfaceScope);
-  const resourceKey = scope.key('workspace-resources', activeWorkspace?.connectionId, activeWorkspace?.id, activeWorkspace?.rootPath);
-  return <WorkspaceResourceContent key={resourceKey} resourceKey={resourceKey} />;
+  const workspace = resolveResourceWorkspace(target, scope.surfaceId, openedWorkspaces, activeWorkspace);
+  const resourceKey = scope.key('workspace-resources', workspace?.connectionId, workspace?.id, workspace?.rootPath);
+  return <WorkspaceResourceContent key={resourceKey} resourceKey={resourceKey} workspace={workspace} />;
 }
 
-function WorkspaceResourceContent({ resourceKey }: { resourceKey: string }) {
+function WorkspaceResourceContent({ resourceKey, workspace }: { resourceKey: string; workspace: WorkspaceInfo | null }) {
   const { t, formatNumber } = useI18n('common');
   const { t: tFiles } = useI18n('panels/files');
   const { t: tTools } = useI18n('tools');
-  const { activeWorkspace: workspace, openedWorkspacesList, setActiveWorkspace } = useWorkspaceContext();
+  const { openedWorkspacesList } = useWorkspaceContext();
+  const openWorkspaceResources = useNavSceneStore(state => state.openWorkspaceResources);
   const scope = getActiveSurfaceScope();
-  const terminals = useShellEntries();
+  const terminals = useShellEntries(workspace);
   const layout = useWorkspaceResourceState(state => state.layouts[resourceKey] ?? DEFAULT_RESOURCE_LAYOUT);
   const updateLayout = useWorkspaceResourceState(state => state.updateLayout);
   const [toolbar, setToolbar] = useState<FileExplorerToolbarHandlers | null>(null);
@@ -112,7 +117,7 @@ function WorkspaceResourceContent({ resourceKey }: { resourceKey: string }) {
             aria-label={t('nav.resources.switchWorkspace')}
             onClick={event => showResourceMenu(event, openedWorkspacesList.map(item => ({
               id: item.id, label: getWorkspaceDisplayName(item), icon: item.id === workspace?.id ? 'Check' : 'Folder',
-              onClick: () => run(async () => { await setActiveWorkspace(item.id); }),
+              onClick: () => openWorkspaceResources(item.id),
             })))}>
             <Icon name="folder" size="sm" />
             <OverflowText className="openbitfun-file-viewer-nav__workspace-name">{workspaceName || t('nav.resources.title')}</OverflowText>
@@ -126,7 +131,8 @@ function WorkspaceResourceContent({ resourceKey }: { resourceKey: string }) {
       </NavigationPanelHeader>
       <NavigationPanelBody className="openbitfun-file-viewer-nav__body">
         <NavigationPanelContent className="openbitfun-file-viewer-nav__content">
-          {!workspace ? <p className="openbitfun-file-viewer-nav__empty">{tFiles('empty.selectWorkspace')}</p> : (
+          {!workspace || (isRemote && !workspace.connectionId)
+            ? <p className="openbitfun-file-viewer-nav__empty">{workspace ? t('nav.resources.unavailable') : tFiles('empty.selectWorkspace')}</p> : (
             <div ref={container} className="openbitfun-file-viewer-nav__sections"
               data-openbitfun-component="file-viewer-nav" data-openbitfun-part="sections">
               <section className="openbitfun-file-viewer-nav__section" aria-label={t('nav.resources.files')}
@@ -151,7 +157,7 @@ function WorkspaceResourceContent({ resourceKey }: { resourceKey: string }) {
                   </div>
                 </div>
                 <div id={filesId} hidden={layout.filesCollapsed} className="openbitfun-file-viewer-nav__section-body">
-                  <FilesPanel workspacePath={workspace.rootPath} searchStateKey={resourceKey} hideHeader hideExplorerToolbar onExplorerToolbarApi={setToolbar}
+                  <FilesPanel workspace={workspace} workspacePath={workspace.rootPath} searchStateKey={resourceKey} hideHeader hideExplorerToolbar onExplorerToolbarApi={setToolbar}
                     viewMode={layout.fileView} onViewModeChange={fileView => updateLayout(resourceKey, { fileView })} />
                 </div>
               </section>

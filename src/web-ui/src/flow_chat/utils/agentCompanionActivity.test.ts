@@ -54,7 +54,7 @@ function createSession(turnStatus: DialogTurn['status']): Session {
     title: 'Remote Task',
     dialogTurns: [createTurn(turnStatus)],
     status: 'idle',
-    config: { agentType: 'agentic' },
+    config: { agentType: 'Standard' },
     createdAt: 900,
     lastActiveAt: 2000,
     updatedAt: 2000,

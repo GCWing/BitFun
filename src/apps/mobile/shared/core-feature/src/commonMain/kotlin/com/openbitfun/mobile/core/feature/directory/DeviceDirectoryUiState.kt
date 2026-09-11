@@ -9,8 +9,9 @@ import com.openbitfun.mobile.core.domain.RemoteSession
  * [CACHED] means an offline device still has non-empty workspace or session
  * data retained from an earlier successful load. An offline device with no
  * retained data remains [IDLE]; `online = false` carries the offline fact.
- * [CACHED] is therefore not a generic offline marker or a promise of disk
- * hydration. Online entries transition IDLE -> LOADING -> READY/FAILED;
+ * [CACHED] is therefore not a generic offline marker. It may be restored from
+ * the device-scoped disk cache or retained from this process. Online entries
+ * transition IDLE -> LOADING -> READY/FAILED;
  * online -> offline changes READY/LOADING to CACHED only when data exists, and
  * offline -> online permits a new load/retry.
  */
@@ -21,6 +22,20 @@ public enum class DeviceDirectoryStatus {
     READY,
     FAILED,
 }
+
+public enum class WorkspaceDirectoryStatus {
+    IDLE,
+    LOADING,
+    READY,
+    FAILED,
+}
+
+/** Disclosure and request state for one workspace inside one device row. */
+public data class WorkspaceDirectoryEntry public constructor(
+    public val path: String,
+    public val expanded: Boolean,
+    public val status: WorkspaceDirectoryStatus,
+)
 
 /** Why a device's directory content cannot be shown. */
 public enum class DeviceDirectoryFailure {
@@ -53,8 +68,31 @@ public data class DeviceDirectoryEntry public constructor(
     public val error: DeviceDirectoryFailure?,
     public val workspaces: List<RecentWorkspace>,
     public val sessions: List<RemoteSession>,
+    public val workspaceDirectory: List<WorkspaceDirectoryEntry>,
 ) {
+    public constructor(
+        deviceId: String,
+        deviceName: String,
+        online: Boolean,
+        expanded: Boolean,
+        status: DeviceDirectoryStatus,
+        error: DeviceDirectoryFailure?,
+        workspaces: List<RecentWorkspace>,
+        sessions: List<RemoteSession>,
+    ) : this(deviceId, deviceName, online, expanded, status, error, workspaces, sessions, emptyList())
+
+    public fun workspace(path: String): WorkspaceDirectoryEntry? {
+        val normalized = normalizeWorkspacePath(path)
+        return workspaceDirectory.firstOrNull { normalizeWorkspacePath(it.path) == normalized }
+    }
+
     public companion object {
+        private fun normalizeWorkspacePath(path: String): String {
+            val trimmed = path.trim()
+            val normalized = trimmed.trimEnd('/')
+            return normalized.ifEmpty { trimmed }
+        }
+
         public fun empty(deviceId: String, deviceName: String, online: Boolean): DeviceDirectoryEntry =
             DeviceDirectoryEntry(
                 deviceId = deviceId,
@@ -65,6 +103,7 @@ public data class DeviceDirectoryEntry public constructor(
                 error = null,
                 workspaces = emptyList(),
                 sessions = emptyList(),
+                workspaceDirectory = emptyList(),
             )
     }
 }
@@ -110,6 +149,17 @@ public sealed interface DeviceDirectoryIntent {
 
     public data class Retry public constructor(
         public val deviceId: String,
+    ) : DeviceDirectoryIntent
+
+    public data class SetWorkspaceExpanded public constructor(
+        public val deviceId: String,
+        public val path: String,
+        public val expanded: Boolean,
+    ) : DeviceDirectoryIntent
+
+    public data class RetryWorkspace public constructor(
+        public val deviceId: String,
+        public val path: String,
     ) : DeviceDirectoryIntent
 
     public data object Stop : DeviceDirectoryIntent

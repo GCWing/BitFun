@@ -27,8 +27,9 @@ Peer Device Mode（同账号远程完整客户端）的边界见 `docs/architect
 前端不变量见 `src/infrastructure/peer-device/README.md`。不要重新引入内嵌会话/聊天壳；
 应从设备列表（Remote Connect 的「我的 OpenBitFun」组）进入 peer mode。
 
-一键部署 Relay：`src/features/relay-deploy/`（见其 README）。Remote Connect「我的 OpenBitFun」
-登录表单与 Self-Hosted 入口必须打开 `RelayDeployWizard`，不要改成外链 README。
+Remote Connect 使用全局 GitHub 账户和官方版本化 Relay。账户控件复用 account-identity
+服务，不再提供独立 Relay 账户、自定义服务器或自建部署入口。SSH 与 Docker 远程工作区
+继续独立使用，不受 Relay 登录限制。
 
 ## 本模块规则
 

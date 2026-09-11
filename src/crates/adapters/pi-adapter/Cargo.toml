@@ -1,0 +1,19 @@
+[package]
+name = "openbitfun-pi-adapter"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Runtime-free PI extension source discovery for OpenBitFun"
+
+[dependencies]
+openbitfun-product-domains = { path = "../../contracts/product-domains", features = ["external-sources"] }
+openbitfun-static-hook-support = { path = "../static-hook-support" }
+dirs = { workspace = true }
+oxc-parse = { workspace = true, features = ["ast_visit"] }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

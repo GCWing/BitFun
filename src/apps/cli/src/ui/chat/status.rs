@@ -201,7 +201,7 @@ mod status_tests {
         let mut state = ChatState::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
         );
         state.metadata.message_count = 3;
@@ -224,7 +224,7 @@ mod status_tests {
         let mut state = ChatState::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("/tmp/project".to_string()),
         );
         state.current_model_name = "Example Model".to_string();
@@ -239,7 +239,7 @@ mod status_tests {
             "ID: session-1",
             "Runtime: Embedded TUI",
             "State: Idle",
-            "Agent: agentic",
+            "Agent: Standard",
             "Model: Example Model",
             "Reasoning: Auto",
             "Approval: Ask",
@@ -269,7 +269,7 @@ mod status_tests {
         let mut state = ChatState::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
         );
         state.is_processing = true;

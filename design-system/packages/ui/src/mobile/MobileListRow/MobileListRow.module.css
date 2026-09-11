@@ -20,8 +20,7 @@
     transition:
       background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .root[data-appearance="surface"] {
@@ -44,7 +43,6 @@
 
   .root:is(:active, [data-openbitfun-preview-state="active"]):not(:disabled) {
     background: var(--openbitfun-color-action-neutral-surface-pressed);
-    transform: scale(0.99);
   }
 
   .root:is(:focus-visible, [data-openbitfun-preview-state="focus-visible"]) {

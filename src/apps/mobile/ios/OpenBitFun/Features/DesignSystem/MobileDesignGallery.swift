@@ -17,7 +17,8 @@ struct MobileDesignGallery: View {
         let previewModel = MobileAppModel(
             sessions: [session],
             selectedSessionID: session.id,
-            messages: previewMessages
+            messages: previewMessages,
+            connectCore: false
         )
         previewModel.coreAdapter = nil
         previewModel.surface = .remote

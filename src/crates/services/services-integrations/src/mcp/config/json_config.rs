@@ -235,7 +235,6 @@ pub fn validate_mcp_json_config(
             ("args", "array"),
             ("env", "object"),
             ("headers", "object"),
-            ("oauth", "object"),
             ("xaa", "object"),
         ] {
             if let Some(value) = obj.get(key) {
@@ -250,6 +249,33 @@ pub fn validate_mcp_json_config(
                         server_id, key, expected
                     )));
                 }
+            }
+        }
+
+        if let Some(value) = obj.get("oauth") {
+            if !value.is_object() && !value.is_boolean() {
+                return Err(MCPJsonConfigValidationError::new(format!(
+                    "Server '{}' 'oauth' field must be a boolean or an object",
+                    server_id
+                )));
+            }
+        }
+        if let Some(value) = obj.get("oauthEnabled") {
+            if !value.is_boolean() {
+                return Err(MCPJsonConfigValidationError::new(format!(
+                    "Server '{}' 'oauthEnabled' field must be a boolean",
+                    server_id
+                )));
+            }
+            if obj
+                .get("oauth")
+                .and_then(|oauth| oauth.as_bool())
+                .is_some_and(|enabled| Some(enabled) != value.as_bool())
+            {
+                return Err(MCPJsonConfigValidationError::new(format!(
+                    "Server '{}' 'oauth' conflicts with 'oauthEnabled'",
+                    server_id
+                )));
             }
         }
     }

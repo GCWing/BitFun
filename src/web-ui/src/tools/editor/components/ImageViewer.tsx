@@ -1,3 +1,4 @@
+import { useEditorDocument } from '../services/EditorDocument';
 /**
  * Image Viewer Component
  * 
@@ -5,12 +6,13 @@
  * @module components/ImageViewer
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ZoomIn, ZoomOut, RotateCw, Maximize2 } from 'lucide-react';
 import { OverflowText, Button, Icon, IconButton, Toolbar, ToolbarGroup, ToolbarSeparator, Tooltip } from '@openbitfun/ui';
 import { createLogger } from '@/shared/utils/logger';
 
 import { useI18n } from '@/infrastructure/i18n';
+import { formatBytes } from '@/shared/utils/format';
 import './ImageViewer.scss';
 
 const log = createLogger('ImageViewer');
@@ -18,20 +20,27 @@ const log = createLogger('ImageViewer');
 export interface ImageViewerProps {
   /** Image file path */
   filePath: string;
+  isActiveTab?: boolean;
   /** File name */
   fileName?: string;
   /** Workspace path (for relative path resolution) */
   workspacePath?: string;
   /** CSS class name */
   className?: string;
+  /** Immutable bytes supplied by a session provider; never read filePath locally. */
+  imageSource?: { dataUrl: string; size: number };
 }
 
 export const ImageViewer: React.FC<ImageViewerProps> = ({
   filePath,
   fileName,
+  imageSource,
+  isActiveTab = true,
   className = ''
 }) => {
+  const documentSession = useEditorDocument();
   const { t } = useI18n('tools');
+  const [retryKey, setRetryKey] = useState(0);
   const [imageUrl, setImageUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +48,8 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   const [rotation, setRotation] = useState(0);
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [loadedOrigin, setLoadedOrigin] = useState<{ filePath: string; imageSource: typeof imageSource; documentSession: typeof documentSession }>();
+  const originCurrent = loadedOrigin?.filePath === filePath && loadedOrigin.imageSource === imageSource && loadedOrigin.documentSession === documentSession;
   const [fileSize, setFileSize] = useState<number>(0);
 
   const getMimeType = useCallback((path: string): string => {
@@ -58,6 +69,23 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoadedOrigin({ filePath, imageSource, documentSession });
+    setImageUrl('');
+    setImageDimensions(null);
+    if (imageSource) {
+      setImageUrl(imageSource.dataUrl);
+      setFileSize(imageSource.size);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    if (filePath.startsWith('dispatch-file://')) {
+      setImageUrl('');
+      setError(t('editor.imageViewer.filePathEmpty'));
+      setLoading(false);
+      return;
+    }
     const loadImage = async () => {
       if (!filePath) {
         setError(t('editor.imageViewer.filePathEmpty'));
@@ -69,26 +97,36 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         setLoading(true);
         setError(null);
 
-        const { workspaceAPI } = await import('@/infrastructure/api');
+        const workspaceAPI = documentSession?.files ?? (await import('@/infrastructure/api')).workspaceAPI;
         const result = await workspaceAPI.readFileContent(filePath);
 
+        if (cancelled) return;
         const mimeType = getMimeType(filePath);
 
         const dataUrl = `data:${mimeType};base64,${result}`;
         
         setImageUrl(dataUrl);
-        setFileSize(result.length);
+        setFileSize(Math.floor(result.length * 3 / 4) - (result.endsWith('==') ? 2 : result.endsWith('=') ? 1 : 0));
         setLoading(false);
         
       } catch (err) {
+        if (cancelled) return;
         log.error('Failed to load image', err);
         setError(t('editor.imageViewer.loadImageFailedWithMessage', { message: String(err) }));
         setLoading(false);
       }
     };
 
-    loadImage();
-  }, [filePath, getMimeType, t]);
+    void loadImage();
+    return () => { cancelled = true; };
+  }, [filePath, getMimeType, imageSource, t, documentSession, retryKey]);
+
+  const errorRef = useRef(error);
+  errorRef.current = error;
+  useEffect(() => {
+    // Retry on reactivation, not on each failure (which would loop forever).
+    if (isActiveTab && errorRef.current && documentSession?.isCurrent()) setRetryKey(key => key + 1);
+  }, [documentSession, isActiveTab]);
 
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
@@ -139,14 +177,6 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
     setIsFullscreen(prev => !prev);
   }, []);
 
-  /** Format file size (base64 length is roughly 1.33x original) */
-  const formatFileSize = useCallback((base64Length: number): string => {
-    const bytes = Math.round(base64Length * 0.75);
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }, []);
-
   return (
     <div
       className={`openbitfun-image-viewer ${className} ${isFullscreen ? 'fullscreen' : ''}`}
@@ -159,14 +189,14 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         leading={
           <div data-openbitfun-component="image-viewer" data-openbitfun-part="info" className="openbitfun-image-viewer__info">
             <OverflowText className="openbitfun-image-viewer__filename">{fileName || filePath.split(/[/\\]/).pop()}</OverflowText>
-            {imageDimensions && (
+            {originCurrent && imageDimensions && (
               <span className="openbitfun-image-viewer__dimensions">
                 {imageDimensions.width} × {imageDimensions.height}
               </span>
             )}
-            {fileSize > 0 && (
+            {originCurrent && fileSize > 0 && (
               <span className="openbitfun-image-viewer__filesize">
-                {formatFileSize(fileSize)}
+                {formatBytes(fileSize)}
               </span>
             )}
           </div>
@@ -223,6 +253,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
                   variant="quiet"
                   icon={<Icon name="arrow-down" size="sm" />}
                   onClick={handleDownload}
+                  disabled={!originCurrent || loading || Boolean(error) || !imageUrl}
                 />
               </Tooltip>
               <Tooltip
@@ -243,21 +274,21 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
       />
 
       <div data-openbitfun-component="image-viewer" data-openbitfun-part="container" className="openbitfun-image-viewer__container">
-        {loading && (
+        {(!originCurrent || loading) && (
           <div data-openbitfun-component="image-viewer" data-openbitfun-part="loading" className="openbitfun-image-viewer__loading">
             <div className="openbitfun-image-viewer__spinner" />
             <p>{t('editor.common.loading')}</p>
           </div>
         )}
 
-        {error && (
+        {originCurrent && error && (
           <div data-openbitfun-component="image-viewer" data-openbitfun-part="error" className="openbitfun-image-viewer__error">
             <p>{error}</p>
             <p className="openbitfun-image-viewer__error-path">{filePath}</p>
           </div>
         )}
 
-        {!loading && !error && imageUrl && (
+        {originCurrent && !loading && !error && imageUrl && (
           <div data-openbitfun-component="image-viewer" data-openbitfun-part="imageWrapper" className="openbitfun-image-viewer__image-wrapper">
             <img
               src={imageUrl}
@@ -274,7 +305,7 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
           </div>
         )}
         
-        {!loading && !error && !imageUrl && (
+        {originCurrent && !loading && !error && !imageUrl && (
           <div data-openbitfun-component="image-viewer" data-openbitfun-part="error" className="openbitfun-image-viewer__error">
             <p>{t('editor.imageViewer.imageUrlEmpty')}</p>
           </div>
@@ -285,4 +316,3 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
 };
 
 export default ImageViewer;
-

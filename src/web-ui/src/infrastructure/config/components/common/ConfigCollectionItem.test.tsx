@@ -65,8 +65,11 @@ describe('ConfigCollectionItem', () => {
     expect(details?.hasAttribute('inert')).toBe(true);
 
     act(() => {
-      vi.advanceTimersByTime(180);
+      vi.advanceTimersByTime(179);
     });
+    expect(details?.isConnected).toBe(true);
+    expect(details?.textContent).toBe('Configuration location');
+    act(() => vi.advanceTimersByTime(1));
     expect(container.querySelector('.openbitfun-collection-item__details-collapse')).toBeNull();
   });
 

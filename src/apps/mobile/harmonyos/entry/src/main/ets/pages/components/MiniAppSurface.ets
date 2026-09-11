@@ -1,5 +1,5 @@
 import { MobileDesignTypography } from '../../generated/MobileDesignTokens';
-import { MiniAppActions, RemoteMiniAppSummary, emptyMiniAppActions } from '../../model/RemoteMiniAppModels';
+import { MiniAppActions, MiniAppSummary, emptyMiniAppActions } from '../../model/MiniAppModels';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { MiniAppState } from '../state/MiniAppState';
 import { MiniAppWebView } from './MiniAppWebView';
@@ -34,7 +34,7 @@ export struct MiniAppSurface {
         Text(RemoteI18n.t('miniapp.empty')).fontColor(MUTED).padding(24)
       } else {
         List({ space: 8 }) {
-          ForEach(this.state.apps, (app: RemoteMiniAppSummary) => {
+          ForEach(this.state.apps, (app: MiniAppSummary) => {
             ListItem() {
               Column({ space: 6 }) {
                 Text(app.name).fontSize(MobileDesignTypography.titleMedium.size).fontColor(INK)
@@ -43,7 +43,7 @@ export struct MiniAppSurface {
                 .border({ width: 1, color: LINE }).borderRadius(12)
                 .onClick(() => this.actions.select(app.id))
             }
-          }, (app: RemoteMiniAppSummary) => app.id)
+          }, (app: MiniAppSummary) => app.id)
         }.padding({ left: 16, right: 16 }).layoutWeight(1).width('100%')
       }
     }.width('100%').height('100%').backgroundColor(PAGE_BG)

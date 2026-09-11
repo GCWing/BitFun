@@ -66,7 +66,7 @@ describe('HarnessProfileSelector', () => {
     await act(async () => {
       root.render(
         <HarnessProfileSelector
-          selectedProfile="balanced"
+          selectedProfile='Standard'
           onSelectProfile={vi.fn()}
         />,
       );
@@ -76,7 +76,7 @@ describe('HarnessProfileSelector', () => {
       '[data-testid="harness-profile-selector"]',
     );
     expect(trigger?.querySelector('.openbitfun-harness-selector__density-mark')).toBeNull();
-    expect(trigger?.textContent).toBe('chatInput.harness.profiles.balanced.name');
+    expect(trigger?.textContent).toBe('chatInput.harness.profiles.Standard.name');
     expect(trigger?.dataset.harnessPending).toBeUndefined();
     expect(
       container.querySelector('[data-testid="harness-profile-pending-dot"]'),
@@ -85,7 +85,7 @@ describe('HarnessProfileSelector', () => {
 
   it('renders the authoritative selected profile without a pending projection', async () => {
     await act(async () => {
-      root.render(<HarnessProfileSelector selectedProfile="minimal" onSelectProfile={vi.fn()} />);
+      root.render(<HarnessProfileSelector selectedProfile='Minimal' onSelectProfile={vi.fn()} />);
     });
 
     const trigger = container.querySelector<HTMLButtonElement>(
@@ -117,7 +117,7 @@ describe('HarnessProfileSelector', () => {
       root.render(
         <HarnessProfileSelector
           disabled
-          selectedProfile="minimal"
+          selectedProfile='Minimal'
           onSelectProfile={vi.fn()}
         />,
       );
@@ -137,7 +137,7 @@ describe('HarnessProfileSelector', () => {
         <div data-testid="parent-add-menu">
           <HarnessProfileSelector
             presentation="menu-item"
-            selectedProfile="balanced"
+            selectedProfile='Standard'
             otherAgents={[{ id: 'DeepResearch', name: 'Deep Research' }]}
             onSelectProfile={vi.fn()}
             onSelectAgent={onSelectAgent}
@@ -154,17 +154,17 @@ describe('HarnessProfileSelector', () => {
       '[data-testid="harness-profile-selector"]',
     );
     expect(selectorRoot?.dataset.openbitfunPresentation).toBe('menu-item');
-    expect(selectorRoot?.dataset.openbitfunProfile).toBe('balanced');
+    expect(selectorRoot?.dataset.openbitfunProfile).toBe('Standard');
     expect(trigger?.querySelector('.openbitfun-harness-selector__trigger-chevron')).not.toBeNull();
     const triggerMark = trigger?.querySelector<HTMLElement>(
       '.openbitfun-harness-selector__density-mark',
     );
-    expect(triggerMark?.dataset.harnessProfile).toBe('balanced');
+    expect(triggerMark?.dataset.harnessProfile).toBe('Standard');
     expect(triggerMark?.dataset.harnessDensity).toBe('2');
     expect(triggerMark?.querySelector('[data-openbitfun-name="standard"][data-size="md"]')).not.toBeNull();
     expect(
       trigger?.querySelector('[data-openbitfun-part="label"]')?.textContent,
-    ).toBe('chatInput.harness.profiles.balanced.name');
+    ).toBe('chatInput.harness.profiles.Standard.name');
     expect(trigger?.textContent).not.toContain('chatInput.harness.menuLabel');
     expect(trigger?.textContent).not.toContain('chatInput.current');
     expect(trigger?.getAttribute('aria-controls')).toBeTruthy();
@@ -214,7 +214,7 @@ describe('HarnessProfileSelector', () => {
       root.render(
         <HarnessProfileSelector
           presentation="menu-item"
-          selectedProfile="balanced"
+          selectedProfile='Standard'
           onSelectProfile={vi.fn()}
         />,
       );
@@ -242,7 +242,7 @@ describe('HarnessProfileSelector', () => {
     await act(async () => {
       root.render(
         <HarnessProfileSelector
-          selectedProfile="balanced"
+          selectedProfile='Standard'
           otherAgents={[
             { id: 'DeepResearch', name: 'Deep Research' },
             { id: 'Cowork', name: 'Cowork' },
@@ -261,10 +261,10 @@ describe('HarnessProfileSelector', () => {
     expect(menu).not.toBeNull();
     const rows = Array.from(menu!.querySelectorAll<HTMLElement>('[data-openbitfun-part="profile"]'));
     expect(rows.map(row => row.dataset.openbitfunProfile)).toEqual([
-      'minimal',
-      'balanced',
-      'ultimate',
-      'creative',
+      'Minimal',
+      'Standard',
+      'Ultimate',
+      'Creative',
       'other',
     ]);
     expect(rows.map(row => density(row))).toEqual([1, 2, 3, 0, 0]);
@@ -289,7 +289,7 @@ describe('HarnessProfileSelector', () => {
     await act(async () => {
       root.render(
         <HarnessProfileSelector
-          selectedProfile="balanced"
+          selectedProfile='Standard'
           otherAgents={[
             { id: 'DeepResearch', name: 'Deep Research' },
             { id: 'Cowork', name: 'Cowork' },
@@ -341,17 +341,17 @@ describe('HarnessProfileSelector', () => {
   it('activates every implemented profile including Creative', async () => {
     const onSelectProfile = vi.fn();
     await act(async () => {
-      root.render(<HarnessProfileSelector selectedProfile="balanced" onSelectProfile={onSelectProfile} />);
+      root.render(<HarnessProfileSelector selectedProfile='Standard' onSelectProfile={onSelectProfile} />);
     });
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-ultimate"]')
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-Ultimate"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(onSelectProfile).toHaveBeenCalledWith('ultimate');
+    expect(onSelectProfile).toHaveBeenCalledWith('Ultimate');
     expect(onSelectProfile).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -359,24 +359,24 @@ describe('HarnessProfileSelector', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-creative"]')
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-Creative"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(notify.info).not.toHaveBeenCalled();
     expect(onSelectProfile).toHaveBeenCalledTimes(2);
-    expect(onSelectProfile).toHaveBeenLastCalledWith('creative');
+    expect(onSelectProfile).toHaveBeenLastCalledWith('Creative');
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-testid="harness-profile-selector"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-minimal"]')
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-Minimal"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onSelectProfile).toHaveBeenCalledTimes(3);
-    expect(onSelectProfile).toHaveBeenLastCalledWith('minimal');
-    expect(onSelectProfile).toHaveBeenCalledWith('minimal');
+    expect(onSelectProfile).toHaveBeenLastCalledWith('Minimal');
+    expect(onSelectProfile).toHaveBeenCalledWith('Minimal');
     expect(document.querySelector('.openbitfun-harness-selector__menu')).toBeNull();
   });
 
@@ -387,7 +387,7 @@ describe('HarnessProfileSelector', () => {
       root.render(
         <HarnessProfileSelector
           sessionStarted
-          selectedProfile="balanced"
+          selectedProfile='Standard'
           otherAgents={[{ id: 'Plan', name: 'Plan' }]}
           onSelectProfile={onSelectProfile}
           onStartNewSession={onStartNewSession}
@@ -401,7 +401,7 @@ describe('HarnessProfileSelector', () => {
     expect(trigger?.dataset.harnessLocked).toBe('true');
     expect(trigger?.dataset.harnessFixed).toBe('true');
     expect(trigger?.disabled).toBe(false);
-    expect(trigger?.textContent).toBe('chatInput.harness.profiles.balanced.name');
+    expect(trigger?.textContent).toBe('chatInput.harness.profiles.Standard.name');
 
     await act(async () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -413,16 +413,16 @@ describe('HarnessProfileSelector', () => {
     expect(menu?.querySelector('[data-testid="harness-session-summary"]')).toBeNull();
     expect(menu?.querySelector('[data-testid="harness-start-new-session"]')).toBeNull();
     expect(
-      menu?.querySelector<HTMLButtonElement>('[data-testid="harness-profile-minimal"]')
+      menu?.querySelector<HTMLButtonElement>('[data-testid="harness-profile-Minimal"]')
         ?.getAttribute('role'),
     ).toBe('menuitem');
     expect(
-      menu?.querySelector<HTMLElement>('[data-testid="harness-profile-minimal"]')
+      menu?.querySelector<HTMLElement>('[data-testid="harness-profile-Minimal"]')
         ?.dataset.openbitfunState,
     ).toBe('available');
 
     await act(async () => {
-      menu?.querySelector<HTMLButtonElement>('[data-testid="harness-profile-minimal"]')
+      menu?.querySelector<HTMLButtonElement>('[data-testid="harness-profile-Minimal"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onSelectProfile).not.toHaveBeenCalled();
@@ -432,7 +432,7 @@ describe('HarnessProfileSelector', () => {
       confirmText: 'chatInput.harness.newSessionConfirmation.confirm',
     });
     expect(onStartNewSession).toHaveBeenCalledWith(
-      { kind: 'profile', id: 'minimal' },
+      { kind: 'profile', id: 'Minimal' },
     );
     expect(document.querySelector('.openbitfun-harness-selector__menu')).toBeNull();
   });
@@ -495,7 +495,7 @@ describe('HarnessProfileSelector', () => {
       root.render(
         <HarnessProfileSelector
           sessionStarted
-          selectedProfile="balanced"
+          selectedProfile='Standard'
           onSelectProfile={vi.fn()}
           onStartNewSession={onStartNewSession}
         />,
@@ -507,7 +507,7 @@ describe('HarnessProfileSelector', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-ultimate"]')
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-Ultimate"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       await Promise.resolve();
     });
@@ -517,7 +517,7 @@ describe('HarnessProfileSelector', () => {
     expect(document.querySelector('.openbitfun-harness-selector__menu')).toBeNull();
   });
 
-  it.each(['creative'] as const)(
+  it.each(['Creative'] as const)(
     'presents a persisted %s profile as active',
     async (profileId) => {
       await act(async () => {
@@ -543,7 +543,7 @@ describe('HarnessProfileSelector', () => {
       root.render(
         <HarnessProfileSelector
           legacySession
-          selectedProfile="balanced"
+          selectedProfile='Standard'
           onSelectProfile={onSelectProfile}
           onStartNewSession={onStartNewSession}
         />,
@@ -560,12 +560,12 @@ describe('HarnessProfileSelector', () => {
       trigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     await act(async () => {
-      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-balanced"]')
+      document.querySelector<HTMLButtonElement>('[data-testid="harness-profile-Standard"]')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onSelectProfile).not.toHaveBeenCalled();
     expect(onStartNewSession).toHaveBeenCalledWith(
-      { kind: 'profile', id: 'balanced' },
+      { kind: 'profile', id: 'Standard' },
     );
     expect(notify.info).not.toHaveBeenCalled();
   });

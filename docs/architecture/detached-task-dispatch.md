@@ -422,6 +422,16 @@ not change protocol version 6 or the required submission capabilities. The targe
 path inside the job workspace, checks canonical containment (including symlinks), and returns
 UTF-8 text up to 4 MiB. The controller displays a read-only memory editor, never watches or
 reads the target path on its own filesystem, and drops replies after a device-surface switch.
-Binary or larger files can be inspected after result synchronization. Detached projections do
+Images and downloads use the separate optional `query_file_chunks_v1` capability,
+`kind: "readFileChunk"`, and `fileChunk: { offset, limit, expectedRevision? }`.
+The target reads at most 256 KiB per request from the job's workspace or that
+session's runtime output root. It returns base64 bytes, offset, size, MIME type,
+and a revision derived from file metadata. Continuations require the first
+revision; changed files fail instead of mixing versions. Controllers retry a
+failed chunk at its existing offset, show supported images inline, and download
+other binary outputs. Preview and download budgets are 12 MiB and 128 MiB.
+This optional capability is not a new submission requirement and does not change
+the protocol version. Older targets can still execute jobs and sync results.
+Detached projections do
 not expose controller-local snapshot rollback or message editing until a target-side history
 mutation capability exists.

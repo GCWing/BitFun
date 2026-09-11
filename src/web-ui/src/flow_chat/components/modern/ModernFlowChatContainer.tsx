@@ -2505,7 +2505,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         try {
           await FlowChatManager.getInstance().createChatSession(
             flowChatSessionConfigForCurrentWorkspace(activeWorkspace),
-            'agentic',
           );
         } catch (error) {
           log.error('Failed to create session from shortcut', { error });

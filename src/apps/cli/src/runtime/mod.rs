@@ -93,7 +93,7 @@ impl CliRuntimeContext {
         .context("Failed to build CLI Agent Runtime SDK")?;
         let compatibility =
             CoreAgentRuntimeCompatibility::build(agentic_system.coordinator.clone(), scheduler);
-        let account = build_account_runtime(compatibility.clone());
+        let account = build_account_runtime();
         let local_workspace_snapshot = CoreLocalWorkspaceSnapshot::build();
         let token_usage_service = agentic_system.token_usage_service.clone();
 

@@ -31,7 +31,6 @@ mod password_vault;
 #[cfg(feature = "remote-ssh-concrete")]
 mod port_forward;
 #[cfg(feature = "remote-ssh-concrete")]
-pub mod relay_deploy;
 #[cfg(feature = "remote-ssh-concrete")]
 mod release_verify;
 #[cfg(feature = "remote-ssh-concrete")]

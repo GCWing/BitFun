@@ -18,6 +18,7 @@ fn config_signature(config: &MCPServerConfig) -> String {
         "headers": headers,
         "url": config.url,
         "oauth": config.oauth,
+        "oauthEnabled": config.remote_oauth_enabled(),
         "xaa": config.xaa,
     })
     .to_string()

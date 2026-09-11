@@ -25,11 +25,14 @@ export async function compressImageDataUrl(
   dataUrl: string,
   fileName: string,
 ): Promise<{ dataUrl: string; name: string }> {
-  if (dataUrlByteSize(dataUrl) <= MAX_OUTPUT_BYTES) {
+  // Decode even small inputs: HEIC/SVG and corrupt bytes must not pass through
+  // as model-ready images just because their payload is short.
+  const img = await loadImage(dataUrl);
+  if (/^data:image\/(png|jpeg|gif|webp);base64,/.test(dataUrl)
+    && dataUrlByteSize(dataUrl) <= MAX_OUTPUT_BYTES
+    && Math.max(img.width, img.height) <= MAX_DIMENSION) {
     return { dataUrl, name: fileName };
   }
-
-  const img = await loadImage(dataUrl);
   let { width, height } = img;
 
   if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
@@ -41,7 +44,8 @@ export async function compressImageDataUrl(
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Image conversion is unavailable');
   ctx.drawImage(img, 0, 0, width, height);
 
   let quality = JPEG_QUALITY;
@@ -52,10 +56,12 @@ export async function compressImageDataUrl(
     result = canvas.toDataURL('image/jpeg', quality);
   }
 
-  if (dataUrlByteSize(result) > MAX_OUTPUT_BYTES) {
-    const scale = 0.75;
-    canvas.width = Math.round(width * scale);
-    canvas.height = Math.round(height * scale);
+  while (dataUrlByteSize(result) > MAX_OUTPUT_BYTES) {
+    if (canvas.width <= 64 || canvas.height <= 64) {
+      throw new Error('Image exceeds the upload size limit');
+    }
+    canvas.width = Math.max(1, Math.floor(canvas.width * 0.75));
+    canvas.height = Math.max(1, Math.floor(canvas.height * 0.75));
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     result = canvas.toDataURL('image/jpeg', 0.6);
   }

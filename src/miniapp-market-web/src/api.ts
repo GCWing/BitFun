@@ -137,7 +137,7 @@ export const marketApi = {
 };
 
 export function loginUrl(returnTo = window.location.pathname): string {
-  return `${API}/auth/github/start?returnTo=${encodeURIComponent(returnTo)}`;
+  return `https://auth.openbitfun.com/sign-in?returnTo=${encodeURIComponent(returnTo)}`;
 }
 
 export function downloadUrl(slug: string, release: number): string {

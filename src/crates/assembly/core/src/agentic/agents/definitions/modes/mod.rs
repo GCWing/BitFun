@@ -1,15 +1,15 @@
-mod agentic;
 mod claw;
 mod cowork;
 mod creative;
 mod deep_research;
 mod minimal;
-mod ultra;
+mod standard;
+mod ultimate;
 
-pub use agentic::AgenticMode;
 pub use claw::ClawMode;
 pub use cowork::CoworkMode;
-pub use creative::CreativeMode;
+pub use creative::CreativeHarness;
 pub use deep_research::DeepResearchMode;
-pub use minimal::MinimalMode;
-pub use ultra::UltraMode;
+pub use minimal::MinimalHarness;
+pub use standard::StandardHarness;
+pub use ultimate::UltimateHarness;

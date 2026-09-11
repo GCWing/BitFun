@@ -473,6 +473,8 @@
 .markdown-renderer .markdown-image-fallback {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4em;
   min-width: 1.25em;
   min-height: 1.25em;
   max-width: 100%;
@@ -486,6 +488,18 @@
   line-height: var(--openbitfun-type-flow-support-line-height);
   overflow-wrap: anywhere;
   vertical-align: middle;
+
+  button {
+    flex-shrink: 0;
+    padding: 0.15em 0.5em;
+    border: 1px solid currentColor;
+    border-radius: var(--openbitfun-control-flow-chat-card-radius);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
 }
 
 .markdown-renderer .katex-display {

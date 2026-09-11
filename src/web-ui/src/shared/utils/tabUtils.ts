@@ -3,11 +3,13 @@
 import { i18nService } from '@/infrastructure/i18n';
 import { fileTabManager } from '@/shared/services/FileTabManager';
 import type { FileTabOptions } from '@/shared/services/FileTabManager';
-import { enqueuePendingTab } from '@/shared/services/pendingTabQueue';
-import { resolveAndFocusOpenTarget } from '@/shared/services/sceneOpenTargetResolver';
-import type { OpenSource } from '@/shared/services/sceneOpenTargetResolver';
+import { useBottomTerminalCanvasStore } from '@/app/components/panels/content-canvas/stores';
+import type { PanelContentType } from '@/app/components/panels/base/types';
+import { openCanvasContent, openContentInBestTarget } from '@/shared/services/workbenchContentService';
+type OpenSource = 'default' | 'project-nav';
 import { TAB_EVENTS } from '@/app/components/panels/content-canvas/types';
 import { parseCanvasArtifactReference } from '@/shared/utils/canvasArtifactReference';
+import type { ContentResourceScope } from '@/shared/types/contentResource';
 export type TabTargetMode = 'agent' | 'project' | 'git';
 
 export interface TabCreationOptions {
@@ -18,14 +20,15 @@ export interface TabCreationOptions {
   checkDuplicate?: boolean;
   duplicateCheckKey?: string;
   replaceExisting?: boolean;
-  /** Target canvas: agent (AuxPane), project (FileViewer), git (Git scene diff area) */
+  /** Git explicitly selects its inline host; agent/project use the session-first default. */
   mode?: TabTargetMode;
-  /** Rechecked after delayed panel expansion so stale host work cannot open a tab. */
+  /** Check the originating operation before committing a resource or inline view. */
   isCurrent?: () => boolean;
 }
 
 interface CreateTerminalTabOptions {
   sceneJustOpened?: boolean;
+  scope?: ContentResourceScope;
 }
 
 export interface CreateReviewPlatformPullRequestDetailTabOptions {
@@ -49,14 +52,6 @@ export interface OpenCanvasArtifactTabOptions {
   metadata?: Record<string, unknown>;
 }
 
-function isRightPanelCollapsed(): boolean {
-  try {
-    const layoutState = (window as any).__OPENBITFUN_LAYOUT_STATE__;
-    return layoutState?.rightPanelCollapsed ?? false;
-  } catch {
-    return false;
-  }
-}
 
  
 export function createTab(options: TabCreationOptions): void {
@@ -66,37 +61,15 @@ export function createTab(options: TabCreationOptions): void {
     title,
     data,
     metadata = {},
-    checkDuplicate = false,
     duplicateCheckKey,
     replaceExisting = false,
     mode = 'agent' 
   } = options;
 
-  const eventName =
-    mode === 'project' ? 'project-create-tab' : mode === 'git' ? 'git-create-tab' : 'agent-create-tab';
-
-  const createTabEvent = new CustomEvent(eventName, {
-    detail: {
-      type,
-      title,
-      data,
-      metadata,
-      checkDuplicate,
-      duplicateCheckKey,
-      replaceExisting
-    }
-  });
-
-  if (mode === 'agent' && isRightPanelCollapsed()) {
-    window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
-    window.setTimeout(() => {
-      if (options.isCurrent && !options.isCurrent()) return;
-      window.dispatchEvent(createTabEvent);
-    }, 300);
-    return;
-  }
-
-  window.dispatchEvent(createTabEvent);
+  const content = { type: type as PanelContentType, title, data, metadata: { ...metadata, duplicateCheckKey: duplicateCheckKey ?? metadata.duplicateCheckKey } };
+  const openOptions = { resourceKey: duplicateCheckKey, replaceExisting, isCurrent: options.isCurrent };
+  if (mode === 'git') openCanvasContent('git', content, openOptions);
+  else openContentInBestTarget(content, openOptions);
 }
 
 /** Open a persisted Canvas artifact through the same panel path as Canvas tool cards. */
@@ -143,7 +116,7 @@ export function createFileViewerTab(
   createTab({
     type: 'file-viewer',
     title: fileName,
-    data: content,
+    data: { filePath, fileName, initialContent: content },
     metadata: { filePath, fileName },
     checkDuplicate: true,
     duplicateCheckKey: filePath,
@@ -345,16 +318,7 @@ export function createReviewPlatformTab(workspacePath?: string): void {
     replaceExisting: true,
   };
 
-  window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
-
-  if (isRightPanelCollapsed()) {
-    window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
-    }, 300);
-    return;
-  }
-
-  window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+  createTab(detail);
 }
 
 export function createBackgroundCommandOutputTab(options: {
@@ -389,16 +353,7 @@ export function createBackgroundCommandOutputTab(options: {
     replaceExisting: true,
   };
 
-  window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
-
-  if (isRightPanelCollapsed()) {
-    window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
-    }, 300);
-    return;
-  }
-
-  window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+  createTab(detail);
 }
 
 export function createReviewPlatformPullRequestDetailTab(options: CreateReviewPlatformPullRequestDetailTabOptions): void {
@@ -431,16 +386,7 @@ export function createReviewPlatformPullRequestDetailTab(options: CreateReviewPl
     replaceExisting: true,
   };
 
-  window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
-
-  if (isRightPanelCollapsed()) {
-    window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
-    }, 300);
-    return;
-  }
-
-  window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
+  createTab(detail);
 }
 
 export function createTerminalTab(
@@ -464,34 +410,16 @@ export function createTerminalTab(
     replaceExisting: false,
   };
 
-  if (mode === 'agent') {
-    window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
-
-    if (options.sceneJustOpened) {
-      enqueuePendingTab('agent', detail);
-      return;
-    }
-
-    if (isRightPanelCollapsed()) {
-      window.setTimeout(() => {
-        window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
-      }, 300);
-      return;
-    }
-
-    window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail }));
-    return;
-  }
-
   if (mode === 'bottom-terminal') {
-    window.dispatchEvent(new CustomEvent(TAB_EVENTS.BOTTOM_TERMINAL_CREATE_TAB, { detail }));
+    const store = useBottomTerminalCanvasStore.getState();
+    const existing = store.findTabByMetadata({ duplicateCheckKey: detail.duplicateCheckKey });
+    if (existing) store.switchToTab(existing.tab.id, existing.groupId);
+    else store.addTab({ ...detail, type: 'terminal' }, 'active');
+    window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_BOTTOM_TERMINAL_PANEL));
     return;
   }
+  openContentInBestTarget({ ...detail, type: 'terminal' }, { scope: options.scope });
 
-  createTab({
-    ...detail,
-    mode,
-  });
 }
 
 type OpenFileInBestTargetOptions = Omit<FileTabOptions, 'mode'>;
@@ -499,24 +427,10 @@ interface OpenFileTargetContext {
   source?: OpenSource;
 }
 
-/**
- * Open a file to the best target:
- * - explicit project navigation: open in the file-viewer scene
- * - contextual open while Session is active: open in agent AuxPane tabs
- * - otherwise: open in the file-viewer scene
- *
- * Explicit user navigation outranks ambient scene state. This keeps the file
- * tree deterministic while contextual links avoid unexpected focus stealing.
- */
+/** Open near the owning conversation, falling back to a main resource tab. */
 export function openFileInBestTarget(
   options: OpenFileInBestTargetOptions,
-  context: OpenFileTargetContext = {}
+  _context: OpenFileTargetContext = {}
 ): void {
-  const { mode, sceneJustOpened } = resolveAndFocusOpenTarget('file', { source: context.source ?? 'default' });
-
-  fileTabManager.openFile({
-    ...options,
-    mode,
-    sceneJustOpened,
-  });
+  fileTabManager.openFile(options);
 }

@@ -19,7 +19,7 @@ interface RemediationSelectionPanelProps {
   selectionDisabled?: boolean;
   onToggleRemediation: (id: string) => void;
   onToggleAll: () => void;
-  onToggleGroup: (groupId: string) => void;
+  onToggleGroup: (groupId: RemediationGroupId | 'ungrouped') => void;
   onToggleList: () => void;
   onToggleDecisionExpansion: (id: string) => void;
   onSetDecisionSelection: (id: string, optionIndex: number) => void;
@@ -78,7 +78,7 @@ export const RemediationSelectionPanel: React.FC<RemediationSelectionPanelProps>
   }, [remediationItems]);
 
   const groupOrder = useMemo(() => {
-    const ordered: string[] = [];
+    const ordered: Array<RemediationGroupId | 'ungrouped'> = [];
     for (const gid of REMEDIATION_GROUP_ORDER) {
       if (groupedItems[gid]?.length) ordered.push(gid);
     }

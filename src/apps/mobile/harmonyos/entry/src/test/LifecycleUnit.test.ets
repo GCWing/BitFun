@@ -51,7 +51,6 @@ import { MockGeneralChatAdapter } from '../main/ets/services/general-chat/MockGe
 import { MarkdownParser } from '../main/ets/services/MarkdownParser';
 import { RemoteCommandFactory } from '../main/ets/services/RemoteCommandFactory';
 import { RemoteCrypto, RemoteCryptoCipher } from '../main/ets/services/RemoteCrypto';
-import { RemoteDescriptorParser } from '../main/ets/services/RemoteDescriptorParser';
 import { RemoteActivityLifecycleController } from '../main/ets/services/RemoteActivityLifecycleController';
 import { RemoteChatCommandClient, RemoteChatCommandController } from '../main/ets/services/RemoteChatCommandController';
 import { RemoteChatPollingLifecycleController } from '../main/ets/services/RemoteChatPollingLifecycleController';
@@ -66,7 +65,6 @@ import {
   RemoteModelController,
   RemoteModelPreferenceStore
 } from '../main/ets/services/RemoteModelController';
-import { RemotePairingPolicy } from '../main/ets/services/RemotePairingPolicy';
 import { RemoteResponseMapper } from '../main/ets/services/RemoteResponseMapper';
 import { RemoteSessionClient, RemoteSessionController } from '../main/ets/services/RemoteSessionController';
 import { RemoteSessionManager } from '../main/ets/services/RemoteSessionManager';
@@ -205,6 +203,13 @@ class FakeTaskCompletionNotificationPort implements TaskCompletionNotificationPo
 
 export default function lifecycleUnitTest() {
   describe('TaskCompletionNotificationController', () => {
+    it('does not request permission when tracking a task', 0, () => {
+      const port = new FakeTaskCompletionNotificationPort();
+      const controller = new TaskCompletionNotificationController(port);
+      controller.track({ source: 'remote', sessionId: 'session-1', turnId: 'turn-1' });
+      expect(port.prepareCount).assertEqual(0);
+    });
+
     it('publishes once only after the exact background task finishes', 0, () => {
       const port = new FakeTaskCompletionNotificationPort();
       const controller = new TaskCompletionNotificationController(port);

@@ -50,8 +50,8 @@ vi.mock('./components/AgentCard', () => ({
   ),
 }));
 
-vi.mock('./components/CoreAgentCard', () => ({
-  default: () => <div />,
+vi.mock('./components/CoreAgentCard', async () => ({
+  default: (await import('./components/AgentCard')).default,
 }));
 
 vi.mock('./components/useUserToolGroups', () => ({
@@ -62,11 +62,12 @@ vi.mock('./components/useUserToolGroups', () => ({
   }),
 }));
 
-vi.mock('./components/useUserSkillGroups', () => ({
+vi.mock('@/features/skill-groups/useUserSkillGroups', () => ({
   useUserSkillGroups: () => ({
     groups: [],
     loading: false,
-    saveGroups: vi.fn(),
+    error: null,
+    reload: vi.fn(),
   }),
 }));
 
@@ -124,6 +125,7 @@ vi.mock('./hooks/useAgentsList', () => ({
 
 function mockAgentsList(overrides: Record<string, unknown> = {}) {
   useAgentsListMock.mockReturnValue({
+    hiddenAgentIds: new Set<string>(),
     allAgents: [],
     filteredAgents: [],
     loading: false,
@@ -268,29 +270,9 @@ describeWithJsdom('AgentsScene', () => {
     expect(stylesheet).toContain('min-width: 0;');
   });
 
-  it('uses one compact responsive catalog without overview category navigation', () => {
+  it('uses one responsive catalog without overview category navigation', () => {
     const sceneSource = readFileSync(
       fileURLToPath(new URL('./AgentsScene.tsx', import.meta.url)),
-      'utf8',
-    );
-    const agentCardStyles = readFileSync(
-      fileURLToPath(new URL('./components/AgentCard.scss', import.meta.url)),
-      'utf8',
-    );
-    const coreCardSurfaceStyles = readFileSync(
-      fileURLToPath(new URL('./components/_AgentSurfaceCard.scss', import.meta.url)),
-      'utf8',
-    );
-    const coreCardStyles = readFileSync(
-      fileURLToPath(new URL('./components/CoreAgentCard.scss', import.meta.url)),
-      'utf8',
-    );
-    const agentCardSource = readFileSync(
-      fileURLToPath(new URL('./components/AgentCard.tsx', import.meta.url)),
-      'utf8',
-    );
-    const coreCardSource = readFileSync(
-      fileURLToPath(new URL('./components/CoreAgentCard.tsx', import.meta.url)),
       'utf8',
     );
 
@@ -298,42 +280,9 @@ describeWithJsdom('AgentsScene', () => {
     expect(sceneSource).toContain('catalogAgents.map');
     expect(sceneSource).not.toContain('gallery-anchor-bar');
     expect(sceneSource).not.toContain('agents-core-zone');
-    expect(agentCardStyles).toMatch(/\.agent-card \{\s+width: 100%;\s+min-width: 0;/);
-    expect(coreCardSurfaceStyles).toMatch(/width: 100%;\s+min-width: 0;/);
-    expect(agentCardStyles).toContain('height: 148px;');
-    expect(coreCardSurfaceStyles).toContain('height: 148px;');
-    expect(agentCardStyles).toContain('border-radius: var(--openbitfun-layout-field-group-radius);');
-    expect(coreCardSurfaceStyles).toContain('border-radius: var(--openbitfun-layout-field-group-radius);');
-    expect(agentCardStyles).toContain('background: var(--openbitfun-color-surface-tertiary);');
-    expect(coreCardSurfaceStyles).toContain('background: var(--openbitfun-color-surface-tertiary);');
-    expect(agentCardStyles).not.toContain('box-shadow: var(--openbitfun-shadow-xs);');
-    expect(coreCardSurfaceStyles).not.toContain('box-shadow: var(--openbitfun-shadow-xs);');
-    expect(agentCardStyles).toContain('grid-template-columns: 56px minmax(0, 1fr);');
-    expect(coreCardStyles).toContain('grid-template-columns: 56px minmax(0, 1fr);');
-    expect(agentCardStyles).toContain('inset-block: 12px;');
-    expect(coreCardStyles).toContain('inset-block: 12px;');
-    expect(agentCardStyles).toContain('@container agent-card (max-width: 330px)');
-    expect(coreCardStyles).toContain('@container core-agent-card (max-width: 330px)');
-    expect(agentCardSource).toContain('agent-card__icon-area');
-    expect(agentCardSource).toContain('agent-card__dot-field');
-    expect(agentCardSource).toContain("t('agentCard.metrics.collaboration')");
-    expect(coreCardSource).toContain("t('agentCard.status.connected')");
-    expect(coreCardSource).toContain('core-agent-card__status');
-    expect(coreCardSource).toContain('core-agent-card__dot-field');
-    expect(agentCardSource).not.toContain('CAPABILITY_ACCENT');
-    expect(agentCardSource).not.toContain('--agent-card-gradient');
-    expect(coreCardSource).not.toContain('getAlphaColor');
-    expect(coreCardSource).not.toContain('--core-card-gradient');
-    expect(coreCardStyles).toMatch(/&__status \{[\s\S]*?color: var\(--openbitfun-color-content-primary\);[\s\S]*?\.core-agent-card__status-icon \{[\s\S]*?color: var\(--openbitfun-color-status-success-content\);/);
-    expect(coreCardSurfaceStyles).not.toContain('$gradient');
-    expect(coreCardSurfaceStyles).toContain('@mixin agent-icon-dot-field()');
-    expect(coreCardSurfaceStyles).not.toContain('background-size: 7px 7px;');
-    expect(coreCardSurfaceStyles).toContain('display: none;');
-    expect(agentCardStyles).not.toContain('width: 360px;');
-    expect(coreCardSurfaceStyles).not.toContain('width: 360px;');
   });
 
-  it('presents four Harness strategies as descriptive content between task and result', async () => {
+  it('presents four canonical Harness entries as a list', async () => {
     const { default: AgentsScene } = await import('./AgentsScene');
 
     await act(async () => {
@@ -341,21 +290,24 @@ describeWithJsdom('AgentsScene', () => {
     });
 
     const presentation = container.querySelector('.openbitfun-agents-scene__harness-presentation');
-    expect(presentation?.getAttribute('aria-label')).toBe('harnessZone.flowCaption');
+    expect(presentation?.tagName).toBe('UL');
+    expect(presentation?.getAttribute('role')).toBe('list');
+    expect(presentation?.getAttribute('aria-label')).toBe('harnessZone.title');
+    expect(presentation?.querySelectorAll(':scope > li')).toHaveLength(4);
     expect(presentation?.querySelectorAll('[data-openbitfun-component="harness-profile-step"]')).toHaveLength(4);
-    expect(Array.from(presentation?.querySelectorAll('.openbitfun-agents-scene__harness-endpoint') ?? [])
-      .map(node => node.textContent)).toEqual(['harnessZone.task', 'harnessZone.result']);
 
-    for (const id of ['minimal', 'balanced', 'ultimate', 'creative']) {
+    for (const id of ['Minimal', 'Standard', 'Ultimate', 'Creative']) {
       const profile = container.querySelector<HTMLElement>(`[data-testid="agents-harness-${id}"]`);
       expect(profile?.dataset.openbitfunProfile).toBe(id);
       expect(profile?.textContent).toContain(`harnessZone.profiles.${id}.name`);
       expect(profile?.textContent).toContain(`harnessZone.profiles.${id}.purpose`);
-      expect(profile?.tagName).toBe('DIV');
+      expect(profile?.tagName).toBe('BUTTON');
+      expect(profile?.querySelector('.openbitfun-agents-scene__harness-profile-icon')).not.toBeNull();
+      expect(profile?.querySelector('.openbitfun-agents-scene__harness-route svg')).not.toBeNull();
       expect(profile?.dataset.openbitfunState).toBeUndefined();
     }
-    expect(presentation?.querySelector('button, [role="button"], [tabindex]')).toBeNull();
-    expect(presentation?.textContent).not.toMatch(/harnessZone\.(connected|comingSoon)/);
+    expect(presentation?.querySelectorAll('button')).toHaveLength(4);
+    expect(presentation?.textContent).not.toMatch(/harnessZone\.(task|result|connected|comingSoon)/);
 
     expect(notificationInfoMock).not.toHaveBeenCalled();
     expect(notificationSuccessMock).not.toHaveBeenCalled();
@@ -429,7 +381,7 @@ describeWithJsdom('AgentsScene', () => {
       defaultEnabled: true,
       effectiveEnabled: true,
       source: 'user',
-      agentKind: 'mode' as const,
+      agentKind: 'agent' as const,
       capabilities: [],
     };
     mockAgentsList({
@@ -444,7 +396,7 @@ describeWithJsdom('AgentsScene', () => {
         },
       ],
       getModeConfig: () => ({
-        profile_id: 'coding_shared',
+        profile_id: 'Standard',
         enabled_tools: ['Read', 'mcp__github__list_issues'],
         default_tools: ['Read'],
       }),
@@ -488,7 +440,7 @@ describeWithJsdom('AgentsScene', () => {
       defaultEnabled: true,
       effectiveEnabled: true,
       source: 'user',
-      agentKind: 'mode' as const,
+      agentKind: 'agent' as const,
       capabilities: [],
     };
     mockAgentsList({

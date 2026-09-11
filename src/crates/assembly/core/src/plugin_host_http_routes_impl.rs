@@ -122,7 +122,7 @@ async fn session_create(context: &PluginHostInstance, body: &[u8]) -> RouteResul
             input
                 .title
                 .unwrap_or_else(|| "OpenCode Plugin Session".to_string()),
-            "agentic".to_string(),
+            "Standard".to_string(),
             crate::agentic::core::SessionConfig {
                 workspace_path: Some(context.directory.to_string_lossy().into_owned()),
                 project_workspace_path: Some(context.directory.to_string_lossy().into_owned()),
@@ -959,10 +959,11 @@ async fn file_read(
 }
 
 async fn file_status(context: &PluginHostInstance) -> RouteResult {
-    let snapshot = openbitfun_services_integrations::git::GitWorkspaceDiffPort::new(&context.directory)
-        .workspace_diff()
-        .await
-        .map_err(|error| Failure::backend(error.to_string()))?;
+    let snapshot =
+        openbitfun_services_integrations::git::GitWorkspaceDiffPort::new(&context.directory)
+            .workspace_diff()
+            .await
+            .map_err(|error| Failure::backend(error.to_string()))?;
     Ok(Value::Array(snapshot.files.into_iter().map(|file| json!({
         "path": file.path,
         "added": file.additions,

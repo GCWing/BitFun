@@ -1,7 +1,5 @@
 import { ImagePickerService } from '../../services/ImagePickerService';
 import { ClipboardService } from '../../services/ClipboardService';
-import { GeneralChatCommandController } from '../../services/general-chat/GeneralChatCommandController';
-import { GeneralChatDraftLifecycleController } from '../../services/general-chat/GeneralChatDraftLifecycleController';
 import { RemoteChatCache } from '../../services/RemoteChatCache';
 import { RemoteChatCommandController } from '../../services/RemoteChatCommandController';
 import { RemoteChatPollingLifecycleController } from '../../services/RemoteChatPollingLifecycleController';
@@ -17,9 +15,7 @@ import { FilePreviewController } from './FilePreviewController';
 import { RemoteConnectionController } from './RemoteConnectionController';
 import { RemoteSessionViewModel } from './RemoteSessionViewModel';
 import { SettingsController } from './SettingsController';
-import { GeneralChatConversationViewModel } from './GeneralChatConversationViewModel';
 
-export const GENERAL_CHAT_HOME_DRAFT_ID: string = 'new-chat';
 
 export interface ConversationControllerHooks {
   readonly currentRoute: () => AppRoute;
@@ -50,9 +46,6 @@ export interface RemoteConversationDependencies {
   readonly settings: SettingsController;
   readonly appShell: AppShellViewModel;
   readonly filePreview: FilePreviewController;
-  readonly generalCommands: GeneralChatCommandController;
-  readonly generalConversation: GeneralChatConversationViewModel;
-  readonly generalDrafts: GeneralChatDraftLifecycleController;
   readonly hooks: RemoteConversationHooks;
 }
 

@@ -1896,7 +1896,6 @@ pub async fn create_session(
 
     let session_id = session.session_id.clone();
     // Notify auto-sync: new session created
-    crate::api::remote_connect_api::notify_session_changed(&session_id, &wp);
 
     if let Some(target_evidence) = request.review_target_evidence {
         coordinator
@@ -4257,7 +4256,7 @@ mod tests {
             "sessionId": "session-1",
             "userInput": "resolved input",
             "originalUserInput": "original input",
-            "agentType": "agentic",
+            "agentType": "Standard",
             "workspacePath": "/worktrees/session-1",
             "projectWorkspacePath": "/workspace/project",
             "remoteConnectionId": "connection-1",
@@ -4290,7 +4289,7 @@ mod tests {
             Some("original input")
         );
         assert_eq!(runtime_request.turn_id.as_deref(), Some("turn-1"));
-        assert_eq!(runtime_request.agent_type, "agentic");
+        assert_eq!(runtime_request.agent_type, "Standard");
         assert_eq!(
             runtime_request.workspace_path.as_deref(),
             Some("/workspace/project")
@@ -4390,7 +4389,7 @@ mod tests {
         let request = serde_json::from_value::<StartDialogTurnRequest>(json!({
             "sessionId": "session-1",
             "userInput": "hello",
-            "agentType": "agentic",
+            "agentType": "Standard",
             "userMessageMetadata": "not-an-object"
         }))
         .expect("legacy metadata request");
@@ -4665,7 +4664,7 @@ mod tests {
         let mut session = Session::new_with_id(
             "session-1".to_string(),
             "Tail view".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig::default(),
         );
         session.dialog_turn_ids = vec!["turn-49".to_string(), "turn-50".to_string()];

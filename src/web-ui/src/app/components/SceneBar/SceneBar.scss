@@ -13,6 +13,26 @@
   background: transparent;
   user-select: none;
 
+  &__item {
+    position: relative;
+    display: flex;
+    flex: 0 0 auto;
+    min-width: 0;
+
+    &[data-canvas-drop-position]::after {
+      content: '';
+      position: absolute;
+      inset-block: var(--openbitfun-space-1);
+      width: var(--openbitfun-border-width-strong);
+      border-radius: var(--openbitfun-radius-pill);
+      background: var(--openbitfun-color-accent-default);
+      pointer-events: none;
+    }
+
+    &[data-canvas-drop-position='before']::after { inset-inline-start: 0; }
+    &[data-canvas-drop-position='after']::after { inset-inline-end: 0; }
+  }
+
   &__tab-region {
     display: flex;
     align-items: center;
@@ -20,6 +40,34 @@
     gap: var(--openbitfun-space-1);
     min-width: 0;
     height: 100%;
+  }
+
+  &__drop-hint {
+    display: grid;
+    align-items: center;
+    flex: 0 0 auto;
+    block-size: var(--openbitfun-control-tab-group-item-height-sm);
+    margin-inline: var(--openbitfun-space-2) var(--openbitfun-space-1);
+    padding-inline: var(--openbitfun-control-tab-group-item-padding-inline-sm);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-component-button-outline-border-interactive);
+    border-radius: var(--openbitfun-control-tab-group-item-radius);
+    background: var(--openbitfun-color-selection-surface);
+    color: var(--openbitfun-color-content-primary);
+    font-family: var(--openbitfun-type-label-md-font-family);
+    font-size: var(--openbitfun-type-label-md-font-size);
+    font-weight: var(--openbitfun-type-label-md-font-weight);
+    line-height: var(--openbitfun-type-label-md-line-height);
+    letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
+    white-space: nowrap;
+    pointer-events: none;
+    transition: border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+
+    > span { grid-area: 1 / 1; }
+    > span[aria-hidden='true'] { visibility: hidden; }
+  }
+
+  &[data-canvas-drop-state='active'] &__drop-hint {
+    border-color: var(--openbitfun-color-accent-default);
   }
 
   &__tabs {
@@ -131,7 +179,6 @@
     }
 
     &:active {
-      transform: scale(0.94);
       background: var(--openbitfun-color-action-neutral-surface-pressed);
     }
 
@@ -154,6 +201,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .openbitfun-scene-bar__drop-hint { transition: none; }
   .openbitfun-scene-bar__scroll-button {
     transition: none;
     transform: none;

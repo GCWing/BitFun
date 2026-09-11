@@ -119,8 +119,8 @@ export const ECOSYSTEM_IMPORT_ITEM_KINDS: readonly EcosystemImportItemKind[] = [
 const PRODUCT_ADAPTED_KINDS = {
   'claude-code': ['command', 'subagent', 'skill', 'mcp', 'hook'],
   codex: ['subagent', 'skill', 'mcp', 'hook'],
-  pi: [],
-  dsh: [],
+  pi: ['skill', 'hook'],
+  dsh: ['skill', 'hook'],
   opencode: ['command', 'tool', 'subagent', 'skill', 'mcp', 'hook'],
 } as const satisfies Record<EcosystemProductId, readonly EcosystemImportItemKind[]>;
 
@@ -147,8 +147,7 @@ export function ecosystemCompatibilitySupport(
 
 /**
  * Presentation catalog for product families already represented by a shipped
- * adapter or ACP preset. Pi stays explicit because it appears in the product
- * concept, but is marked as development rather than being presented as support.
+ * adapter or ACP preset. Skill and Hook discovery does not imply ACP execution.
  */
 export const ECOSYSTEM_PRODUCT_SPECS: readonly EcosystemProductSpec[] = [
   {
@@ -168,12 +167,13 @@ export const ECOSYSTEM_PRODUCT_SPECS: readonly EcosystemProductSpec[] = [
   {
     id: 'pi',
     name: 'Pi',
-    development: true,
+    ecosystemId: 'pi',
     searchTerms: ['pi', 'agent'],
   },
   {
     id: 'dsh',
     name: 'DeepSeek Harness',
+    ecosystemId: 'deepseek-harness',
     acpClientId: 'dsh',
     searchTerms: ['deepseek', 'harness', 'dsh', 'agent', 'acp'],
   },

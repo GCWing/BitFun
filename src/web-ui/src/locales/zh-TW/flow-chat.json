@@ -431,7 +431,7 @@
     }
   },
   "session": {
-    "new": "新增會話",
+    "new": "新會話",
     "newCode": "新增 Code 會話",
     "newCowork": "新增 Cowork 會話",
     "newClaw": "新增 Claw 會話",
@@ -624,6 +624,7 @@
     "codeBlock": "代碼塊",
     "image": "圖片",
     "url": "URL",
+    "dropToAdd": "放開即可新增",
     "dragHint": "拖放檔案到此處新增上下文"
   },
   "agent": {
@@ -725,7 +726,6 @@
     "harness": {
       "selectorTooltip": "目前執行：{{name}}",
       "fixedTooltip": "本工作階段使用 {{name}}，開始後已固定。",
-      "activateBalanced": "切換到標準 Harness",
       "compatibilityShort": "相容模式",
       "comingSoon": "開發中",
       "comingSoonNotice": "「{{name}}」Harness 執行框架正在開發中。",
@@ -742,17 +742,29 @@
       "profileChangeOutcomeUnknown": "暫時無法確認 Harness 是否已切換，請重新整理工作階段後再重試。",
       "profileUnavailable": "目前 OpenBitFun Host 不支援該 Harness。",
       "profileChangeFailed": "切換 Harness 失敗，請重試。",
+      "rememberFailed": "Harness 已切換，但無法記住本次選擇。之後的新工作階段可能繼續使用原預設值。",
       "otherAgentsTitle": "智能體",
       "otherAgentsEmpty": "目前沒有可用的主智能體",
       "unavailable": "無法使用",
       "agentUnavailable": "目前 Host 或設定不支援 {{name}}。",
       "profiles": {
-        "minimal": { "name": "極簡" },
-        "balanced": { "name": "標準" },
-        "ultimate": { "name": "極致" },
-        "creative": { "name": "創造" },
-        "other": { "name": "智能體" }
-      }
+        "other": {
+          "name": "智能體"
+        },
+        "Minimal": {
+          "name": "$t(shared:agents.Minimal)"
+        },
+        "Standard": {
+          "name": "$t(shared:agents.Standard)"
+        },
+        "Ultimate": {
+          "name": "$t(shared:agents.Ultimate)"
+        },
+        "Creative": {
+          "name": "$t(shared:agents.Creative)"
+        }
+      },
+      "activateStandard": "切換到標準 Harness"
     },
     "agents": {
       "available": "可用",
@@ -760,9 +772,15 @@
       "comingSoon": "開發中",
       "comingSoonNotice": "直接呼叫「{{name}}」Agent 的能力正在開發中。",
       "reviewUnavailable": "Review Agent 需要一個包含可審查變更的活動會話。",
-      "review": { "name": "Review" },
-      "cowork": { "name": "Cowork" },
-      "computerUse": { "name": "Computer Use" }
+      "review": {
+        "name": "Review"
+      },
+      "cowork": {
+        "name": "Cowork"
+      },
+      "computerUse": {
+        "name": "Computer Use"
+      }
     },
     "addBoostTooltip": "指令、上下文、圖片或 Skill",
     "modeChangeFailed": "切換智能體模式失敗，請重試。",
@@ -837,7 +855,6 @@
     "boostSkillsEmpty": "暫無已啟用的 Skill",
     "openSkillsLibrary": "管理 Skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
-    "resetToAgentic": "移除目前 Agent",
     "defaultModeSetTooltip": "將 {{mode}} 設為新聊天預設模式",
     "defaultModeUnsetTooltip": "預設模式覆蓋已啟用，點擊清除",
     "defaultModeSet": "已將 {{mode}} 設為新聊天預設模式。",
@@ -919,20 +936,22 @@
     "sendingToMain": "主會話：{{title}}",
     "sendingToBtw": "側問會話：{{title}}",
     "modeDescriptions": {
-      "agentic": "AI 主導執行，自動規劃和完成編碼任務，擁有完整的工具訪問能力",
       "Claw": "個人助理模式：面向個人工作區和日常事務，使用獨立的助理上下文",
       "Cowork": "協作模式：先澄清再推進，輕量跟蹤進度，隨時驗證結果",
       "ComputerUse": "獨立電腦操作智能體：感知本機環境，操作應用、瀏覽器與系統介面",
       "DeepResearch": "深度研究：並行派發多個子 Agent 同時調研不同章節，快速生成高質量研究報告",
-      "Ultra": "群體規劃模式：適合複雜任務，可能並行發起較多模型請求，從而增加 API 成本和供應商限流壓力"
+      "Standard": "AI 主導執行，自動規劃和完成編碼任務，擁有完整的工具訪問能力",
+      "Ultimate": "群體規劃模式：適合複雜任務，可能並行發起較多模型請求，從而增加 API 成本和供應商限流壓力"
     },
     "modeNames": {
-      "agentic": "Agentic",
-      "Claw": "Claw",
-      "Cowork": "Cowork",
-      "ComputerUse": "Computer Use",
-      "DeepResearch": "Deep Research",
-      "Ultra": "Ultra"
+      "Claw": "$t(shared:agents.Claw)",
+      "Cowork": "$t(shared:agents.Cowork)",
+      "ComputerUse": "$t(shared:agents.ComputerUse)",
+      "DeepResearch": "$t(shared:agents.DeepResearch)",
+      "Standard": "$t(shared:agents.Standard)",
+      "Ultimate": "$t(shared:agents.Ultimate)",
+      "Minimal": "$t(shared:agents.Minimal)",
+      "Creative": "$t(shared:agents.Creative)"
     },
     "openFolder": "開啟資料夾…",
     "selectWorkspaceTitle": "選擇工作區目錄",
@@ -1419,9 +1438,10 @@
     "sendInput": "傳送輸入",
     "sendInputUnavailable": "只能向正在運行的互動式命令傳送輸入。",
     "copy": "複製輸出",
+    "copyRaw": "複製原始輸出",
+    "replayIncomplete": "較早的輸出已捨棄，無法完整恢復終端狀態；保留內容可能顯示不完整。",
+    "unknownGeometry": "無法確定來源終端尺寸，不能準確重播輸出。你仍可複製原始輸出。",
     "copyCommand": "複製命令",
-    "simplifiedView": "簡化顯示",
-    "simplifiedViewTooltip": "隱藏終端控制符，讓輸出更易讀。",
     "loading": "正在載入輸出...",
     "empty": "暫未擷取到輸出。",
     "remote": "遠端",
@@ -1973,7 +1993,7 @@
       "executing": "執行中...",
       "subAgentFailed": "子代理任務執行失敗",
       "subAgentTaskFailed": "子代理任務失敗",
-      "failed": "失敗",
+      "failed": "$t(shared:statuses.failed)",
       "confirmDelegate": "確認委派",
       "cancel": "取消",
       "task": "任務",
@@ -2006,8 +2026,8 @@
       "waitingForModelResponse": "等待模型回應...",
       "status": {
         "pending": "等待中",
-        "running": "執行中",
-        "completed": "已完成",
+        "running": "$t(shared:statuses.running)",
+        "completed": "$t(shared:statuses.done)",
         "failed": "執行失敗"
       },
       "loadingMore": "正在載入更多輸出...",
@@ -2196,10 +2216,10 @@
       "pending": "等待中",
       "paramsReceiving": "接收參數中",
       "preparing": "準備中",
-      "running": "執行中",
-      "completed": "已完成",
-      "error": "失敗",
-      "cancelled": "已取消"
+      "running": "$t(shared:statuses.running)",
+      "completed": "$t(shared:statuses.done)",
+      "error": "$t(shared:statuses.failed)",
+      "cancelled": "$t(shared:statuses.cancelled)"
     },
     "toolbar": {
       "executing": "執行中...",
@@ -2444,15 +2464,14 @@
     }
   },
   "welcome": {
+    "openingMorning": "早安，今天由你開場。",
+    "openingAfternoon": "下午好，給今天加點意思。",
+    "openingEvening": "晚上好，按你的節奏來。",
+    "openingNight": "夜深了，想法可以慢慢說。",
     "greetingMorning": "早安",
-    "subtitleMorning": "新的一天，新的可能，讓我們一起創造些什麼",
     "greetingAfternoon": "下午好",
-    "subtitleAfternoon": "新的一天，新的可能，讓我們一起創造些什麼",
     "greetingEvening": "晚上好",
-    "subtitleEvening": "夜晚安靜，最適合沉浸式編碼",
     "greetingNight": "夜深了",
-    "subtitleNight": "靈感不眠，讓我們繼續",
-    "aiPartner": "編程搭檔",
     "subtitleMorningCowork": "清晨頭腦最清醒，把今天的想法和任務整理一下吧",
     "subtitleAfternoonCowork": "下午好，有什麼要推進或整理的，一起來",
     "subtitleEveningCowork": "收尾、覆盤、或是為明天做準備——都行",

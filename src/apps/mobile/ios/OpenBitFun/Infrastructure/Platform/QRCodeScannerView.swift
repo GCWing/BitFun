@@ -154,7 +154,7 @@ final class QRScannerController: UIViewController, AVCaptureMetadataOutputObject
     func metadataOutput(
         _ output: AVCaptureMetadataOutput,
         didOutput metadataObjects: [AVMetadataObject],
-        from connection: AVCaptureConnection,
+        from connection: AVCaptureConnection
     ) {
         guard let value = (metadataObjects.first as? AVMetadataMachineReadableCodeObject)?.stringValue,
               !value.isEmpty,

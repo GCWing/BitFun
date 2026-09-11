@@ -1,14 +1,14 @@
 //! Machine-bound persistent session store.
 //!
-//! Saves the full `AccountSession` (token + master_key + user_id) and relay
+//! Saves the device `AccountSession` (token + private key + user_id) and relay
 //! URL to disk, encrypted with a key that combines machine identity and a
 //! random per-install secret. Secret files are owner-only on Unix and replaced
 //! through a private temporary file. This lets Desktop / CLI restart without
-//! requiring a fresh password entry while keeping copied session ciphertext
+//! requiring a fresh GitHub sign-in while keeping copied session ciphertext
 //! unusable without the separate install key.
 //!
-//! File location: `<OPENBITFUN_HOME>/account_session.enc` when configured,
-//! otherwise `~/.openbitfun/account_session.enc`.
+//! File location: `<OPENBITFUN_HOME>/relay-v1.0.0/account_session.enc` when configured,
+//! otherwise `~/.openbitfun/relay-v1.0.0/account_session.enc`.
 //! Format: base64(nonce || ciphertext) where the plaintext is a JSON
 //! payload `{ token, user_id, master_key_b64, relay_url }`.
 
@@ -36,10 +36,12 @@ fn session_store_directory() -> Result<PathBuf> {
         .read()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     if let Some(path) = override_path.as_ref() {
-        return Ok(path.clone());
+        return Ok(path.join("relay-v1.0.0"));
     }
     drop(override_path);
-    super::product_home_dir().ok_or_else(|| anyhow!("cannot determine OpenBitFun home directory"))
+    super::product_home_dir()
+        .map(|path| path.join("relay-v1.0.0"))
+        .ok_or_else(|| anyhow!("cannot determine OpenBitFun home directory"))
 }
 
 /// Resolve the persistent session file path.
@@ -48,6 +50,15 @@ fn session_file_path() -> Result<PathBuf> {
 }
 
 // ── Public API ──────────────────────────────────────────────────────────
+
+pub fn device_secret(relay_url: &str, user_id: &str, device_id: &str) -> Result<[u8; 32]> {
+    crate::remote_persistence::load_or_create_device_secret(
+        &session_store_directory()?,
+        relay_url,
+        user_id,
+        device_id,
+    )
+}
 
 /// Persist the session (token, master_key, user_id, relay_url) to disk,
 /// encrypted with the machine-bound key.

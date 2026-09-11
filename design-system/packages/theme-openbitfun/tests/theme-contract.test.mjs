@@ -295,13 +295,13 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.light["color.selection.surface"], "rgba(0, 0, 0, 0.08)");
   assert.equal(themes.light["color.surface.chrome"], "#f8f8f9");
   assert.equal(themes.light["color.surface.tertiary"], "#f7f7f7");
-  assert.equal(themes.light["color.scrollbar.thumb"], "rgba(0, 0, 0, 0.08)");
+  assert.equal(themes.light["color.scrollbar.thumb"], "rgba(0, 0, 0, 0.10)");
   assert.equal(themes.light["color.scrollbar.thumbHover"], "rgba(0, 0, 0, 0.10)");
-  assert.equal(themes.light["color.keyHint.background"], "rgba(0, 0, 0, 0.05)");
+  assert.equal(themes.light["color.keyHint.background"], "rgba(0, 0, 0, 0.08)");
   assert.equal(themes.light["color.control.highlight.background"], "#059cb0");
   assert.equal(themes.light["color.control.highlight.content"], "#000000");
   assert.equal(themes.light["color.content.requiredIndicator"], "#059cb0");
-  assert.equal(themes.light["color.control.launcher.background"], "rgba(0, 0, 0, 0.10)");
+  assert.equal(themes.light["color.control.launcher.background"], "rgba(0, 0, 0, 0.08)");
   assert.equal(
     themes.light["color.control.launcher.backgroundHover"],
     "color-mix(in srgb, #059cb0 20%, transparent)",
@@ -313,7 +313,7 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.light["color.control.launcher.content"], "rgba(0, 0, 0, 0.80)");
   assert.equal(themes.light["color.control.launcher.contentHover"], "#059cb0");
   assert.equal(themes.light["color.control.launcher.contentPressed"], "#059cb0");
-  assert.equal(themes.light["color.control.switch.track"], "#dddddd");
+  assert.equal(themes.light["color.control.switch.track"], "rgba(0, 0, 0, 0.10)");
   assert.equal(themes.light["color.control.switch.trackChecked"], "#059cb0");
   assert.equal(themes.light["color.control.switch.thumb"], "#ffffff");
   assert.equal(themes.light["color.identity.harness.minimal"], "#b434ef");
@@ -328,8 +328,8 @@ test("default modes preserve the built-in Appearance anchor values", () => {
   assert.equal(themes.light["color.identity.globalSearch.openFiles"], "#9e54ff");
   assert.equal(themes.light["color.status.warning.surface"], "rgba(255, 140, 0, 0.1)");
   assert.equal(themes.light["shadow.base"], "0 4px 8px rgba(16, 26, 39, 0.07)");
-  assert.equal(themes.light["shadow.composer"], "0 2px 6px rgba(0, 0, 0, 0.08)");
-  assert.equal(themes.light["shadow.menu"], "0 4px 10px rgba(0, 0, 0, 0.12)");
+  assert.equal(themes.light["shadow.composer"], "0 2px 12px rgba(0, 0, 0, 0.08)");
+  assert.equal(themes.light["shadow.menu"], "0 4px 20px rgba(0, 0, 0, 0.12)");
   assert.equal(themes.light["shadow.overlay"], "0 4px 20px rgba(0, 0, 0, 0.12)");
   assert.equal(themes.light["opacity.disabled"], 0.55);
   assert.equal(themes.dark["color.surface.canvas"], "#0e0e10");

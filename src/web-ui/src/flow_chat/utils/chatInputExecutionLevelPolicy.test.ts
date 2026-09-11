@@ -7,29 +7,29 @@ import {
 
 describe('chatInputExecutionLevelPolicy', () => {
   it('maps presentation levels directly to Agent types', () => {
-    expect(resolveComposerExecutionLevelSelection('ultimate')).toEqual({
-      modeId: 'Ultra',
+    expect(resolveComposerExecutionLevelSelection('Ultimate')).toEqual({
+      modeId: 'Ultimate',
     });
-    expect(resolveComposerExecutionLevelSelection('minimal')).toEqual({
-      modeId: 'minimal',
+    expect(resolveComposerExecutionLevelSelection('Minimal')).toEqual({
+      modeId: 'Minimal',
     });
-    expect(resolveComposerExecutionLevelSelection('creative')).toEqual({
+    expect(resolveComposerExecutionLevelSelection('Creative')).toEqual({
       modeId: 'Creative',
     });
     expect(resolveSelectedComposerExecutionLevel({
       currentMode: ' Ultra ',
-    })).toBe('ultimate');
+    })).toBe('Ultimate');
   });
 
   it('maps Standard to agentic and projects specialized Agents as Other', () => {
-    expect(resolveComposerExecutionLevelSelection('minimal')).toEqual({
-      modeId: 'minimal',
+    expect(resolveComposerExecutionLevelSelection('Minimal')).toEqual({
+      modeId: 'Minimal',
     });
-    expect(resolveComposerExecutionLevelSelection('balanced')).toEqual({
-      modeId: 'agentic',
+    expect(resolveComposerExecutionLevelSelection('Standard')).toEqual({
+      modeId: 'Standard',
     });
-    expect(resolveSelectedComposerExecutionLevel({ currentMode: 'agentic' })).toBe('balanced');
-    expect(resolveSelectedComposerExecutionLevel({ currentMode: ' Creative ' })).toBe('creative');
+    expect(resolveSelectedComposerExecutionLevel({ currentMode: 'Standard' })).toBe('Standard');
+    expect(resolveSelectedComposerExecutionLevel({ currentMode: ' Creative ' })).toBe('Creative');
     expect(resolveSelectedComposerExecutionLevel({ currentMode: 'Plan' })).toBe('other');
   });
 

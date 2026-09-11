@@ -1,5 +1,9 @@
 //! HostInvoke / DeviceEvent dispatch for CLI Peer Host.
 
+use openbitfun_core_types::agent_identity_wire::{
+    translate_agent_identity_command, translate_agent_identity_response, AgentIdentityDialect,
+};
+
 use serde_json::{json, Value};
 
 use openbitfun_core::service::remote_connect::remote_server::RemoteResponse;
@@ -71,8 +75,21 @@ async fn handle_host_invoke_inner(command: &str, args: Value) -> HostInvokeBridg
         Err(e) => return HostInvokeBridgeResult::err(e),
     };
 
+    let args =
+        match translate_agent_identity_command(command, args, AgentIdentityDialect::Canonical) {
+            Ok(args) => args,
+            Err(error) => return HostInvokeBridgeResult::err(error),
+        };
     match commands::dispatch(command, &args, state).await {
-        Ok(value) => HostInvokeBridgeResult::ok_value(value),
+        Ok(value) => match translate_agent_identity_response(
+            command,
+            value,
+            &args,
+            AgentIdentityDialect::Legacy,
+        ) {
+            Ok(value) => HostInvokeBridgeResult::ok_value(value),
+            Err(error) => HostInvokeBridgeResult::err(error),
+        },
         Err(error) => HostInvokeBridgeResult::err(error),
     }
 }

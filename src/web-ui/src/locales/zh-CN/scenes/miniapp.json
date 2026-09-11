@@ -117,7 +117,7 @@
     "account": {
       "menuLabel": "GitHub 账号 @{{login}}",
       "githubAccount": "GitHub 市场账号",
-      "dialogTitle": "登录 OpenBitFun 市场",
+      "dialogTitle": "使用 GitHub 登录",
       "dialogHeading": "使用 GitHub 继续",
       "dialogDescription": "MiniApp 市场与 Skin 市场共用此账号。授权将在浏览器中完成，凭证只保存在桌面系统凭证库中。",
       "waiting": "请在浏览器中完成授权，OpenBitFun 会自动更新登录状态。",

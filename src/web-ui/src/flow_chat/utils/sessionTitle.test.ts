@@ -1,278 +1,115 @@
-import { describe, expect, it } from 'vitest';
-import type { SessionMetadata } from '@/shared/types/session-history';
-import {
-  deriveSessionTitleStateFromMetadata,
-  freezeSessionTitleState,
-  getNextDefaultSessionTitleCount,
-  resolvePersistedSessionTitle,
-  resolveSessionTitle,
-} from './sessionTitle';
-import type { Session } from '../types/flow-chat';
+// @vitest-environment jsdom
 
-function createTranslator(locale: 'en' | 'zh') {
-  return (key: string, options?: Record<string, unknown>) => {
-    const count = options?.count;
-    if (key === 'flow-chat:session.newCodeWithIndex') {
-      return locale === 'zh' ? `新建代码会话 ${count}` : `New Code Session ${count}`;
-    }
-    if (key === 'flow-chat:session.new') {
-      return locale === 'zh' ? '新建会话' : 'New Session';
-    }
-    return key;
+import { describe, expect, it, vi } from 'vitest';
+import type { Session } from '../types/flow-chat';
+import type { SessionMetadata } from '@/shared/types/session-history';
+import { createDefaultSessionTitleDescriptor, deriveSessionTitleState, deriveSessionTitleStateFromMetadata, freezeSessionTitleState, resolvePersistedSessionTitle, resolveSessionTitle } from './sessionTitle';
+import { buildSessionMetadata } from './sessionMetadata';
+import { sessionTitleNumbers } from './sessionTitlePresentation';
+
+vi.mock('@/infrastructure/i18n', () => ({ i18nService: { t: (key: string) => key } }));
+
+const translate = (key: string) => key === 'flow-chat:session.new' ? 'New Session' : key;
+function session(id: string, path: string, number = 1, overrides: Partial<Session> = {}): Session {
+  return {
+    sessionId: id, ...deriveSessionTitleState(createDefaultSessionTitleDescriptor(translate)),
+    workspaceSessionNumber: number, workspacePath: path, config: {},
+    dialogTurns: [], status: 'idle', createdAt: number, lastActiveAt: number, error: null,
+    mode: 'Standard', sessionKind: 'normal', ...overrides,
   };
 }
 
-function counterSession(overrides: Partial<Session>): Session {
-  return {
-    sessionId: overrides.sessionId ?? 'session',
-    title: overrides.title ?? 'New Code Session',
-    titleSource: overrides.titleSource ?? 'i18n',
-    titleI18nKey: overrides.titleI18nKey ?? 'flow-chat:session.newCodeWithIndex',
-    titleI18nParams: overrides.titleI18nParams ?? { count: 1 },
-    dialogTurns: [],
-    status: 'idle',
-    config: {},
-    createdAt: 1,
-    lastActiveAt: 1,
-    error: null,
-    mode: 'agentic',
-    sessionKind: 'normal',
-    ...overrides,
-  } as Session;
-}
-
-describe('sessionTitle', () => {
-  it('renders untouched default session titles from the current locale', () => {
-    const session = {
-      title: 'New Code Session 2',
-      titleSource: 'i18n',
-      titleI18nKey: 'flow-chat:session.newCodeWithIndex',
-      titleI18nParams: { count: 2 },
-    } as const;
-
-    expect(resolveSessionTitle(session, createTranslator('en'))).toBe('New Code Session 2');
-    expect(resolveSessionTitle(session, createTranslator('zh'))).toBe('新建代码会话 2');
+describe('workspace session titles', () => {
+  it('uses one plain default title independently of the workspace number', () => {
+    expect(createDefaultSessionTitleDescriptor(translate)).toMatchObject({ text: 'New Session', key: 'flow-chat:session.new' });
+    expect(resolveSessionTitle(session('a', '/a', 27), translate)).toBe('New Session');
   });
 
-  it('keeps generated titles fixed after the first message', () => {
-    const frozen = freezeSessionTitleState('Fix flaky test');
-
-    expect(resolveSessionTitle(frozen, createTranslator('en'))).toBe('Fix flaky test');
-    expect(resolveSessionTitle(frozen, createTranslator('zh'))).toBe('Fix flaky test');
+  it('shows numbers only for duplicate default titles in the same workspace, across modes', () => {
+    const a = session('a', '/a');
+    const b = session('b', '/b');
+    expect(sessionTitleNumbers([a, b]).size).toBe(0);
+    const c = session('c', '/a', 2, { mode: 'Cowork' });
+    expect([...sessionTitleNumbers([a, b, c])]).toEqual([['a', 1], ['c', 2]]);
   });
 
-  it('restores persisted locale-aware titles only for untouched sessions', () => {
-    const untouchedMetadata: SessionMetadata = {
-      sessionId: 'session-1',
-      sessionName: 'New Code Session 3',
-      agentType: 'agentic',
-      modelName: 'primary',
-      createdAt: 1,
-      lastActiveAt: 2,
-      turnCount: 0,
-      messageCount: 0,
-      toolCallCount: 0,
-      status: 'active',
-      tags: [],
+  it('keeps surviving display slots stable when a vacant number is reused', () => {
+    const a = session('a', '/a', 2);
+    const b = session('b', '/a', 8);
+    expect(sessionTitleNumbers([b, a]).get('a')).toBe(2);
+    const renamed = { ...a, ...freezeSessionTitleState('Fix login') };
+    expect(renamed.workspaceSessionNumber).toBe(2);
+    expect(sessionTitleNumbers([renamed, b]).size).toBe(0);
+    const c = session('c', '/a', 2);
+    expect(sessionTitleNumbers([b, c]).get('b')).toBe(8);
+    expect([...sessionTitleNumbers([renamed, b, c])]).toEqual([['b', 8], ['c', 2]]);
+    const metadata = buildSessionMetadata(a, { customMetadata: { workspaceSessionNumber: 2 } } as SessionMetadata);
+    const restored = { ...a, ...deriveSessionTitleStateFromMetadata(metadata) };
+    expect(restored.workspaceSessionNumber).toBe(2);
+    expect(sessionTitleNumbers([restored, b]).get('a')).toBe(2);
+  });
+
+  it('does not count generated, manually named, or child sessions as duplicate defaults', () => {
+    const a = session('a', '/a');
+    const manual = session('manual', '/a', 2, freezeSessionTitleState('New Session'));
+    const child = session('child', '/a', 3, { sessionKind: 'review', parentSessionId: 'a' });
+    const archived = session('archived', '/a', 4, { persistedStatus: 'archived' });
+    expect(sessionTitleNumbers([a, manual, child, archived]).size).toBe(0);
+  });
+
+  it('uses the owning project for worktrees and normalizes local paths', () => {
+    const a = session('a', 'D:/Project');
+    const worktree = session('worktree', 'D:/Worktrees/task', 2, { projectWorkspacePath: 'd:/project/' });
+    expect(sessionTitleNumbers([a, worktree]).size).toBe(2);
+  });
+
+  it('isolates SSH hosts and case-sensitive remote roots', () => {
+    const a = session('a', '/repo', 1, { remoteSshHost: 'host-a', remoteConnectionId: 'ssh-user@host-a' });
+    const b = session('b', '/repo', 1, { remoteSshHost: 'host-b', remoteConnectionId: 'ssh-user@host-b' });
+    const c = session('c', '/Repo', 2, { remoteSshHost: 'host-a', remoteConnectionId: 'ssh-user@host-a' });
+    expect(sessionTitleNumbers([a, b, c]).size).toBe(0);
+    const d = session('d', '/repo/', 3, { remoteConnectionId: 'ssh-user@host-a:22' });
+    expect([...sessionTitleNumbers([a, b, c, d])]).toEqual([['a', 1], ['d', 3]]);
+  });
+
+  it('reads old indexed titles as ordinary text without renaming or numbering', () => {
+    for (const key of ['flow-chat:session.newCodeWithIndex', 'flow-chat:session.newCoworkWithIndex', 'flow-chat:session.newClawWithIndex', 'flow-chat:session.newWithIndex']) {
+      const metadata = { sessionName: 'Old title 7', turnCount: 0, customMetadata: { titleSource: 'i18n', titleKey: key, titleParams: { count: 7 } } } as SessionMetadata;
+      const titleState = deriveSessionTitleStateFromMetadata(metadata);
+      expect(titleState).toMatchObject({ title: 'Old title 7', titleSource: 'text', workspaceSessionNumber: undefined });
+      expect(resolvePersistedSessionTitle(metadata, translate)).toBe('Old title 7');
+      expect(sessionTitleNumbers([session('old', '/a', 7, titleState), session('new', '/a')]).size).toBe(0);
+    }
+  });
+
+  it('preserves generated text and rejects invalid numeric metadata', () => {
+    const metadata = { sessionName: 'Fix login', turnCount: 1, customMetadata: { titleSource: 'i18n', titleKey: 'flow-chat:session.new', workspaceSessionNumber: 4 } } as SessionMetadata;
+    expect(resolvePersistedSessionTitle(metadata, translate)).toBe('Fix login');
+    for (const number of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '2']) {
+      expect(deriveSessionTitleStateFromMetadata({ ...metadata, customMetadata: { workspaceSessionNumber: number } } as SessionMetadata).workspaceSessionNumber).toBeUndefined();
+    }
+  });
+
+  it('keeps a manually renamed empty session as text even when default metadata is stale', () => {
+    const metadata = {
+      sessionName: 'Fix login', turnCount: 0,
       customMetadata: {
-        kind: 'normal',
-        titleSource: 'i18n',
-        titleKey: 'flow-chat:session.newCodeWithIndex',
-        titleParams: { count: 3 },
+        titleSource: 'i18n', titleKey: 'flow-chat:session.new',
+        titleParams: { defaultTitleText: 'New Session' }, workspaceSessionNumber: 4,
       },
-    };
-    const activeMetadata: SessionMetadata = {
-      ...untouchedMetadata,
-      turnCount: 1,
-      sessionName: 'Fix flaky test',
-    };
-
-    expect(deriveSessionTitleStateFromMetadata(untouchedMetadata)).toMatchObject({
-      titleSource: 'i18n',
-      titleI18nKey: 'flow-chat:session.newCodeWithIndex',
-      titleI18nParams: { count: 3 },
+    } as SessionMetadata;
+    expect(deriveSessionTitleStateFromMetadata(metadata)).toMatchObject({
+      title: 'Fix login', titleSource: 'text', workspaceSessionNumber: 4,
     });
-    expect(resolvePersistedSessionTitle(untouchedMetadata, createTranslator('zh'))).toBe(
-      '新建代码会话 3',
-    );
+    expect(resolvePersistedSessionTitle(metadata, translate)).toBe('Fix login');
+  });
 
-    expect(deriveSessionTitleStateFromMetadata(activeMetadata)).toMatchObject({
-      title: 'Fix flaky test',
-      titleSource: 'text',
-      titleI18nKey: undefined,
+  it('clears default title identity when the user names an empty session New Session', () => {
+    const draft = session('a', '/a', 4);
+    const metadata = buildSessionMetadata(draft, { customMetadata: { workspaceSessionNumber: 4 } } as SessionMetadata);
+    const renamed = buildSessionMetadata({ ...draft, ...freezeSessionTitleState('New Session') }, metadata);
+    expect(deriveSessionTitleStateFromMetadata(renamed)).toMatchObject({
+      title: 'New Session', titleSource: 'text', workspaceSessionNumber: 4,
     });
-    expect(resolvePersistedSessionTitle(activeMetadata, createTranslator('zh'))).toBe(
-      'Fix flaky test',
-    );
-  });
-
-  it('keeps default title counters separate for each workspace and mode', () => {
-    const sessions = [
-      counterSession({
-        sessionId: 'a-code-1',
-        workspaceId: 'workspace-a',
-        workspacePath: 'D:/workspace/a',
-        mode: 'agentic',
-        titleI18nParams: { count: 1 },
-      }),
-      counterSession({
-        sessionId: 'b-code-1',
-        workspaceId: 'workspace-b',
-        workspacePath: 'D:/workspace/b',
-        mode: 'agentic',
-        titleI18nParams: { count: 1 },
-      }),
-      counterSession({
-        sessionId: 'a-cowork-4',
-        workspaceId: 'workspace-a',
-        workspacePath: 'D:/workspace/a',
-        mode: 'Cowork',
-        titleI18nKey: 'flow-chat:session.newCoworkWithIndex',
-        titleI18nParams: { count: 4 },
-      }),
-    ];
-
-    expect(
-      getNextDefaultSessionTitleCount(sessions, {
-        mode: 'code',
-        workspaceId: 'workspace-a',
-        workspacePath: 'D:/workspace/a',
-      }),
-    ).toBe(2);
-    expect(
-      getNextDefaultSessionTitleCount(sessions, {
-        mode: 'code',
-        workspaceId: 'workspace-b',
-        workspacePath: 'D:/workspace/b',
-      }),
-    ).toBe(2);
-    expect(
-      getNextDefaultSessionTitleCount(sessions, {
-        mode: 'cowork',
-        workspaceId: 'workspace-a',
-        workspacePath: 'D:/workspace/a',
-      }),
-    ).toBe(5);
-  });
-
-  it('continues from the highest title count in the same workspace scope', () => {
-    const sessions = [
-      counterSession({
-        sessionId: 'code-2',
-        workspacePath: 'D:/workspace/a',
-        titleI18nParams: { count: 2 },
-      }),
-      counterSession({
-        sessionId: 'code-5',
-        workspacePath: 'D:/workspace/a',
-        titleI18nParams: { count: 5 },
-      }),
-    ];
-
-    expect(
-      getNextDefaultSessionTitleCount(sessions, {
-        mode: 'code',
-        workspacePath: 'D:/workspace/a',
-      }),
-    ).toBe(6);
-  });
-
-  it('counts generated same-scope sessions so numbering does not reset after title generation', () => {
-    const sessions = [
-      counterSession({
-        sessionId: 'generated-code',
-        workspacePath: 'D:/workspace/a',
-        title: 'Fix flaky test',
-        titleSource: 'text',
-        titleI18nKey: undefined,
-        titleI18nParams: undefined,
-      }),
-    ];
-
-    expect(
-      getNextDefaultSessionTitleCount(sessions, {
-        mode: 'code',
-        workspacePath: 'D:/workspace/a',
-      }),
-    ).toBe(2);
-  });
-
-  it('keeps remote workspace counters separate by host and path', () => {
-    const sessions = [
-      counterSession({
-        sessionId: 'host-a-code-2',
-        workspacePath: '/repo',
-        remoteConnectionId: 'ssh-user@host-a:22',
-        remoteSshHost: 'host-a',
-        titleI18nParams: { count: 2 },
-      }),
-      counterSession({
-        sessionId: 'host-b-code-1',
-        workspacePath: '/repo',
-        remoteConnectionId: 'ssh-user@host-b:22',
-        remoteSshHost: 'host-b',
-        titleI18nParams: { count: 1 },
-      }),
-    ];
-
-    expect(
-      getNextDefaultSessionTitleCount(sessions, {
-        mode: 'code',
-        workspacePath: '/repo',
-        remoteConnectionId: 'ssh-user@host-a:22',
-        remoteSshHost: 'host-a',
-      }),
-    ).toBe(3);
-    expect(
-      getNextDefaultSessionTitleCount(sessions, {
-        mode: 'code',
-        workspacePath: '/repo',
-        remoteConnectionId: 'ssh-user@host-b:22',
-        remoteSshHost: 'host-b',
-      }),
-    ).toBe(2);
-  });
-
-  it('keeps remote workspace counters stable across legacy and portless connection ids', () => {
-    const sessions = [
-      counterSession({
-        sessionId: 'legacy-remote-code-2',
-        workspacePath: '/repo',
-        remoteConnectionId: 'ssh-user@host-a:22',
-        remoteSshHost: undefined,
-        titleI18nParams: { count: 2 },
-      }),
-    ];
-
-    expect(
-      getNextDefaultSessionTitleCount(sessions, {
-        mode: 'code',
-        workspacePath: '/repo',
-        remoteConnectionId: 'ssh-user@host-a',
-      }),
-    ).toBe(3);
-  });
-
-  it('ignores child sessions when choosing a main session title count', () => {
-    const sessions = [
-      counterSession({
-        sessionId: 'normal-code-1',
-        workspacePath: 'D:/workspace/a',
-        titleI18nParams: { count: 1 },
-      }),
-      counterSession({
-        sessionId: 'review-code-9',
-        workspacePath: 'D:/workspace/a',
-        sessionKind: 'review',
-        titleI18nParams: { count: 9 },
-      }),
-    ];
-
-    expect(
-      getNextDefaultSessionTitleCount(sessions, {
-        mode: 'code',
-        workspacePath: 'D:/workspace/a',
-      }),
-    ).toBe(2);
   });
 });

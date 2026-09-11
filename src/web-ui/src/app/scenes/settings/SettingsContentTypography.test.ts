@@ -8,6 +8,7 @@ function readSource(relativePath: string): string {
 
 const headerComponent = readSource('../../../infrastructure/config/components/common/ConfigPageHeader.tsx');
 const headerStyles = readSource('../../../infrastructure/config/components/common/ConfigPageHeader.scss');
+const pageHeaderStyles = readSource('../../../../../../design-system/packages/ui/src/components/PageHeader/PageHeader.module.css');
 const layoutStyles = readSource('../../../infrastructure/config/components/common/ConfigPageLayout.scss');
 const formStyles = readSource('../../../infrastructure/config/components/ConfigForm.scss');
 const appearanceStyles = readSource('../../../infrastructure/config/components/AppearanceSettingsPage.scss');
@@ -15,12 +16,15 @@ const shortcutStyles = readSource('./components/KeyboardShortcutsTab.scss');
 
 describe('Settings content typography', () => {
   it('maps the shared settings hierarchy to canonical semantic type roles', () => {
+    expect(headerComponent).toContain("import { PageHeader } from '@openbitfun/ui'");
+    expect(headerComponent).toContain('<PageHeader');
     expect(headerComponent).toContain('size="md"');
 
-    expect(headerStyles).toContain('font-size: var(--openbitfun-type-heading-page-font-size);');
-    expect(headerStyles).toContain('font-weight: var(--openbitfun-type-heading-page-font-weight);');
-    expect(headerStyles).toContain('font-size: var(--openbitfun-type-body-lg-font-size);');
-    expect(headerStyles).toContain('font-weight: var(--openbitfun-type-body-lg-font-weight);');
+    expect(headerStyles).not.toMatch(/(?:^|[;{])\s*(?:font(?:-[\w-]+)?|line-height|letter-spacing)\s*:/m);
+    expect(pageHeaderStyles).toContain('font-size: var(--openbitfun-type-heading-page-font-size);');
+    expect(pageHeaderStyles).toContain('font-weight: var(--openbitfun-type-heading-page-font-weight);');
+    expect(pageHeaderStyles).toContain('font-size: var(--openbitfun-type-body-lg-font-size);');
+    expect(pageHeaderStyles).toContain('font-weight: var(--openbitfun-type-body-lg-font-weight);');
 
     expect(layoutStyles).toContain('font-size: var(--openbitfun-type-heading-section-font-size);');
     expect(layoutStyles).toContain('font-weight: var(--openbitfun-type-heading-section-font-weight);');

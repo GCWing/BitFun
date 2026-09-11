@@ -200,6 +200,8 @@ export interface SessionDriver {
   /** When provided, all session file previews belong to this transport. */
   readonly fileAccess?: {
     open(sessionId: string, filePath: string, fileName: string, lineRange?: LineRange): Promise<void>;
+    readImage?(sessionId: string, filePath: string, refresh?: boolean): Promise<string>;
+    download?(sessionId: string, filePath: string): Promise<void>;
   };
 
   /** Optional driver-owned facts used by the shared session navigation UI. */

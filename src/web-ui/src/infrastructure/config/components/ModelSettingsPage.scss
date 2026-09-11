@@ -1415,17 +1415,11 @@
   &__form--modal {
     display: flex;
     flex-direction: column;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
+    flex: 0 0 auto;
   }
 
-  &__form-scrollable {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-x: hidden;
-    padding: var(--openbitfun-space-5) var(--openbitfun-space-6);
-    scroll-padding-block: var(--openbitfun-space-5);
+  &__form-content {
+    padding-inline: var(--openbitfun-space-6);
     display: flex;
     flex-direction: column;
     gap: var(--openbitfun-space-6);

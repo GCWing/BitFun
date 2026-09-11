@@ -65,7 +65,7 @@ impl AnalyzeImageTool {
         let local_path = Path::new(input_path);
         if local_path.is_absolute()
             && !crate::agentic::tools::workspace_paths::is_openbitfun_tool_uri(input_path)
-            && (!context.is_some_and(|ctx| ctx.is_remote()) || local_path.is_file())
+            && !context.is_some_and(|ctx| ctx.is_remote())
         {
             return Ok(ResolvedImagePath::Local(local_path.to_path_buf()));
         }
@@ -478,5 +478,91 @@ Divide by that factor to map anything in `analysis` back to source pixels — bu
                 analysis
             )),
         )])
+    }
+}
+
+#[cfg(test)]
+mod image_path_tests {
+    use super::*;
+    use crate::agentic::workspace::WorkspaceBinding;
+
+    #[tokio::test]
+    async fn analyze_image_reads_uploaded_runtime_pixels_in_an_ssh_session() {
+        let root = tempfile::tempdir().unwrap();
+        let identity = crate::service::remote_ssh::workspace_state::workspace_session_identity(
+            "/ssh/workspace",
+            Some("remote-1"),
+            Some("host"),
+        )
+        .unwrap();
+        let mut context = ToolUseContext::for_tool_listing(
+            Some(WorkspaceBinding::new_remote(
+                Some("remote-workspace".into()),
+                PathBuf::from("/ssh/workspace"),
+                "remote-1".into(),
+                "remote-session".into(),
+                identity,
+            )),
+            None,
+        );
+        context
+            .custom_data
+            .insert("__openbitfun_test_runtime_root".into(), json!(root.path()));
+        let mut images = vec![crate::agentic::image_analysis::attachments::test_image()];
+        let expected =
+            crate::agentic::image_analysis::decode_data_url(images[0].data_url.as_deref().unwrap())
+                .unwrap()
+                .0;
+        crate::agentic::image_analysis::attachments::prepare_inline_image_attachments(
+            &mut images,
+            &context,
+        )
+        .await
+        .unwrap();
+        let reference = images[0].image_path.as_deref().unwrap();
+        assert!(reference.starts_with("openbitfun://runtime/remote-workspace/"));
+        let resolved = AnalyzeImageTool::resolve_path(reference, Some(&context)).unwrap();
+        assert!(matches!(resolved, ResolvedImagePath::Local(_)));
+        assert_eq!(
+            AnalyzeImageTool::read_image_bytes(&resolved, Some(&context))
+                .await
+                .unwrap(),
+            expected
+        );
+    }
+
+    #[tokio::test]
+    async fn analyze_image_never_falls_back_to_an_existing_controller_file() {
+        let local = tempfile::tempdir().unwrap();
+        let path = local.path().join("private.png");
+        std::fs::write(&path, b"private controller content").unwrap();
+        let identity = crate::service::remote_ssh::workspace_state::workspace_session_identity(
+            local.path().to_str().unwrap(),
+            Some("remote-1"),
+            Some("host"),
+        )
+        .unwrap();
+        let context = ToolUseContext::for_tool_listing(
+            Some(WorkspaceBinding::new_remote(
+                Some("remote-workspace".into()),
+                local.path().to_path_buf(),
+                "remote-1".into(),
+                "remote-session".into(),
+                identity,
+            )),
+            None,
+        );
+        let resolved =
+            AnalyzeImageTool::resolve_path(path.to_str().unwrap(), Some(&context)).unwrap();
+        assert!(matches!(
+            resolved,
+            ResolvedImagePath::RemoteWorkspace { .. }
+        ));
+        let error = AnalyzeImageTool::read_image_bytes(&resolved, Some(&context))
+            .await
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("workspace filesystem services are unavailable"));
     }
 }

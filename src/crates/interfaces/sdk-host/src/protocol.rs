@@ -754,7 +754,7 @@ mod tests {
 
     #[test]
     fn session_create_result_preserves_runtime_placement_facts() {
-        let mut created = AgentSessionCreateResult::new("session_1", "Main", "agentic");
+        let mut created = AgentSessionCreateResult::new("session_1", "Main", "Standard");
         created.workspace_path = Some("/worktrees/session_1".to_string());
         created.workspace_id = Some("workspace_1".to_string());
         created.project_workspace_path = Some("/workspace/project".to_string());
@@ -765,7 +765,7 @@ mod tests {
 
         assert_eq!(json["sessionId"], "session_1");
         assert_eq!(json["sessionName"], "Main");
-        assert_eq!(json["agent"], "agentic");
+        assert_eq!(json["agent"], "Standard");
         assert!(json.get("agentType").is_none());
         assert_eq!(json["workspacePath"], "/worktrees/session_1");
         assert_eq!(json["workspaceId"], "workspace_1");

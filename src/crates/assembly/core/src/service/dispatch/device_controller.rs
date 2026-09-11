@@ -372,11 +372,11 @@ pub async fn query_device_job(
     let DispatchTarget::Device { device_id, .. } = &record.target else {
         unreachable!("load_device_record validates target kind")
     };
-    if request.kind == "readFile" {
+    if matches!(request.kind.as_str(), "readFile" | "readFileChunk") {
         let protocol = rpc
             .invoke(device_id, "dispatch_target_probe", json!({}))
             .await?;
-        validate_file_query_capability(Some(&protocol))?;
+        validate_file_query_capability(Some(&protocol), &request.kind)?;
     }
     rpc.invoke(
         device_id,
@@ -951,6 +951,7 @@ mod tests {
 
     struct QueryRpc {
         supports_files: bool,
+        supports_chunks: bool,
         calls: Mutex<Vec<(String, Value)>>,
     }
 
@@ -965,7 +966,7 @@ mod tests {
             assert_eq!(device_id, "device-a");
             self.calls.lock().unwrap().push((command.to_owned(), args));
             Ok(if command == "dispatch_target_probe" {
-                json!({"capabilities": if self.supports_files { vec!["query_file_content"] } else { vec!["session_query"] }})
+                json!({"capabilities": if self.supports_chunks { vec!["query_file_chunks_v1"] } else if self.supports_files { vec!["query_file_content"] } else { vec!["session_query"] }})
             } else {
                 json!({"kind": "readFile", "content": "target content"})
             })
@@ -979,12 +980,14 @@ mod tests {
         for supports_files in [false, true] {
             let rpc = QueryRpc {
                 supports_files,
+                supports_chunks: false,
                 calls: Mutex::new(Vec::new()),
             };
             let request = DispatchQueryJobRequest {
                 job_id: "job-1".into(),
                 kind: "readFile".into(),
                 file_path: Some("/w/result.txt".into()),
+                file_chunk: None,
             };
             let result = query_device_job(&rpc, &store, request).await;
             assert_eq!(result.is_ok(), supports_files);
@@ -1000,6 +1003,7 @@ mod tests {
         }
         let rpc = QueryRpc {
             supports_files: false,
+            supports_chunks: false,
             calls: Mutex::new(Vec::new()),
         };
         query_device_job(
@@ -1009,6 +1013,7 @@ mod tests {
                 job_id: "job-1".into(),
                 kind: "usageReport".into(),
                 file_path: None,
+                file_chunk: None,
             },
         )
         .await
@@ -1020,6 +1025,44 @@ mod tests {
                 json!({"jobId": "job-1", "kind": "usageReport"})
             )]
         );
+    }
+
+    #[tokio::test]
+    async fn binary_query_negotiates_optional_capability_and_retains_chunk_cursor() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = device_store(temp.path()).await;
+        for supports_chunks in [false, true] {
+            let rpc = QueryRpc {
+                supports_files: true,
+                supports_chunks,
+                calls: Mutex::new(vec![]),
+            };
+            let request = DispatchQueryJobRequest {
+                job_id: "job-1".into(),
+                kind: "readFileChunk".into(),
+                file_path: Some("/w/image.png".into()),
+                file_chunk: Some(
+                    openbitfun_services_core::dispatch_contract::DispatchFileChunkRequest {
+                        offset: 256,
+                        limit: 256,
+                        expected_revision: Some("revision-1".into()),
+                    },
+                ),
+            };
+            assert_eq!(
+                query_device_job(&rpc, &store, request).await.is_ok(),
+                supports_chunks
+            );
+            let calls = rpc.calls.lock().unwrap();
+            assert_eq!(calls.len(), if supports_chunks { 2 } else { 1 });
+            if supports_chunks {
+                assert_eq!(
+                    calls[1].1["fileChunk"],
+                    json!({"offset":256,"limit":256,"expectedRevision":"revision-1"})
+                );
+                assert_eq!(calls[1].1["filePath"], "/w/image.png");
+            }
+        }
     }
 
     #[tokio::test]

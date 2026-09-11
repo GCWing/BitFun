@@ -39,8 +39,6 @@ use openbitfun_runtime_ports::{AgentContextReloadRequest, SessionTurnWindowReque
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-const UI_CUSTOM_METADATA_KEYS: [&str; 3] = ["titleSource", "titleKey", "titleParams"];
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum UiSessionMetadataField {
@@ -273,8 +271,6 @@ fn choose_remote_ssh_host(
 #[async_trait]
 pub(crate) trait DesktopSessionHostEffects: Send + Sync {
     async fn release_session(&self, session_id: &str);
-    fn notify_session_changed(&self, session_id: &str, workspace_path: &str);
-    fn notify_session_deleted(&self, session_id: &str);
 }
 
 #[derive(Clone)]
@@ -618,7 +614,6 @@ impl DesktopSessionApplication {
                 "At least one session metadata field is required".to_string(),
             ));
         }
-        let workspace_path = request.workspace_path.clone();
         let scope = self.resolved_scope(request).await;
         self.ensure_runtime_ownership(&scope)?;
         let storage_path = self.storage_path(&scope);
@@ -629,8 +624,6 @@ impl DesktopSessionApplication {
             })
             .await
             .map_err(|error| DesktopSessionApplicationError::Core(error.to_string()))?;
-        self.host_effects
-            .notify_session_changed(&session_id, &workspace_path);
         Ok(())
     }
 
@@ -754,8 +747,6 @@ impl DesktopSessionApplication {
                 })
                 .await
                 .map_err(desktop_runtime_session_error)?;
-            self.host_effects
-                .notify_session_changed(&session_id, &scope.workspace_path);
             return Ok(normalized_title);
         }
 
@@ -773,7 +764,6 @@ impl DesktopSessionApplication {
             .update_loaded_session_title(&session_id, &title)
             .await
             .map_err(desktop_core_session_error)?;
-        self.host_effects.notify_session_changed(&session_id, "");
         Ok(updated_title)
     }
 
@@ -941,7 +931,6 @@ async fn delete_session_with_host_effects(
         })
         .await
         .map_err(|error| DesktopSessionApplicationError::Runtime(error.into_message()))?;
-    host_effects.notify_session_deleted(&session_id);
     Ok(())
 }
 
@@ -969,23 +958,7 @@ fn merge_ui_owned_session_metadata(
         current.needs_user_attention = incoming.needs_user_attention.clone();
     }
     if fields.contains(&UiSessionMetadataField::TitleMetadata) {
-        let mut custom = current
-            .custom_metadata
-            .as_ref()
-            .and_then(serde_json::Value::as_object)
-            .cloned()
-            .unwrap_or_default();
-        let incoming_custom = incoming
-            .custom_metadata
-            .as_ref()
-            .and_then(serde_json::Value::as_object);
-        for key in UI_CUSTOM_METADATA_KEYS {
-            custom.remove(key);
-            if let Some(value) = incoming_custom.and_then(|metadata| metadata.get(key)) {
-                custom.insert(key.to_string(), value.clone());
-            }
-        }
-        current.custom_metadata = (!custom.is_empty()).then_some(serde_json::Value::Object(custom));
+        openbitfun_core::service::session::apply_session_title_metadata(current, incoming);
     }
 }
 
@@ -1158,12 +1131,6 @@ mod tests {
         async fn release_session(&self, _session_id: &str) {
             self.events.lock().unwrap().push("release");
         }
-
-        fn notify_session_changed(&self, _session_id: &str, _workspace_path: &str) {}
-
-        fn notify_session_deleted(&self, _session_id: &str) {
-            self.events.lock().unwrap().push("relay_delete");
-        }
     }
 
     fn delete_test_scope() -> ResolvedDesktopSessionScope {
@@ -1247,7 +1214,7 @@ mod tests {
         let mut restored = Session::new_with_id(
             "session-1".to_string(),
             "Restored".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Default::default(),
         );
         let mut live = restored.clone();
@@ -1272,7 +1239,7 @@ mod tests {
         let mut restored = Session::new_with_id(
             "session-1".to_string(),
             "Restored".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Default::default(),
         );
 
@@ -1378,7 +1345,7 @@ mod tests {
 
         assert_eq!(
             events.lock().unwrap().as_slice(),
-            ["release", "durable_delete", "relay_delete"]
+            ["release", "durable_delete"]
         );
         assert_eq!(
             workspace_path.lock().unwrap().as_deref(),
@@ -1439,7 +1406,7 @@ mod tests {
 
         let mut incoming = current.clone();
         incoming.session_name = "Renamed".to_string();
-        incoming.agent_type = "agentic".to_string();
+        incoming.agent_type = "Standard".to_string();
         incoming.model_name = "stale-model".to_string();
         incoming.memory_mode = SessionMemoryMode::Enabled;
         incoming.status = SessionStatus::Active;
@@ -1502,7 +1469,7 @@ mod tests {
         let mut current = SessionMetadata::new(
             "session".to_string(),
             "Current".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "primary".to_string(),
         );
         current.review_action_state = Some(json!({ "phase": "review_completed" }));

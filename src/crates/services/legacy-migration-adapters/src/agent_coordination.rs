@@ -1440,6 +1440,66 @@ mod tests {
     }
 
     #[test]
+    fn deep_assistant_content_does_not_skip_session_domains() {
+        let temp = test_tempdir("deep-assistant-content");
+        let roots = fixture_roots(temp.path());
+        copy_fixture(&roots);
+        let _connection = materialize_coordination(&roots, false);
+        let mut deep = roots
+            .legacy_home_root
+            .join("personal_assistant/workspace/build");
+        for _ in 0..20 {
+            deep.push("d");
+        }
+        fs::create_dir_all(&deep).unwrap();
+        fs::write(deep.join("content.txt"), b"preserve deep workspace content").unwrap();
+        let selection = session_selection();
+        let source = probe_legacy_source(&roots, ProbeLimits::default())
+            .unwrap()
+            .unwrap();
+        let engine = MigrationEngine::new(roots.clone(), adapters_for_groups(&selection)).unwrap();
+        let plan = engine
+            .plan(&source, selection, &CancellationToken::default())
+            .unwrap();
+        assert!(plan.findings.iter().all(|finding| finding.migratable));
+        let report = engine
+            .execute(&plan, &CancellationToken::default(), &NoCrashInjection)
+            .unwrap();
+        assert!(report
+            .domain_results
+            .iter()
+            .all(|result| result.state == MigrationDomainState::Verified));
+        assert!(roots
+            .target_home_root
+            .join("projects/c--fixture-workspace/sessions/session-1/metadata.json")
+            .is_file());
+        assert!(roots
+            .target_user_root
+            .join(COORDINATION_RELATIVE_PATH)
+            .is_file());
+        assert!(deep.is_dir());
+        let counts = crate::workspace_report_counts(&roots, &report).unwrap();
+        assert_eq!(counts.sessions.imported, 2);
+        assert_eq!(counts.sessions.skipped, 0);
+        assert_eq!(counts.workspaces.imported, 1);
+        assert_eq!(counts.assistant_directories.imported, 1);
+        let relative = deep.strip_prefix(&roots.legacy_home_root).unwrap();
+        assert_eq!(
+            fs::read(roots.target_home_root.join(relative).join("content.txt")).unwrap(),
+            b"preserve deep workspace content"
+        );
+        assert_eq!(
+            fs::read(deep.join("content.txt")).unwrap(),
+            b"preserve deep workspace content"
+        );
+        assert!(!report
+            .domain_results
+            .iter()
+            .flat_map(|r| &r.warnings)
+            .any(|w| w.code == "assistant_workspace_not_migrated"));
+    }
+
+    #[test]
     fn session_group_migrates_owner_data_wal_and_relationship_closure() {
         let temp = test_tempdir("session-group");
         let roots = fixture_roots(temp.path());

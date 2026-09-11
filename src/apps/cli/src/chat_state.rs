@@ -1662,7 +1662,7 @@ mod tests {
         let mut state = ChatState::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("/tmp/project".to_string()),
         );
         state.set_git_repository_status(true, Some("main".to_string()));
@@ -1686,7 +1686,7 @@ mod tests {
         let mut state = ChatState::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("/tmp/project".to_string()),
         );
         state.add_system_message("Worktree: off".to_string());
@@ -1701,7 +1701,7 @@ mod tests {
         let mut state = ChatState::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("/tmp/project".to_string()),
         );
         let usage = ModelTokenUsageSnapshot {
@@ -1726,7 +1726,7 @@ mod tests {
         let mut state = ChatState::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("/tmp/project".to_string()),
         );
         state.set_git_repository_status(true, Some("main".to_string()));
@@ -1746,7 +1746,7 @@ mod tests {
         let mut state = ChatState::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("/tmp/project".to_string()),
         );
         state.apply_workspace_binding(managed_worktree_binding(Some("feature/test"), None));
@@ -1816,7 +1816,7 @@ mod tests {
         let mut state = ChatState::new(
             "parent-session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
         );
         let first = permission_request("request-z", "child-a");
@@ -1870,7 +1870,7 @@ mod tests {
         let mut state = ChatState::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
         );
         let first = PermissionRequest {
@@ -1923,7 +1923,7 @@ mod tests {
         let mut state = ChatState::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
         );
         state.handle_turn_started("turn-1", "Create a plan");
@@ -1951,7 +1951,7 @@ mod tests {
         let mut state = ChatState::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
         );
         state.handle_turn_started("turn-1", "Start the task");
@@ -2012,7 +2012,7 @@ mod tests {
         let state = ChatState::from_session_transcript(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
             &transcript,
         );
@@ -2039,7 +2039,7 @@ mod tests {
         let mut state = ChatState::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             Some("D:/workspace/project".to_string()),
         );
         state.current_model_id = Some("model-1".to_string());
@@ -2071,7 +2071,7 @@ mod tests {
         let mut state = ChatState::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
         );
         let transcript = SessionTranscript {
@@ -2139,7 +2139,7 @@ mod tests {
         let state = ChatState::from_session_transcript(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
             &transcript,
         );
@@ -2187,7 +2187,7 @@ mod tests {
         let state = ChatState::from_session_transcript(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
             &transcript,
         );
@@ -2240,7 +2240,7 @@ mod tests {
         let state = ChatState::from_session_transcript(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
             &transcript,
         );

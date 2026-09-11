@@ -96,35 +96,16 @@ describe('mobile control-target UI ownership contracts', () => {
   });
 
   it('fences a device probe and pairing name lookup to their original owners', () => {
-    expect(devicesSource).toContain('client.delegatedAccountEpoch === accountEpoch');
+    expect(devicesSource).toContain('client.accountEpoch === accountEpoch');
     expect(devicesSource).toContain('client.controlTargetEpoch === expectedTargetEpoch');
     expect(devicesSource).toContain('expectedTargetEpoch = client.controlTargetEpoch;');
 
-    expect(pairingSource).toContain('const target = client.getControlTargetSnapshot();');
-    expect(pairingSource).toContain('!client.isControlTargetCurrent(target)');
-    expect(pairingSource).toContain('client.pairedDeviceId !== homeDeviceId');
-  });
-
-  it('bootstraps pairing auto-reconnect once without resetting to a stuck spinner', () => {
-    expect(pairingSource).toContain('attemptPairRef.current');
-    expect(pairingSource).toContain('pairAttemptGenerationRef');
-    expect(pairingSource).toContain('mount-once bootstrap');
-    expect(pairingSource).toContain('eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once bootstrap');
-    // Regression: depending on attemptPair and unconditionally setting pairing
-    // after a failed reconnect left the page spinning with no retry form.
-    expect(pairingSource).not.toContain('autoReconnectAttemptedRef');
-    expect(pairingSource).not.toMatch(
-      /setConnectionStatus\(shouldAutoReconnect \? 'pairing' : 'idle'\)/,
-    );
+    expect(pairingSource).toContain('generation.current !== attempt');
+    expect(pairingSource).toContain('pending.current?.abort()');
   });
 
   it('reuses only a matching same-tab mobile account session', () => {
-    expect(pairingSource).toContain(
-      'const hasScannedAccountTarget = !!pairingTarget.targetDeviceId;',
-    );
-    expect(pairingSource).toContain(
-      'requiresAccountAuth && hasScannedAccountTarget',
-    );
+    expect(pairingSource).toContain('loadMatchingCloudAccountSession(relayUrl');
 
     const stored = {
       relayUrl: 'https://relay.example.com',
@@ -187,7 +168,7 @@ describe('mobile control-target UI ownership contracts', () => {
       masterKey: wire.master_key,
       controllerDeviceId: wire.controller_device_id,
     });
-    expect(deserializeCloudAccountSession(legacy)?.session.userId).toBe('account-a');
+    expect(deserializeCloudAccountSession(legacy)).toBeNull(); // Old shared-account keys cannot authenticate a device.
     expect(deserializeCloudAccountSession(JSON.stringify({ ...wire, version: 99 }))).toBeNull();
   });
 });

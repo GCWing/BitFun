@@ -3,11 +3,10 @@ use openbitfun_agent_runtime::agents::{
     is_swarm_delegate_agent_type, is_swarm_planner_agent_type, mode_config_profile_label,
     mode_config_profile_member_mode_ids, mode_presentation_rank, resolve_mode_config_profile_id,
     resolve_subagent_availability, resolve_subagent_default_enabled,
-    shared_coding_mode_user_context_policy, subagent_source_kind,
-    subagent_source_presentation_rank, BuiltinAgentCategory, BuiltinSubagentExposure,
-    SubAgentSource, SubagentOverrideLayers, SubagentOverrideState, SubagentSourceKind,
-    SubagentStateReason, SubagentVisibilityPolicy, SHARED_CODING_MODE_CONFIG_PROFILE_ID,
-    SHARED_CODING_MODE_CONFIG_PROFILE_LABEL, SHARED_CODING_MODE_IDS,
+    standard_harness_user_context_policy, subagent_source_kind, subagent_source_presentation_rank,
+    BuiltinAgentCategory, BuiltinSubagentExposure, SubAgentSource, SubagentOverrideLayers,
+    SubagentOverrideState, SubagentSourceKind, SubagentStateReason, SubagentVisibilityPolicy,
+    STANDARD_HARNESS_CONFIG_ID, STANDARD_HARNESS_CONFIG_LABEL, STANDARD_HARNESS_CONFIG_MEMBERS,
 };
 use openbitfun_agent_runtime::deep_review::canonical_review_worker_agent_type;
 
@@ -15,16 +14,16 @@ use openbitfun_agent_runtime::deep_review::canonical_review_worker_agent_type;
 fn visibility_policy_supports_public_restricted_hidden_and_denied_parents() {
     let public = SubagentVisibilityPolicy::public();
     assert!(public.can_access_from_parent(None));
-    assert!(public.can_access_from_parent(Some("agentic")));
+    assert!(public.can_access_from_parent(Some("Standard")));
 
     let restricted = SubagentVisibilityPolicy::restricted(["DeepResearch"]);
     assert!(!restricted.can_access_from_parent(None));
     assert!(restricted.can_access_from_parent(Some("DeepResearch")));
-    assert!(!restricted.can_access_from_parent(Some("agentic")));
+    assert!(!restricted.can_access_from_parent(Some("Standard")));
 
     let denied = SubagentVisibilityPolicy::public().deny_for(["BlockedParent"]);
     assert!(!denied.can_access_from_parent(Some("BlockedParent")));
-    assert!(denied.can_access_from_parent(Some("agentic")));
+    assert!(denied.can_access_from_parent(Some("Standard")));
 
     let hidden = SubagentVisibilityPolicy::hidden(["DeepReview"]);
     assert_eq!(hidden.summary().exposure, BuiltinSubagentExposure::Hidden);
@@ -34,7 +33,7 @@ fn visibility_policy_supports_public_restricted_hidden_and_denied_parents() {
 
 #[test]
 fn swarm_agent_type_contract_is_closed() {
-    for parent in ["Ultra", "SwarmPlanner"] {
+    for parent in ["Ultimate", "SwarmPlanner"] {
         assert!(is_swarm_planner_agent_type(parent));
     }
     assert!(!is_swarm_planner_agent_type("GeneralPurpose"));
@@ -99,7 +98,7 @@ fn default_enabled_uses_visibility_only_for_builtin_subagents() {
     assert!(!resolve_subagent_default_enabled(
         SubagentSourceKind::Builtin,
         &hidden,
-        Some("agentic")
+        Some("Standard")
     ));
     assert!(resolve_subagent_default_enabled(
         SubagentSourceKind::Builtin,
@@ -109,32 +108,32 @@ fn default_enabled_uses_visibility_only_for_builtin_subagents() {
     assert!(resolve_subagent_default_enabled(
         SubagentSourceKind::Project,
         &hidden,
-        Some("agentic")
+        Some("Standard")
     ));
     assert!(resolve_subagent_default_enabled(
         SubagentSourceKind::User,
         &hidden,
-        Some("agentic")
+        Some("Standard")
     ));
 }
 
 #[test]
 fn shared_coding_modes_resolve_to_the_same_config_profile() {
-    for mode_id in SHARED_CODING_MODE_IDS {
+    for mode_id in STANDARD_HARNESS_CONFIG_MEMBERS {
         assert_eq!(
             resolve_mode_config_profile_id(mode_id).as_ref(),
-            SHARED_CODING_MODE_CONFIG_PROFILE_ID
+            STANDARD_HARNESS_CONFIG_ID
         );
     }
 
     assert_eq!(resolve_mode_config_profile_id("Cowork").as_ref(), "Cowork");
     assert_eq!(
-        mode_config_profile_member_mode_ids(SHARED_CODING_MODE_CONFIG_PROFILE_ID),
-        SHARED_CODING_MODE_IDS
+        mode_config_profile_member_mode_ids(STANDARD_HARNESS_CONFIG_ID),
+        STANDARD_HARNESS_CONFIG_MEMBERS
     );
     assert_eq!(
-        mode_config_profile_label(SHARED_CODING_MODE_CONFIG_PROFILE_ID),
-        Some(SHARED_CODING_MODE_CONFIG_PROFILE_LABEL)
+        mode_config_profile_label(STANDARD_HARNESS_CONFIG_ID),
+        Some(STANDARD_HARNESS_CONFIG_LABEL)
     );
 }
 
@@ -179,14 +178,14 @@ fn subagent_source_contract_preserves_runtime_kind_and_presentation_order() {
 
 #[test]
 fn mode_presentation_and_shared_context_policy_match_existing_mode_contract() {
-    assert_eq!(mode_presentation_rank("agentic"), 0);
+    assert_eq!(mode_presentation_rank("Standard"), 0);
     assert_eq!(mode_presentation_rank("Cowork"), 1);
-    assert_eq!(mode_presentation_rank("Ultra"), 3);
+    assert_eq!(mode_presentation_rank("Ultimate"), 3);
     assert_eq!(mode_presentation_rank("Creative"), 4);
     assert_eq!(mode_presentation_rank("unknown"), 99);
 
     assert_eq!(
-        shared_coding_mode_user_context_policy().cache_scope_key(),
+        standard_harness_user_context_policy().cache_scope_key(),
         "workspace_context|workspace_instructions|project_layout|memory_summary"
     );
 }
@@ -198,13 +197,13 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
     assert_eq!(
         ids,
         vec![
-            "minimal",
-            "agentic",
+            "Minimal",
+            "Standard",
             "Cowork",
             "Creative",
             "Claw",
             "DeepResearch",
-            "Ultra",
+            "Ultimate",
             "SwarmPlanner",
             "SwarmWorker",
             "SwarmReviewer",
@@ -235,9 +234,9 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
     assert_eq!(code_review.category, BuiltinAgentCategory::SubAgent);
     assert!(code_review
         .visibility_policy
-        .can_access_from_parent(Some("agentic")));
+        .can_access_from_parent(Some("Standard")));
     assert!(!code_review.visibility_policy.show_in_global_registry);
-    assert_eq!(default_model_id_for_builtin_agent("agentic"), "primary");
+    assert_eq!(default_model_id_for_builtin_agent("Standard"), "primary");
     assert_eq!(default_model_id_for_builtin_agent("Explore"), "primary");
     assert_eq!(
         default_model_id_for_builtin_agent("GeneralPurpose"),
@@ -258,7 +257,7 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
     );
     assert_eq!(default_model_id_for_builtin_agent("ReviewGeneral"), "fast");
     assert_eq!(default_model_id_for_builtin_agent("ReviewWorker"), "fast");
-    assert_eq!(default_model_id_for_builtin_agent("Ultra"), "primary");
+    assert_eq!(default_model_id_for_builtin_agent("Ultimate"), "primary");
     assert_eq!(
         default_model_id_for_builtin_agent("SwarmPlanner"),
         "primary"
@@ -273,14 +272,14 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
             .expect("Swarm agent should be registered");
         assert!(swarm
             .visibility_policy
-            .can_access_from_parent(Some("Ultra")));
+            .can_access_from_parent(Some("Ultimate")));
         assert!(swarm
             .visibility_policy
             .can_access_from_parent(Some("SwarmPlanner")));
         assert!(!swarm.visibility_policy.show_in_global_registry);
         assert!(!swarm
             .visibility_policy
-            .can_access_from_parent(Some("agentic")));
+            .can_access_from_parent(Some("Standard")));
     }
 
     let computer_use = specs
@@ -296,7 +295,7 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
         .can_access_from_parent(Some("Claw")));
     assert!(!computer_use
         .visibility_policy
-        .can_access_from_parent(Some("agentic")));
+        .can_access_from_parent(Some("Standard")));
 
     let research_specialist = specs
         .iter()
@@ -337,10 +336,10 @@ fn shared_coding_modes_have_identical_builtin_subagent_defaults() {
         let expected = resolve_subagent_default_enabled(
             SubagentSourceKind::Builtin,
             &spec.visibility_policy,
-            Some("agentic"),
+            Some("Standard"),
         );
 
-        for mode_id in SHARED_CODING_MODE_IDS {
+        for mode_id in STANDARD_HARNESS_CONFIG_MEMBERS {
             assert_eq!(
                 resolve_subagent_default_enabled(
                     SubagentSourceKind::Builtin,

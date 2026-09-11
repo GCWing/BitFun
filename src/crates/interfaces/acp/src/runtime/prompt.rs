@@ -434,7 +434,7 @@ mod tests {
             acp_session_id: "acp-session".to_string(),
             openbitfun_session_id: "openbitfun-session".to_string(),
             cwd: "/workspace".to_string(),
-            mode_id: "agentic".to_string(),
+            mode_id: "Standard".to_string(),
             model_id: "primary".to_string(),
             mcp_server_ids: Vec::new(),
             lifecycle: std::sync::Arc::new(tokio::sync::Mutex::new(())),

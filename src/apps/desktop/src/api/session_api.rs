@@ -510,10 +510,7 @@ pub async fn save_session_turn(
         .map_err(|error| format!("Failed to save session turn: {error}"))?;
 
     // Notify the auto-sync background task (debounced upload to relay)
-    crate::api::remote_connect_api::notify_session_changed(
-        &request.turn_data.session_id,
-        &request.workspace_path,
-    );
+
     Ok(())
 }
 

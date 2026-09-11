@@ -37,9 +37,9 @@ interface MobileStore {
    * Current same-account control target (delegated identity flow).
    * `isHome` marks the QR-paired desktop this mobile session started from.
    */
-  controlTarget: { deviceId: string; deviceName: string | null; isHome: boolean } | null;
+  controlTarget: { deviceId: string; deviceName: string | null } | null;
   setControlTarget: (
-    target: { deviceId: string; deviceName: string | null; isHome: boolean } | null,
+    target: { deviceId: string; deviceName: string | null } | null,
   ) => void;
 
   sessions: SessionInfo[];

@@ -1,19 +1,15 @@
 //! Concrete MiniApp marketplace client, credential vault and package IO.
 
 mod client;
-mod credentials;
 mod package;
 mod submit;
 
-pub use client::{
-    DesktopAuthPollRequest, DesktopAuthPollResponse, DesktopAuthStart, FavoriteAggregate,
-    MarketBrowseRequest, MarketClient, MarketClientError, MarketMe, MarketTokenPair,
-    RatingAggregate,
-};
-pub use credentials::{
+pub use crate::account_identity::{
     clear_market_credentials, load_market_credentials, save_market_credentials,
-    StoredMarketCredentials,
+    DesktopAuthPollRequest, DesktopAuthPollResponse, DesktopAuthStart, MarketClientError, MarketMe,
+    MarketTokenPair, StoredMarketCredentials,
 };
+pub use client::{FavoriteAggregate, MarketBrowseRequest, MarketClient, RatingAggregate};
 pub use package::{
     build_market_package, validate_market_package, MarketPackageError, ValidatedMarketPackage,
 };

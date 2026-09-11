@@ -256,7 +256,7 @@ describe('openBtwSessionInAuxPane', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
-      mode: 'agentic',
+      mode: 'Standard',
     });
     sessions.set('subagent-child', {
       sessionId: 'subagent-child',
@@ -291,7 +291,7 @@ describe('openBtwSessionInAuxPane', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
-      mode: 'agentic',
+      mode: 'Standard',
     });
     sessions.set('subagent-child', {
       sessionId: 'subagent-child',
@@ -320,7 +320,7 @@ describe('openBtwSessionInAuxPane', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
-      mode: 'agentic',
+      mode: 'Standard',
       remoteConnectionId: 'remote-1',
       remoteSshHost: 'host-1',
     });
@@ -336,7 +336,7 @@ describe('openBtwSessionInAuxPane', () => {
     expect(mocks.addExternalSession).toHaveBeenCalledWith(
       'subagent-child',
       expect.any(String),
-      'agentic',
+      'Standard',
       'D:\\workspace\\repo',
       expect.objectContaining({
         parentSessionId: 'parent-session',
@@ -360,7 +360,7 @@ describe('openBtwSessionInAuxPane', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
-      mode: 'agentic',
+      mode: 'Standard',
       remoteConnectionId: 'remote-1',
       remoteSshHost: 'host-1',
     });
@@ -398,7 +398,7 @@ describe('openBtwSessionInAuxPane', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
-      mode: 'agentic',
+      mode: 'Standard',
       remoteConnectionId: 'remote-current',
       remoteSshHost: 'host-current',
     });
@@ -429,7 +429,7 @@ describe('openBtwSessionInAuxPane', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
-      mode: 'agentic',
+      mode: 'Standard',
       remoteConnectionId: 'remote-1',
       remoteSshHost: 'host-1',
     });
@@ -460,7 +460,7 @@ describe('openBtwSessionInAuxPane', () => {
     sessions.set('parent-session', {
       sessionId: 'parent-session',
       workspacePath: 'D:\\workspace\\repo',
-      mode: 'agentic',
+      mode: 'Standard',
       remoteConnectionId: 'remote-1',
       remoteSshHost: 'host-1',
     });

@@ -1,7 +1,5 @@
 package com.openbitfun.mobile.core.feature.connection
 
-import com.openbitfun.mobile.core.feature.pairing.ConnectionLiveness
-import com.openbitfun.mobile.core.feature.pairing.PairingUiState
 
 /**
  * How far the link to a desktop has got.
@@ -85,27 +83,4 @@ public object ConnectionStatusPresenter {
      */
     public fun canReachSessions(phase: ConnectionPhase): Boolean =
         phase == ConnectionPhase.CONNECTED || phase == ConnectionPhase.RECONNECTING
-}
-
-/**
- * The phase a pairing state implies.
- *
- * A paired room reports its own liveness, so all three of [ConnectionPhase]'s
- * live values come from here: an announced health check is [ConnectionPhase.RECONNECTING]
- * and a failed one is [ConnectionPhase.FAILED]. The latter is still a *paired*
- * state — the room and its key are intact, which is why the shell keeps showing
- * the session list under an error heading rather than dropping back to the form.
- * What is still absent is an automatic re-pair (§11.11): an account room's
- * password is never persisted, so the user has to do that one by hand.
- */
-public fun PairingUiState.connectionPhase(): ConnectionPhase = when (this) {
-    PairingUiState.Idle -> ConnectionPhase.IDLE
-    PairingUiState.Connecting -> ConnectionPhase.CONNECTING
-    is PairingUiState.Paired -> when (liveness) {
-        ConnectionLiveness.LIVE -> ConnectionPhase.CONNECTED
-        ConnectionLiveness.CHECKING -> ConnectionPhase.RECONNECTING
-        ConnectionLiveness.LOST -> ConnectionPhase.FAILED
-    }
-
-    is PairingUiState.Failed -> ConnectionPhase.FAILED
 }

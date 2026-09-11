@@ -66,9 +66,24 @@ pub const PROJECT_SKILL_ROOTS: &[SkillRootSpec] = &[
         source_id: "agent-skills",
         source_label: "Agent Skills",
     },
+    SkillRootSpec {
+        parent: ".dsh",
+        subdir: "skills",
+        slot: "dsh",
+        source_id: "deepseek-harness",
+        source_label: "DeepSeek Harness",
+    },
+    SkillRootSpec {
+        parent: ".pi",
+        subdir: "skills",
+        slot: "pi",
+        source_id: "pi",
+        source_label: "PI",
+    },
 ];
 
 pub const USER_HOME_SKILL_ROOTS: &[SkillRootSpec] = &[
+    // New sources are appended below so existing persisted source ordering is stable.
     SkillRootSpec {
         parent: ".claude",
         subdir: "skills",
@@ -104,6 +119,20 @@ pub const USER_HOME_SKILL_ROOTS: &[SkillRootSpec] = &[
         source_id: "agent-skills",
         source_label: "Agent Skills",
     },
+    SkillRootSpec {
+        parent: ".dsh",
+        subdir: "skills",
+        slot: "home.dsh",
+        source_id: "deepseek-harness",
+        source_label: "DeepSeek Harness",
+    },
+    SkillRootSpec {
+        parent: ".pi/agent",
+        subdir: "skills",
+        slot: "home.pi",
+        source_id: "pi",
+        source_label: "PI",
+    },
 ];
 
 pub const USER_CONFIG_SKILL_ROOTS: &[SkillRootSpec] = &[SkillRootSpec {
@@ -118,6 +147,8 @@ pub(crate) fn skill_source_dialect(source_slot: &str) -> SkillSourceDialect {
     match source_slot {
         "claude" | "home.claude" => SkillSourceDialect::ClaudeCode,
         "codex" | "home.codex" => SkillSourceDialect::Codex,
+        "pi" | "home.pi" => SkillSourceDialect::Pi,
+        "dsh" | "home.dsh" => SkillSourceDialect::DeepSeekHarness,
         _ => SkillSourceDialect::AgentSkills,
     }
 }

@@ -55,13 +55,27 @@
   link、重复/大小写冲突路径和超限解压。
 - GitHub token 只用于读取公开 `{id,login,avatar_url}`，随后丢弃，不能下发给
   Web 或桌面客户端。
-- MiniApp 服务是 MiniApp 与 Skin 两个市场唯一的 GitHub 身份权威。Web 登录会为
+- 本服务是 MiniApp、Skin 和远控共用的 GitHub 身份权威，通过 `auth.openbitfun.com`
+  提供统一入口。Web 和桌面 OAuth 完成都为
   `/miniapp` 与 `/skin` 签发同一服务端 session 的独立 Path-scoped Cookie；Skin
   不保存 OAuth secret，退出登录必须撤销 session 并清除两组 Cookie。
 - 管理员身份每次请求按 GitHub 数字 ID 计算，不能依赖客户端声明。
 - `MARKET_WEB_SUBMISSIONS_ENABLED=false` 时，所有投稿写路由会在读取请求体前
   拒绝 Web Cookie 会话；Desktop Bearer 投稿、投稿历史读取和 Web 管理员审核
   保持可用。UI 隐藏不是这一边界的替代品。
+
+## 全局身份入口资源限制
+
+GitHub 授权启动与回调分别限制为每分钟 300 次，避免启动请求挤占完成授权的容量；
+认证请求最多并发 128 个，POST body 上限 16 KiB，读取期限 10 秒、处理期限 45 秒。
+GitHub HTTP 连接 / 总期限为 10 / 20 秒，单个 JSON 响应不超过 64 KiB。
+公开部署还需按真实来源配置反向代理限流和上游防护，不能把所有 Relay 代理用户
+误识别成同一个终端 IP。
+
+待完成 OAuth flow 和未过期桌面授权事务各有 8,192 条数据库原子上限；桌面事务
+与对应 OAuth flow 一起提交，拒绝新授权时不会留下半条记录。每五分钟清理过期
+认证状态，桌面授权事务在过期后一小时删除。用户、投稿和其他产品数据不在此清理
+范围内；尚未过期的已撤销 refresh token 继续保留，用于发现重放并撤销令牌族。
 
 ## 当前投稿入口与鉴权矩阵
 

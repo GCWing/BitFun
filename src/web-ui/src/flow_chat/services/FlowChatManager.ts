@@ -29,6 +29,9 @@ import {
   sessionBelongsToWorkspaceNavRow,
 } from '../utils/sessionOrdering';
 import { resolveSessionRelationship } from '../utils/sessionMetadata';
+import { createDefaultSessionTitleDescriptor } from '../utils/sessionTitle';
+import { i18nService } from '@/infrastructure/i18n';
+import { initializeSessionTitleMetadata } from './sessionTitleMetadata';
 
 import type {
   FlowChatContext,
@@ -647,6 +650,8 @@ export class FlowChatManager {
   }
 
   async createAcpChatSession(clientId: string, config: SessionConfig = {}): Promise<string> {
+    const surfaceScope = getActiveSurfaceScope();
+    const titleDescriptor = createDefaultSessionTitleDescriptor((key, options) => i18nService.t(key, options));
     const workspacePath =
       config.workspacePath?.trim() ||
       this.context.currentWorkspacePath?.trim();
@@ -665,8 +670,14 @@ export class FlowChatManager {
         workspacePath,
         remoteConnectionId: config.remoteConnectionId,
         remoteSshHost: config.remoteSshHost,
-        sessionName: `${clientId} ACP`,
+        sessionName: titleDescriptor.text,
       });
+
+      surfaceScope.assertCurrent('create ACP backend session');
+      const createdTitleDescriptor = await initializeSessionTitleMetadata(
+        response.sessionId, titleDescriptor, config.projectWorkspacePath || workspacePath,
+        surfaceScope, config.remoteConnectionId, config.remoteSshHost,
+      );
 
       this.context.flowChatStore.createSession(
         response.sessionId,
@@ -682,6 +693,7 @@ export class FlowChatManager {
         workspacePath,
         config.remoteConnectionId,
         config.remoteSshHost,
+        createdTitleDescriptor,
       );
 
       succeeded = true;

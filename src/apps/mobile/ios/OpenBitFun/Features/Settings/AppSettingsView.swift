@@ -49,16 +49,20 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
                         }
-                        SettingsGroup(title: "模型") {
-                            Button { model.generalConfigOpen = true } label: {
+                        SettingsGroup(title: "通知") {
+                            Button {
+                                Task { await TaskCompletionNotifier.manageNotifications() }
+                            } label: {
                                 SettingsValueRow(
-                                    icon: "square.grid.2x2",
-                                    title: "默认模型",
-                                    value: selectedModelName,
+                                    icon: "bell",
+                                    title: "任务完成通知",
+                                    value: "",
                                     showsChevron: true
                                 )
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("settings.notifications")
                         }
                         accountDevicesSection
                         SettingsGroup(title: "关于") {
@@ -103,9 +107,6 @@ struct SettingsView: View {
             if model.languagePickerOpen {
                 LanguagePickerSheet(model: model)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
-            } else if model.generalConfigOpen {
-                GeneralChatConfigSheet(model: model)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
             } else if accountOpen {
                 AccountSettingsView(model: model, onClose: { accountOpen = false })
                     .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -113,12 +114,11 @@ struct SettingsView: View {
         }
         .background(OpenBitFunTheme.page)
         .animation(.easeInOut(duration: 0.2), value: model.languagePickerOpen)
-        .animation(.easeInOut(duration: 0.2), value: model.generalConfigOpen)
         .animation(.easeInOut(duration: 0.2), value: accountOpen)
     }
 
     private var showsCurrentConnection: Bool {
-        model.remoteConnected || model.accountDeviceName != nil || model.directPairingDeviceName != nil
+        model.remoteConnected || model.accountDeviceName != nil
     }
 
     private var currentConnectionSection: some View {
@@ -132,7 +132,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(
                             model.accountDeviceName
-                                ?? model.directPairingDeviceName
+
                                 ?? model.localized("尚未连接桌面端")
                         )
                         .font(MobileDesignTypography.bodyLarge.font.weight(.medium))

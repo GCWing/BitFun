@@ -536,7 +536,7 @@ const MiniAppGalleryView: React.FC<MiniAppGalleryViewProps> = ({ tabs }) => {
                 data-openbitfun-component="miniapp-gallery-view"
                 data-openbitfun-part="categoryFilters"
               >
-                <SegmentedControl
+                <SegmentedControl size="md"
                   className="miniapp-gallery__categories"
                   options={categories.map((category) => {
                     const normalizedCategory = category.toLowerCase();

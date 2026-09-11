@@ -18,7 +18,7 @@ fn request(request_id: &str, project_id: &str) -> PermissionRequest {
         project_path: None,
         project_id: project_id.to_string(),
         session_id: "session-1".to_string(),
-        agent_id: "agentic".to_string(),
+        agent_id: "Standard".to_string(),
         action: "read".to_string(),
         resources: vec!["README.md".to_string()],
         save_resources: vec!["README.md".to_string()],

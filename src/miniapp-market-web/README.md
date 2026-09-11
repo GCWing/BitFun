@@ -195,3 +195,9 @@ pnpm run theme:color-audit:all
 
 完整的备份、精确 commit 发布、健康检查和回滚命令见
 [生产部署手册](../../deploy/miniapp-market/README.md)。
+
+GitHub sign-in uses `https://auth.openbitfun.com/sign-in`; desktop completion
+uses its standalone `/complete` page without marketplace navigation. The page
+is built from this frontend, while the registered OAuth callback remains on the
+market host so MiniApp and Skin receive their existing path-scoped session
+cookies. Legacy `/miniapp/auth/desktop-complete` links remain readable.

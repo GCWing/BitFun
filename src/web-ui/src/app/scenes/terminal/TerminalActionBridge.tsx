@@ -7,6 +7,9 @@ import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurfac
 import { isTerminalPathInside, normalizeTerminalPath } from '@/tools/terminal/services/terminalWorkspaceScope';
 import { notificationService } from '@/shared/notification-system';
 import { useI18n } from '@/infrastructure/i18n';
+import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
+import { useNavSceneStore } from '@/app/stores/navSceneStore';
+import type { ContentResourceScope } from '@/shared/types/contentResource';
 
 const log = createLogger('TerminalActionBridge');
 
@@ -16,38 +19,56 @@ export const TerminalActionBridge: FC = () => {
   const { workspacePath, workspace } = useCurrentWorkspace();
   const creatingRef = useRef(false);
   const workspaceKey = JSON.stringify([workspace?.id, workspace?.connectionId, workspace?.workspaceKind, workspacePath]);
-  const currentWorkspaceKey = useRef(workspaceKey);
-  currentWorkspaceKey.current = workspaceKey;
+  const currentWorkspace = useRef({ workspace, workspacePath, key: workspaceKey });
+  currentWorkspace.current = { workspace, workspacePath, key: workspaceKey };
 
   useEffect(() => {
     let active = true;
     const handleCreate = (event: Event) => {
       const detail = (event as CustomEvent<{
         workingDirectory?: string; workspacePath?: string; surfaceId?: string;
+        resourceScope?: ContentResourceScope;
       }>).detail;
+      const { workspace: activeWorkspace, workspacePath: activePath, key: activeKey } = currentWorkspace.current;
       const scope = getActiveSurfaceScope();
-      const remote = workspace?.workspaceKind === 'remote';
       if (detail?.surfaceId && detail.surfaceId !== scope.surfaceId) return;
-      if (detail?.workspacePath && normalizeTerminalPath(detail.workspacePath, remote) !== normalizeTerminalPath(workspacePath, remote)) return;
-      if (detail?.workingDirectory && !isTerminalPathInside(detail.workingDirectory, workspacePath, remote)) return;
-      if (remote && !workspace?.connectionId) {
+      const origin = detail?.resourceScope;
+      const target = origin
+        ? workspaceManager.getState().openedWorkspaces.get(origin.workspaceId ?? '')
+        : activeWorkspace;
+      if (origin && (origin.surfaceId !== scope.surfaceId || !target
+        || target.rootPath !== origin.workspacePath
+        || target.connectionId !== origin.remoteConnectionId)) return;
+      const targetPath = target?.rootPath ?? activePath;
+      const remote = target?.workspaceKind === 'remote';
+      if (detail?.workspacePath && normalizeTerminalPath(detail.workspacePath, remote) !== normalizeTerminalPath(targetPath, remote)) return;
+      if (detail?.workingDirectory && !isTerminalPathInside(detail.workingDirectory, targetPath, remote)) return;
+      if (remote && !target?.connectionId) {
         notificationService.error(t('nav.resources.unavailable'));
         return;
       }
+      const browseTarget = useNavSceneStore.getState().resourceWorkspace;
+      const isCurrent = () => active && scope.isCurrent() && (origin
+        ? useNavSceneStore.getState().resourceWorkspace === browseTarget
+          && workspaceManager.getState().openedWorkspaces.get(target!.id) === target
+        : currentWorkspace.current.key === activeKey);
       if (creatingRef.current) return;
       creatingRef.current = true;
 
       void createManualTerminalSession({
-        workspacePath: detail?.workingDirectory ?? workspacePath,
-        connectionId: workspace?.connectionId,
+        workspacePath: detail?.workingDirectory ?? targetPath,
+        connectionId: target?.connectionId,
       })
         .then((session) => {
-          if (!active || !scope.isCurrent() || currentWorkspaceKey.current !== workspaceKey) return;
-          openShellSessionTarget({ sessionId: session.id, sessionName: session.name });
+          if (!isCurrent()) return;
+          openShellSessionTarget({ sessionId: session.id, sessionName: session.name, scope: origin ?? {
+            surfaceId: scope.surfaceId, workspaceId: target?.id,
+            workspacePath: targetPath, remoteConnectionId: target?.connectionId,
+          } });
         })
         .catch((error) => {
           log.error('Failed to create terminal from global action', error);
-          if (active && scope.isCurrent() && currentWorkspaceKey.current === workspaceKey) notificationService.error(t('nav.resources.actionFailed', {
+          if (isCurrent()) notificationService.error(t('nav.resources.actionFailed', {
             error: error instanceof Error ? error.message : String(error),
           }));
         })
@@ -61,7 +82,7 @@ export const TerminalActionBridge: FC = () => {
       active = false;
       window.removeEventListener('terminal-create-requested', handleCreate);
     };
-  }, [t, workspace?.connectionId, workspace?.workspaceKind, workspaceKey, workspacePath]);
+  }, [t]);
 
   return null;
 };

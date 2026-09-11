@@ -353,7 +353,7 @@ fn active_dialog_turn_owns_agent_session_reply_suppression_facts() {
         Some("workspace".to_string()),
         Some("target-conn".to_string()),
         Some("target-host".to_string()),
-        "agentic".to_string(),
+        "Standard".to_string(),
         "run task".to_string(),
         Some(serde_json::json!({"kind": "session_message"})),
         DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
@@ -365,7 +365,7 @@ fn active_dialog_turn_owns_agent_session_reply_suppression_facts() {
     assert_eq!(turn.workspace_path(), Some("workspace"));
     assert_eq!(turn.remote_connection_id(), Some("target-conn"));
     assert_eq!(turn.remote_ssh_host(), Some("target-host"));
-    assert_eq!(turn.agent_type(), "agentic");
+    assert_eq!(turn.agent_type(), "Standard");
     assert_eq!(turn.user_input(), "run task");
     assert!(turn.user_message_metadata().is_some());
     assert!(turn.reply_route().is_some());
@@ -380,7 +380,7 @@ fn active_dialog_turn_does_not_suppress_non_agent_session_turns() {
         None,
         None,
         None,
-        "agentic".to_string(),
+        "Standard".to_string(),
         "user task".to_string(),
         None,
         DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
@@ -491,7 +491,7 @@ fn agent_session_reply_action_ignores_non_agent_session_turns() {
         Some("workspace".to_string()),
         None,
         None,
-        "agentic".to_string(),
+        "Standard".to_string(),
         "user task".to_string(),
         None,
         DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
@@ -704,7 +704,7 @@ fn agent_session_turn(source_session_id: &str) -> ActiveDialogTurn {
         Some("workspace".to_string()),
         Some("target-conn".to_string()),
         Some("target-host".to_string()),
-        "agentic".to_string(),
+        "Standard".to_string(),
         "run task".to_string(),
         Some(serde_json::json!({"kind": "session_message"})),
         DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),

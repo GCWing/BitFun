@@ -141,7 +141,7 @@ describe('MessageModule Session mutation admission', () => {
   it('rejects an ordinary submission while Session history is mutating', async () => {
     const session = {
       sessionId: 'session-mutating',
-      mode: 'agentic',
+      mode: 'Standard',
       dialogTurns: [],
       config: {},
       titleStatus: 'generated',
@@ -175,7 +175,7 @@ describe('MessageModule session writer conflict', () => {
   function conflictContext(sessionId: string) {
     const session = {
       sessionId,
-      mode: 'agentic',
+      mode: 'Standard',
       dialogTurns: [] as any[],
       config: { modelName: 'primary' },
       titleStatus: 'generated',
@@ -228,7 +228,7 @@ describe('MessageModule session writer conflict', () => {
   it('keeps only the latest explicit retry for one conflicted session', async () => {
     const session = {
       sessionId: 'session-1',
-      mode: 'agentic',
+      mode: 'Standard',
       dialogTurns: [],
       config: {},
       titleStatus: 'generated',
@@ -632,7 +632,7 @@ describe('MessageModule cancellation', () => {
     const session: any = {
       sessionId: 'session-interrupted',
       sessionKind: 'normal',
-      mode: 'agentic',
+      mode: 'Standard',
       titleStatus: 'generated',
       dialogTurns: [{
         id: 'interrupted-turn',
@@ -740,7 +740,7 @@ describe('MessageModule detached dispatch', () => {
       sessionId: 'dispatch-session',
       title: 'New Chat',
       titleStatus: 'generated',
-      mode: 'agentic',
+      mode: 'Standard',
       dialogTurns: [] as any[],
       workspacePath: '/controller/repo',
       projectWorkspacePath: '/controller/repo',
@@ -817,7 +817,7 @@ describe('MessageModule detached dispatch', () => {
     expect(session.dialogTurns[0]).toMatchObject({
       id: 'dispatch_pending_job-1',
       sessionId: 'dispatch-session',
-      agentType: 'agentic',
+      agentType: 'Standard',
       userMessage: {
         content: 'run remote checks',
         metadata: {
@@ -851,7 +851,7 @@ describe('MessageModule detached dispatch', () => {
       baseRef: 'HEAD',
       jobId: 'job-1',
       sessionId: 'dispatch-session',
-      agentType: 'agentic',
+      agentType: 'Standard',
       prompt: 'expanded remote prompt',
       approvalPolicy: 'reject-and-report',
       model: undefined,
@@ -960,7 +960,7 @@ describe('MessageModule model synchronization', () => {
       },
     };
 
-    await syncSessionModelSelection(context, 'session-primary', 'agentic');
+    await syncSessionModelSelection(context, 'session-primary', 'Standard');
 
     expect(updateSessionModelName).not.toHaveBeenCalled();
     expect(updateSessionMaxContextTokens).toHaveBeenCalledWith('session-primary', 32000);
@@ -992,7 +992,7 @@ describe('MessageModule model synchronization', () => {
       },
     };
 
-    await syncSessionModelSelection(context, 'legacy-session', 'agentic');
+    await syncSessionModelSelection(context, 'legacy-session', 'Standard');
 
     expect(updateSessionModelName).toHaveBeenCalledWith('legacy-session', 'model-b');
     expect(updateSessionMaxContextTokens).toHaveBeenCalledWith('legacy-session', 64000);
@@ -1019,7 +1019,7 @@ describe('MessageModule device surface switch', () => {
   function switchingContext(sessionId: string, options?: { switchAfterTransition?: boolean }) {
     const session = {
       sessionId,
-      mode: 'agentic',
+      mode: 'Standard',
       dialogTurns: [] as any[],
       config: { modelName: 'primary', workspacePath: '/repo' },
       titleStatus: 'generated',

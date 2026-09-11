@@ -615,7 +615,7 @@ const CreateAgentPage: React.FC = () => {
                             onClick={() => setKind(candidateKind)}
                           >
                             {candidateKind === 'mode'
-                              ? t('filters.mode')
+                              ? t('filters.agent')
                               : t('filters.subagent')}
                           </button>
                         </Tooltip>

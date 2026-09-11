@@ -13,6 +13,8 @@ pub const PROJECT_AGENT_PROFILES_FILE_NAME: &str = "agent_profiles.json";
 pub struct ProjectAgentProfileSkillConfig {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub disabled_project_skills: Vec<String>,
+    #[serde(flatten)]
+    pub extensions: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -20,6 +22,8 @@ pub struct ProjectAgentProfileSkillConfig {
 pub struct ProjectAgentProfileSubagentConfig {
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     pub overrides: ParentSubagentOverrideConfig,
+    #[serde(flatten)]
+    pub extensions: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -29,25 +33,27 @@ pub struct ProjectAgentProfileEntry {
     pub skills: ProjectAgentProfileSkillConfig,
     #[serde(skip_serializing_if = "ProjectAgentProfileSubagentConfig::is_empty")]
     pub subagents: ProjectAgentProfileSubagentConfig,
+    #[serde(flatten)]
+    pub extensions: serde_json::Map<String, serde_json::Value>,
 }
 
 pub type ProjectAgentProfilesDocument = HashMap<String, ProjectAgentProfileEntry>;
 
 impl ProjectAgentProfileSkillConfig {
     fn is_empty(&self) -> bool {
-        self.disabled_project_skills.is_empty()
+        self.disabled_project_skills.is_empty() && self.extensions.is_empty()
     }
 }
 
 impl ProjectAgentProfileSubagentConfig {
     fn is_empty(&self) -> bool {
-        self.overrides.is_empty()
+        self.overrides.is_empty() && self.extensions.is_empty()
     }
 }
 
 impl ProjectAgentProfileEntry {
     fn is_empty(&self) -> bool {
-        self.skills.is_empty() && self.subagents.is_empty()
+        self.skills.is_empty() && self.subagents.is_empty() && self.extensions.is_empty()
     }
 }
 
@@ -108,8 +114,14 @@ pub fn normalize_project_agent_profiles_document(
 pub fn deserialize_project_agent_profiles_document(
     content: &str,
 ) -> OpenBitFunResult<ProjectAgentProfilesDocument> {
+    let raw = serde_json::from_str(content)?;
+    let migrated =
+        openbitfun_config_contracts::agent_identity_migration::canonicalize_agent_profile_keys(
+            &raw,
+        )
+        .map_err(OpenBitFunError::config)?;
     Ok(normalize_project_agent_profiles_document(
-        serde_json::from_str(content)?,
+        serde_json::from_value(serde_json::Value::Object(migrated))?,
     ))
 }
 
@@ -117,7 +129,7 @@ pub fn serialize_project_agent_profiles_document(
     document: &ProjectAgentProfilesDocument,
 ) -> OpenBitFunResult<Vec<u8>> {
     Ok(serde_json::to_vec_pretty(
-        &normalize_project_agent_profiles_document(document.clone()),
+        &deserialize_project_agent_profiles_document(&serde_json::to_string(document)?)?,
     )?)
 }
 
@@ -255,4 +267,53 @@ pub fn set_project_subagent_override_state(
         }
     }
     set_project_subagent_overrides(document, profile_id, overrides)
+}
+
+#[cfg(test)]
+mod identity_migration_tests {
+    use super::*;
+
+    #[test]
+    fn legacy_project_overrides_survive_canonical_round_trip() {
+        let old = r#"{"coding_shared":{"skills":{"disabled_project_skills":["project::docs"]}},"Ultra":{"subagents":{"overrides":{"SwarmWorker":"disabled"}}}}"#;
+        let document = deserialize_project_agent_profiles_document(old).unwrap();
+        assert_eq!(
+            get_disabled_project_skills(&document, "Standard"),
+            vec!["project::docs"]
+        );
+        assert!(get_project_subagent_overrides(&document, "Ultimate").contains_key("SwarmWorker"));
+        let bytes = serialize_project_agent_profiles_document(&document).unwrap();
+        let written = String::from_utf8(bytes).unwrap();
+        assert!(!written.contains("coding_shared"));
+        assert!(!written.contains("Ultra"));
+        assert_eq!(
+            deserialize_project_agent_profiles_document(&written).unwrap(),
+            document
+        );
+    }
+
+    #[test]
+    fn ambiguous_project_aliases_are_reported_without_resetting_config() {
+        let old = r#"{"agentic":{"skills":{"disabled_project_skills":["a"]}},"Standard":{"skills":{"disabled_project_skills":["b"]}}}"#;
+        assert!(deserialize_project_agent_profiles_document(old).is_err());
+    }
+
+    #[test]
+    fn migration_and_skill_reset_preserve_unknown_project_fields() {
+        let old = r#"{"coding_shared":{"future_policy":true,"skills":{"disabled_project_skills":["project::docs"],"future_skill_policy":false},"subagents":{"future_delegation_policy":["x"]}}}"#;
+        let mut document = deserialize_project_agent_profiles_document(old).unwrap();
+        set_disabled_project_skills(&mut document, "Standard", Vec::new());
+        let written: serde_json::Value =
+            serde_json::from_slice(&serialize_project_agent_profiles_document(&document).unwrap())
+                .unwrap();
+        assert_eq!(written["Standard"]["future_policy"], true);
+        assert_eq!(written["Standard"]["skills"]["future_skill_policy"], false);
+        assert_eq!(
+            written["Standard"]["subagents"]["future_delegation_policy"],
+            serde_json::json!(["x"])
+        );
+        assert!(written["Standard"]["skills"]
+            .get("disabled_project_skills")
+            .is_none());
+    }
 }

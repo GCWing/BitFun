@@ -32,7 +32,6 @@ import {
   createTextSessionTitleDescriptor,
   createDefaultSessionTitleDescriptor,
   deriveSessionTitleStateFromMetadata,
-  getNextDefaultSessionTitleCount,
   resolveSessionTitle,
 } from '../../utils/sessionTitle';
 import { buildCreateSessionRelationship } from '../../utils/sessionMetadata';
@@ -48,9 +47,11 @@ import {
   recordHistorySessionDiagnosticEvent,
 } from '../historySessionDiagnostics';
 import {
-  DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
-  normalizeUserDefaultChatInputModeId,
-} from '../../utils/chatInputMode';
+  CHAT_INPUT_MODE_PREFERENCE_CONFIG_PATH,
+  normalizeChatInputModePreference,
+  resolveConfiguredChatInputDefaultModeId,
+} from '../ChatInputModePreferenceService';
+import type { AppFlowChatConfig } from '@/infrastructure/config/types';
 import {
   requireSessionProjectWorkspacePath,
   sessionProjectWorkspacePath,
@@ -448,22 +449,8 @@ export function preloadHistoricalSessionForOpen(
   });
 }
 
-type SessionDisplayMode = 'code' | 'cowork' | 'claw';
-
 const isAssistantWorkspace = (workspace?: WorkspaceInfo | null): boolean => {
   return workspace?.workspaceKind === WorkspaceKind.Assistant;
-};
-
-const normalizeSessionDisplayMode = (
-  mode?: string,
-  workspace?: WorkspaceInfo | null
-): SessionDisplayMode => {
-  if (isAssistantWorkspace(workspace)) return 'claw';
-  if (!mode) return 'code';
-  const normalizedMode = mode.toLowerCase();
-  if (normalizedMode === 'cowork') return 'cowork';
-  if (normalizedMode === 'claw') return 'claw';
-  return 'code';
 };
 
 const resolveSessionWorkspacePath = (
@@ -555,18 +542,23 @@ export const resolveAgentTypeForSessionCreation = async (
   }
 
   const normalizedRequestedMode = requestedMode?.trim();
-  if (normalizedRequestedMode && normalizedRequestedMode !== 'agentic') {
+  // A provided mode is an explicit caller decision. Only an omitted mode asks
+  // this owner to resolve the user's default preference. In particular,
+  // `agentic` is the real Standard Harness id, not a default-mode sentinel.
+  if (normalizedRequestedMode) {
     return normalizedRequestedMode;
   }
 
   try {
-    const configuredDefaultMode = normalizeUserDefaultChatInputModeId(
-      await configAPI.getConfig(DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH, {
-        skipRetryOnNotFound: true,
-      }),
+    const configuredDefaultMode = resolveConfiguredChatInputDefaultModeId(
+      normalizeChatInputModePreference(
+        await configAPI.getConfig(CHAT_INPUT_MODE_PREFERENCE_CONFIG_PATH, {
+          skipRetryOnNotFound: true,
+        }) as AppFlowChatConfig | undefined,
+      ),
     );
     if (!configuredDefaultMode) {
-      return normalizedRequestedMode || 'agentic';
+      return 'Standard';
     }
 
     const availableModes = await agentAPI.getAvailableModes({
@@ -590,7 +582,7 @@ export const resolveAgentTypeForSessionCreation = async (
     });
   }
 
-  return normalizedRequestedMode || 'agentic';
+  return 'Standard';
 };
 
 function requireSessionWorkspacePath(
@@ -630,7 +622,6 @@ export async function createChatSession(
         : undefined;
     const agentType = await resolveAgentTypeForSessionCreation(mode, workspace);
     surfaceScope.assertCurrent('resolve session creation mode');
-    const sessionMode = normalizeSessionDisplayMode(agentType, workspace);
     const workspaceCreationKey =
       workspace?.id?.trim()
         ? workspace.id
@@ -655,19 +646,7 @@ export async function createChatSession(
     // activation can rerun initialization while model config is still loading.
     const createPromise = Promise.resolve().then(async () => {
       surfaceScope.assertCurrent('start session creation');
-      const sameModeCount = getNextDefaultSessionTitleCount(
-        context.flowChatStore.getState().sessions.values(),
-        {
-          mode: sessionMode,
-          workspaceId: workspace?.id,
-          workspacePath,
-          remoteConnectionId,
-          remoteSshHost,
-        },
-      );
       const titleDescriptor = createDefaultSessionTitleDescriptor(
-        sessionMode,
-        sameModeCount,
         (key, options) => i18nService.t(key, options),
       );
       const sessionName = titleDescriptor.text;
@@ -1202,7 +1181,7 @@ export async function ensureBackendSession(
       sessionName:
         resolveSessionTitle(latestSession, (key, options) => i18nService.t(key, options)) ||
         `Session ${sessionId.slice(0, 8)}`,
-      agentType: latestSession.mode || 'agentic',
+      agentType: latestSession.mode || 'Standard',
       workspacePath,
       projectWorkspacePath,
       executionTarget:
@@ -1254,7 +1233,7 @@ export async function retryCreateBackendSession(
     sessionName:
       resolveSessionTitle(session, (key, options) => i18nService.t(key, options)) ||
       `Session ${sessionId.slice(0, 8)}`,
-    agentType: session.mode || 'agentic',
+    agentType: session.mode || 'Standard',
     workspacePath,
     projectWorkspacePath,
     executionTarget:

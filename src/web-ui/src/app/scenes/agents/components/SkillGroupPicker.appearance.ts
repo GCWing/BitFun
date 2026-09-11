@@ -2,11 +2,11 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 
 export const skillGroupPickerAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'skill-group-picker',
+  componentAttribute: 'data-openbitfun-product-component',
   parts: [
     { id: 'root' }, { id: 'head' }, { id: 'sections' }, { id: 'section' },
     { id: 'group' }, { id: 'groupHeader' }, { id: 'groupActions' },
-    { id: 'tokenGrid' }, { id: 'token' }, { id: 'manager' },
-    { id: 'managerEditor' }, { id: 'managerList' }, { id: 'managerGroup' },
+    { id: 'tokenGrid' }, { id: 'token' },
     { id: 'summary' }, { id: 'summaryGroup' }, { id: 'empty' },
   ],
   states: [

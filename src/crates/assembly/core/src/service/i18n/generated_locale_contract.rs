@@ -69,23 +69,48 @@ pub const GENERATED_LOCALE_CONTRACT: &[GeneratedLocaleContractEntry] = &[
 pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
-        key: "agents.claw",
-        value: "Claw",
+        key: "agents.Claw",
+        value: "助理",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
-        key: "agents.code",
-        value: "代码会话",
+        key: "agents.ComputerUse",
+        value: "电脑操作",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
-        key: "agents.cowork",
-        value: "协作会话",
+        key: "agents.Cowork",
+        value: "办公协作",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhCN,
+        key: "agents.Creative",
+        value: "创造",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhCN,
+        key: "agents.DeepResearch",
+        value: "深度研究",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
         key: "agents.default",
         value: "默认助手",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhCN,
+        key: "agents.Minimal",
+        value: "极简",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhCN,
+        key: "agents.Standard",
+        value: "标准",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhCN,
+        key: "agents.Ultimate",
+        value: "极致",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
@@ -111,11 +136,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
         locale: LocaleId::ZhCN,
         key: "connectionMethods.lan",
         value: "局域网",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::ZhCN,
-        key: "connectionMethods.ngrok",
-        value: "Ngrok",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
@@ -146,11 +166,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
         locale: LocaleId::ZhCN,
         key: "features.workspace",
         value: "工作区",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::ZhCN,
-        key: "modes.agentic",
-        value: "代理模式",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
@@ -239,23 +254,48 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
-        key: "agents.claw",
-        value: "Claw",
+        key: "agents.Claw",
+        value: "助理",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
-        key: "agents.code",
-        value: "程式碼會話",
+        key: "agents.ComputerUse",
+        value: "電腦操作",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
-        key: "agents.cowork",
-        value: "協作會話",
+        key: "agents.Cowork",
+        value: "辦公協作",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhTW,
+        key: "agents.Creative",
+        value: "創造",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhTW,
+        key: "agents.DeepResearch",
+        value: "深度研究",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
         key: "agents.default",
         value: "預設助手",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhTW,
+        key: "agents.Minimal",
+        value: "極簡",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhTW,
+        key: "agents.Standard",
+        value: "標準",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::ZhTW,
+        key: "agents.Ultimate",
+        value: "極致",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
@@ -281,11 +321,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
         locale: LocaleId::ZhTW,
         key: "connectionMethods.lan",
         value: "區域網路",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::ZhTW,
-        key: "connectionMethods.ngrok",
-        value: "Ngrok",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
@@ -316,11 +351,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
         locale: LocaleId::ZhTW,
         key: "features.workspace",
         value: "工作區",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::ZhTW,
-        key: "modes.agentic",
-        value: "代理模式",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
@@ -409,23 +439,48 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
-        key: "agents.claw",
-        value: "Claw",
+        key: "agents.Claw",
+        value: "Assistant",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
-        key: "agents.code",
-        value: "Code Session",
+        key: "agents.ComputerUse",
+        value: "Computer Use",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
-        key: "agents.cowork",
-        value: "Cowork Session",
+        key: "agents.Cowork",
+        value: "Cowork",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::EnUS,
+        key: "agents.Creative",
+        value: "Creative",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::EnUS,
+        key: "agents.DeepResearch",
+        value: "Deep Research",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
         key: "agents.default",
         value: "Default Assistant",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::EnUS,
+        key: "agents.Minimal",
+        value: "Minimal",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::EnUS,
+        key: "agents.Standard",
+        value: "Standard",
+    },
+    GeneratedSharedTermEntry {
+        locale: LocaleId::EnUS,
+        key: "agents.Ultimate",
+        value: "Ultimate",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
@@ -451,11 +506,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
         locale: LocaleId::EnUS,
         key: "connectionMethods.lan",
         value: "LAN",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::EnUS,
-        key: "connectionMethods.ngrok",
-        value: "Ngrok",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
@@ -486,11 +536,6 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
         locale: LocaleId::EnUS,
         key: "features.workspace",
         value: "Workspace",
-    },
-    GeneratedSharedTermEntry {
-        locale: LocaleId::EnUS,
-        key: "modes.agentic",
-        value: "Agentic Mode",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,

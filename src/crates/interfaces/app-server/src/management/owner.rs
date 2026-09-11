@@ -19,13 +19,11 @@ use openbitfun_app_server_protocol::worktree::*;
 use openbitfun_core::service::config::model_projection::{
     model_catalog_projection, model_edit_projection, model_list_projection, selector_is_unset,
 };
-use openbitfun_core::service::remote_connect::account_runtime::{
-    AccountRuntime, AccountSyncProgress, AccountSyncStatus,
-};
+use openbitfun_core::service::remote_connect::account_runtime::AccountRuntime;
 
 use super::{
     AppManagementCapabilities, AppManagementError, AppManagementResult, ACCOUNT_CAPABILITY,
-    SETTINGS_SYNC_CAPABILITY, WORKTREES_CAPABILITY,
+    WORKTREES_CAPABILITY,
 };
 
 /// Management adapter shared by App Server, Embedded, and local Shared Hosts.
@@ -751,8 +749,6 @@ impl AppManagementService {
                 openbitfun_app_server_protocol::app::CapabilityAvailability::Unavailable {
                     reason: reason.clone(),
                 };
-            capabilities.settings_sync =
-                openbitfun_app_server_protocol::app::CapabilityAvailability::Unavailable { reason };
         }
         if !self.local_worktrees_enabled {
             capabilities.worktrees =
@@ -797,6 +793,32 @@ impl AppManagementService {
         ))
     }
 
+    pub async fn account_github_start(
+        &self,
+        _request: AccountGitHubStartRequest,
+    ) -> AppManagementResult<AccountGitHubStartResponse> {
+        let authorization = self
+            .account_runtime(ACCOUNT_CAPABILITY)?
+            .start_github_auth()
+            .await
+            .map_err(internal_account_error)?;
+        Ok(AccountGitHubStartResponse { authorization })
+    }
+
+    pub async fn account_github_poll(
+        &self,
+        request: AccountGitHubPollRequest,
+    ) -> AppManagementResult<AccountGitHubPollResponse> {
+        let result = self
+            .account_runtime(ACCOUNT_CAPABILITY)?
+            .poll_github_auth(request.transaction_id)
+            .await
+            .map_err(internal_account_error)?;
+        Ok(AccountGitHubPollResponse {
+            status: result.status,
+        })
+    }
+
     pub async fn account_login(
         &self,
         request: AccountLoginRequest,
@@ -804,41 +826,15 @@ impl AppManagementService {
         validate_account_operation_id(&request.operation_id)?;
         let result = self
             .account_runtime(ACCOUNT_CAPABILITY)?
-            .login_with_credentials(&request.relay_url, &request.username, &request.password)
+            .login_with_identity()
             .await
-            .map_err(|error| account_error(error, &request))?;
+            .map_err(|error| internal_account_error(error))?;
         let status_message = account_login_status_message(&result);
         Ok(AccountLoginResponse {
             user_id: result.user_id,
             relay_url: result.relay_url,
-            has_cloud_settings: result.has_cloud_settings,
             status_message,
         })
-    }
-
-    pub async fn account_finalize_login(
-        &self,
-        request: AccountFinalizeLoginRequest,
-    ) -> AppManagementResult<AccountSnapshotResponse> {
-        validate_account_operation_id(&request.operation_id)?;
-        let account = self.account_runtime(ACCOUNT_CAPABILITY)?;
-        account
-            .finalize_login_after_sync_choice()
-            .await
-            .map_err(internal_account_error)?;
-        if !account
-            .start_auto_sync_background(
-                request.operation_id,
-                request.choice == AccountSyncChoice::Local,
-                PathBuf::from(request.workspace_path),
-            )
-            .await
-        {
-            return Err(AppManagementError::invalid_request(
-                "Account settings sync is already in progress",
-            ));
-        }
-        Ok(project_account_snapshot(account.snapshot().await))
     }
 
     pub async fn account_logout(
@@ -848,77 +844,7 @@ impl AppManagementService {
         validate_account_operation_id(&request.operation_id)?;
         let account = self.account_runtime(ACCOUNT_CAPABILITY)?;
         account.logout().await.map_err(internal_account_error)?;
-        account.mark_sync_cancelled(request.operation_id).await;
         Ok(project_account_snapshot(account.snapshot().await))
-    }
-
-    pub async fn settings_sync_start(
-        &self,
-        request: SettingsSyncStartRequest,
-    ) -> AppManagementResult<SettingsSyncResponse> {
-        validate_account_operation_id(&request.operation_id)?;
-        let account = self.account_runtime(SETTINGS_SYNC_CAPABILITY)?;
-        if !account.is_logged_in().await {
-            return Err(AppManagementError::invalid_request(
-                "Account login must be finalized before settings sync starts",
-            ));
-        }
-        if !account
-            .start_auto_sync_background(
-                request.operation_id,
-                request.is_first_login,
-                PathBuf::from(request.workspace_path),
-            )
-            .await
-        {
-            return Err(AppManagementError::invalid_request(
-                "Account settings sync is already in progress",
-            ));
-        }
-        Ok(SettingsSyncResponse {
-            progress: project_sync_progress(account.current_sync_progress().await),
-        })
-    }
-
-    pub async fn settings_sync_snapshot(
-        &self,
-        request: SettingsSyncSnapshotRequest,
-    ) -> AppManagementResult<SettingsSyncResponse> {
-        let _ = request;
-        let progress = self
-            .account_runtime(SETTINGS_SYNC_CAPABILITY)?
-            .current_sync_progress()
-            .await;
-        Ok(SettingsSyncResponse {
-            progress: project_sync_progress(progress),
-        })
-    }
-
-    pub async fn settings_sync_cancel(
-        &self,
-        request: SettingsSyncCancelRequest,
-    ) -> AppManagementResult<SettingsSyncResponse> {
-        validate_account_operation_id(&request.operation_id)?;
-        let progress = self
-            .account_runtime(SETTINGS_SYNC_CAPABILITY)?
-            .cancel_sync(request.operation_id)
-            .await
-            .map_err(internal_account_error)?;
-        Ok(SettingsSyncResponse {
-            progress: project_sync_progress(progress),
-        })
-    }
-
-    pub async fn settings_sync_local_changed(
-        &self,
-        request: SettingsSyncLocalChangedRequest,
-    ) -> AppManagementResult<SettingsSyncResponse> {
-        validate_account_operation_id(&request.operation_id)?;
-        let account = self.account_runtime(SETTINGS_SYNC_CAPABILITY)?;
-        account.notify_local_settings_changed();
-        Ok(SettingsSyncResponse {
-            progress: project_sync_progress(account.current_sync_progress().await),
-        })
     }
 
     pub async fn native_hook_overview(
@@ -1667,7 +1593,6 @@ fn project_account_snapshot(
 ) -> AccountSnapshotResponse {
     AccountSnapshotResponse {
         logged_in: snapshot.logged_in,
-        pending_sync_choice: snapshot.pending_sync_choice,
         info: snapshot.info.map(|info| AccountInfo {
             user_id: info.user_id,
             relay_url: info.relay_url,
@@ -1683,40 +1608,12 @@ fn project_account_snapshot(
                 online: device.online,
             })
             .collect(),
-        sync: project_sync_progress(snapshot.sync),
-    }
-}
-
-fn project_sync_progress(progress: AccountSyncProgress) -> SettingsSyncProgress {
-    SettingsSyncProgress {
-        operation_id: progress.operation_id,
-        status: match progress.status {
-            AccountSyncStatus::Idle => SettingsSyncStatus::Idle,
-            AccountSyncStatus::Syncing => SettingsSyncStatus::Syncing,
-            AccountSyncStatus::Done => SettingsSyncStatus::Done,
-            AccountSyncStatus::Failed => SettingsSyncStatus::Failed,
-            AccountSyncStatus::Cancelled => SettingsSyncStatus::Cancelled,
-        },
-        phase: progress.phase,
-        percent: progress.percent,
-        current: progress.current,
-        total: progress.total,
-        detail: progress.detail,
-        error: progress.error,
-        settings_synced: progress.settings_synced,
-        sessions_exported: progress.sessions_exported,
     }
 }
 
 fn account_login_status_message(
     result: &openbitfun_core::service::remote_connect::account_runtime::AccountLoginResult,
 ) -> String {
-    if result.has_cloud_settings {
-        return format!(
-            "Authenticated as user {} on {}. Choose cloud or local settings to finish login.",
-            result.user_id, result.relay_url
-        );
-    }
     if result.routing_connected {
         format!(
             "Logged in as user {} on {}. Device routing connected.",
@@ -1746,16 +1643,6 @@ fn validate_account_operation_id(operation_id: &str) -> AppManagementResult<()> 
     valid
         .then_some(())
         .ok_or_else(|| AppManagementError::invalid_request("Account operation ID is invalid"))
-}
-
-fn account_error(error: anyhow::Error, request: &AccountLoginRequest) -> AppManagementError {
-    let mut message = error.to_string();
-    for secret in [&request.relay_url, &request.username, &request.password] {
-        if !secret.is_empty() {
-            message = message.replace(secret, "<redacted>");
-        }
-    }
-    AppManagementError::internal(bounded_error(message))
 }
 
 fn internal_account_error(error: anyhow::Error) -> AppManagementError {

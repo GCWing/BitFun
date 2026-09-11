@@ -28,7 +28,7 @@ impl SessionControlAction {
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub enum SessionControlAgentType {
-    #[serde(rename = "agentic", alias = "Agentic", alias = "AGENTIC")]
+    #[serde(rename = "Standard", alias = "Standard", alias = "AGENTIC")]
     Agentic,
     #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
     Cowork,
@@ -43,7 +43,7 @@ pub enum SessionControlAgentType {
 impl SessionControlAgentType {
     pub const fn as_str(&self) -> &'static str {
         match self {
-            Self::Agentic => "agentic",
+            Self::Agentic => "Standard",
             Self::Cowork => "Cowork",
             Self::DeepResearch => "DeepResearch",
         }
@@ -131,7 +131,7 @@ pub fn session_control_agent_type_or_default(
 ) -> String {
     agent_type
         .map(|agent_type| agent_type.as_str().to_string())
-        .unwrap_or_else(|| "agentic".to_string())
+        .unwrap_or_else(|| "Standard".to_string())
 }
 
 pub fn session_control_creator_marker(creator_session_id: &str) -> String {

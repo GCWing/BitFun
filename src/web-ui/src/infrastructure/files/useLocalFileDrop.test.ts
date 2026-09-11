@@ -34,6 +34,32 @@ describe('local file drop controller', () => {
     expect(onDropPaths).toHaveBeenCalledOnce();
   });
 
+  it('shows hover on entry, clears it outside the pane and after a drop', async () => {
+    const { controller, onDragOver } = setup();
+    await controller.handle({ type: 'enter', paths: ['/tmp/a'], position: { x: 20, y: 20 } });
+    expect(onDragOver).toHaveBeenLastCalledWith(true);
+    await controller.handle({ type: 'over', position: { x: 100, y: 100 } });
+    expect(onDragOver).toHaveBeenLastCalledWith(false);
+    await controller.handle({ type: 'over', position: { x: 20, y: 20 } });
+    await controller.handle({ type: 'drop', paths: ['/tmp/a'], position: { x: 20, y: 20 } });
+    expect(onDragOver).toHaveBeenLastCalledWith(false);
+  });
+
+  it('does not restore hover when a delayed hit test finishes after leave', async () => {
+    let resolveScale!: (scale: number) => void;
+    const scale = new Promise<number>(resolve => { resolveScale = resolve; });
+    const onDragOver = vi.fn();
+    const controller = createLocalFileDropController({
+      getTarget: () => target, getScaleFactor: () => scale,
+      isEnabled: () => true, onDragOver, onDropPaths: vi.fn(),
+    });
+    const entering = controller.handle({ type: 'enter', paths: ['/tmp/a'], position: { x: 20, y: 20 } });
+    await controller.handle({ type: 'leave' });
+    resolveScale(1);
+    await entering;
+    expect(onDragOver).toHaveBeenCalledExactlyOnceWith(false);
+  });
+
   it('clears hover state on leave', async () => {
     const { controller, onDragOver } = setup();
     await controller.handle({ type: 'over', position: { x: 20, y: 20 } });

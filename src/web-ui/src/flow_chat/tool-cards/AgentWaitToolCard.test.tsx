@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { FlowToolItem, Session, ToolCardConfig } from '../types/flow-chat';
-import { AgentWaitToolCard, shouldShowAgentWaitSteeringHint } from './AgentWaitToolCard';
+import { AgentWaitToolCard } from './AgentWaitToolCard';
+import { shouldShowAgentWaitSteeringHint } from './agentWaitSteeringHint';
 
 const { getState } = vi.hoisted(() => ({ getState: vi.fn() }));
 

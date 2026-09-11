@@ -292,10 +292,6 @@
     opacity: 1;
   }
   
-  &:active {
-    transform: scale(0.97);
-  }
-
   &:focus-visible {
     outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent);
     outline-offset: 1px;

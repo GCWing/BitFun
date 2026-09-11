@@ -62,7 +62,7 @@ test("form grouping styles consume only shared public composition tokens", async
   assert.match(styles, /--openbitfun-layout-form-section-gap/);
   assert.match(styles, /--openbitfun-layout-field-group-radius/);
   assert.match(styles, /--openbitfun-layout-field-group-row-padding-block/);
-  assert.match(styles, /--openbitfun-color-surface-tertiary/);
+  assert.match(styles, /--openbitfun-color-field-group-background/);
   assert.match(styles, /--openbitfun-color-border-subtle/);
 });
 

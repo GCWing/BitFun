@@ -15,8 +15,8 @@ use std::time::{Duration, Instant, SystemTime};
 use tar::Archive;
 
 const GITHUB_MANIFEST: &str =
-    "https://github.com/GCWing/OpenBitFun/releases/latest/download/linux-binaries.json";
-const OPENBITFUN_MANIFEST: &str = "https://openbitfun.com/release/linux-binaries.json";
+    "https://github.com/GCWing/OpenBitFun/releases/latest/download/linux-binaries-v1.json";
+const OPENBITFUN_MANIFEST: &str = "https://openbitfun.com/release/linux-binaries-v1.json";
 const AUTO_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 /// Source-selection tuning. Mirrors the relay deploy path in

@@ -20,6 +20,7 @@ export struct RemoteControlSettingsSheet {
   @Param desktopId: string = '';
   @Param userId: string = '';
   @Param accountUsername: string = '';
+  @Param accountAvatarUrl: string = '';
   @Param accountUserId: string = '';
   @Param deviceId: string = '';
   @Param controlTargetType: string = 'none';
@@ -31,7 +32,8 @@ export struct RemoteControlSettingsSheet {
   @Event onClose: () => void = () => {};
   @Event onOpenAccount: () => void = () => {};
   @Event onAddConnection: () => void = () => {};
-  @Event cloudLogin: (relayUrl: string, username: string, password: string) => Promise<string> = async (_relayUrl: string, _username: string, _password: string): Promise<string> => '';
+  @Event cloudCancelLogin: () => void = () => {};
+  @Event cloudLogin: () => Promise<string> = async (): Promise<string> => '';
   @Event cloudLogout: () => Promise<void> = async (): Promise<void> => {};
   @Event cloudListDevices: () => Promise<CloudAccountDevice[]> = async (): Promise<CloudAccountDevice[]> => [];
   @Event cloudSelectDevice: (device: CloudAccountDevice) => Promise<void> =
@@ -109,7 +111,7 @@ export struct RemoteControlSettingsSheet {
   @Builder
   private ProfileEntry() {
     Row({ space: 12 }) {
-      DefaultAccountAvatar({ avatarSize: 34 })
+      DefaultAccountAvatar({ avatarSize: 34, avatarUrl: this.accountAvatarUrl })
       Text(this.isAccountAuthenticated() ? RemoteI18n.t('remote.settings.profile') :
         RemoteI18n.t('sidebar.signInOpenBitFunAccount'))
         .fontSize(MobileDesignTypography.headlineSmall.size)
@@ -434,6 +436,7 @@ export struct RemoteControlSettingsSheet {
   private LoginPage() {
     OpenBitFunAccountLoginPage({
       cloudLogin: this.cloudLogin,
+      cloudCancelLogin: this.cloudCancelLogin,
       onClose: (): void => this.leaveAccountPage(),
       onLoginSuccess: (): void => {
         this.showLogin = false;
@@ -447,6 +450,7 @@ export struct RemoteControlSettingsSheet {
     Scroll() {
       AccountProfilePanel({
         accountUsername: this.accountUsername,
+        accountAvatarUrl: this.accountAvatarUrl,
         accountUserId: this.accountUserId,
         fallbackUserId: this.userId,
         deviceId: this.deviceId,

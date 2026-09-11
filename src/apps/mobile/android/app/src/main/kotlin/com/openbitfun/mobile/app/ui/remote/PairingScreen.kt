@@ -37,14 +37,8 @@ import com.openbitfun.mobile.app.R
 import com.openbitfun.mobile.app.ui.chat.ConversationView
 import com.openbitfun.mobile.app.ui.common.CircleControl
 import com.openbitfun.mobile.app.ui.shell.MENU_TEST_TAG
-import com.openbitfun.mobile.app.viewmodel.PairingViewModel
 import com.openbitfun.mobile.core.feature.connection.ConnectionPhase
 import com.openbitfun.mobile.core.feature.layout.SettingsPlacement
-import com.openbitfun.mobile.core.feature.connection.connectionPhase
-import com.openbitfun.mobile.core.feature.pairing.ConnectionLiveness
-import com.openbitfun.mobile.core.feature.pairing.PairedWorkspace
-import com.openbitfun.mobile.core.feature.pairing.PairingIntent
-import com.openbitfun.mobile.core.feature.pairing.PairingUiState
 import com.openbitfun.mobile.core.feature.session.ConversationHeaderPresenter
 import com.openbitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceIntent
@@ -68,6 +62,7 @@ internal fun PairingScreen(
     onOpenSidebar: (() -> Unit)? = null,
     onBack: () -> Unit = {},
     onOpenAccount: () -> Unit = {},
+    onDeviceLink: (String) -> Unit = {},
     compact: Boolean = true,
     requestedSessionId: String? = null,
     creatingSession: Boolean = false,
@@ -76,65 +71,15 @@ internal fun PairingScreen(
     onRemoteHome: () -> Unit = {},
     startScanning: Boolean = false,
     onScanStarted: () -> Unit = {},
-    viewModel: PairingViewModel = viewModel(factory = PairingViewModel.Factory),
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val remoteState by viewModel.remoteState.collectAsStateWithLifecycle()
-    val workspaceState by viewModel.workspaceState.collectAsStateWithLifecycle()
-    // The heartbeat runs only while this surface is both composed and resumed:
-    // a ping every fifteen seconds from a backgrounded app buys nothing and
-    // costs a wake-up, and coming back is exactly when the answer is stale.
-    LifecycleResumeEffect(viewModel) {
-        viewModel.dispatch(PairingIntent.Foreground)
-        onPauseOrDispose { viewModel.dispatch(PairingIntent.Background) }
-    }
-
-    when (val current = state) {
-        is PairingUiState.Paired -> {
-            RemoteConnectedScreen(
-                remoteState = remoteState,
-                workspaceState = workspaceState,
-                phase = current.connectionPhase(),
-                settingsPlacement = settingsPlacement,
-                sessionDetailsPlacement = sessionDetailsPlacement,
-                viewSettingsPlacement = viewSettingsPlacement,
-                onOpenRemoteSettings = onOpenRemoteSettings,
-                deviceId = current.workspace.roomLabel,
-                createDevices = emptyList(),
-                desktopName = "",
-                onCreateDevicePick = {},
-                onSessionIntent = viewModel::dispatchSession,
-                onWorkspaceIntent = viewModel::dispatchWorkspace,
-                onOpenSidebar = onOpenSidebar,
-                compact = compact,
-                requestedSessionId = requestedSessionId,
-                creatingSession = creatingSession,
-                onOpenSession = onOpenSession,
-                onCreateSession = onCreateSession,
-                onRemoteHome = onRemoteHome,
-                connectionDetails = {
-                    PairedDetails(
-                        workspace = current.workspace,
-                        liveness = current.liveness,
-                        onVerify = { viewModel.dispatch(PairingIntent.Verify) },
-                        onDisconnect = { viewModel.dispatch(PairingIntent.Disconnect) },
-                    )
-                },
-                modifier = modifier,
-            )
-        }
-
-        else -> ConnectView(
-            state = current,
-            onSubmit = viewModel::dispatch,
-            onDismiss = { viewModel.dispatch(PairingIntent.Dismiss) },
-            onBack = onBack,
-            onOpenAccount = onOpenAccount,
-            startScanning = startScanning,
-            onScanStarted = onScanStarted,
-            modifier = modifier,
-        )
-    }
+    ConnectView(
+        onSubmit = onDeviceLink,
+        onBack = onBack,
+        onOpenAccount = onOpenAccount,
+        startScanning = startScanning,
+        onScanStarted = onScanStarted,
+        modifier = modifier,
+    )
 }
 
 /** The account-device route, which bypasses the QR pairing form entirely. */
@@ -505,63 +450,5 @@ internal fun RemoteWorkspacePanel(
                 )
             }
         }
-    }
-}
-
-
-internal const val CONNECTION_RETRY_TEST_TAG: String = "connection-retry"
-
-@Composable
-internal fun PairedDetails(
-    workspace: PairedWorkspace,
-    liveness: ConnectionLiveness,
-    onVerify: () -> Unit,
-    onDisconnect: () -> Unit,
-) {
-    Text(stringResource(R.string.paired_title), style = MaterialTheme.typography.headlineSmall)
-    Text(
-        stringResource(R.string.paired_room, workspace.roomLabel),
-        style = MaterialTheme.typography.bodyMedium,
-    )
-    Text(
-        if (workspace.hasWorkspace && workspace.projectName != null) {
-            stringResource(R.string.paired_project, workspace.projectName!!)
-        } else {
-            stringResource(R.string.paired_no_workspace)
-        },
-        style = MaterialTheme.typography.bodyMedium,
-    )
-    workspace.authenticatedUserId?.let {
-        Text(
-            stringResource(R.string.paired_user, it),
-            style = MaterialTheme.typography.bodyMedium,
-        )
-    }
-    // A desktop that stopped answering has not un-paired: the room, its key and
-    // its transport are all still here, so the way out is another ping rather
-    // than the connect form. Re-pairing is a separate, manual act because an
-    // account room's password is never kept.
-    when (liveness) {
-        ConnectionLiveness.LIVE -> Unit
-        ConnectionLiveness.CHECKING -> Text(
-            stringResource(R.string.connection_checking),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        ConnectionLiveness.LOST -> {
-            Text(
-                stringResource(R.string.connection_lost_detail),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-            TextButton(
-                onClick = onVerify,
-                modifier = Modifier.testTag(CONNECTION_RETRY_TEST_TAG),
-            ) { Text(stringResource(R.string.connection_check_again)) }
-        }
-    }
-    Button(onClick = onDisconnect, modifier = Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.pairing_disconnect))
     }
 }

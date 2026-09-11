@@ -11,15 +11,19 @@
     "workspace": "Workspace"
   },
   "modes": {
-    "agentic": "Agentic Mode",
     "assistant": "Assistant Mode",
     "expert": "Expert Mode",
     "review": "Review Mode"
   },
   "agents": {
-    "code": "Code Session",
-    "cowork": "Cowork Session",
-    "claw": "Claw",
+    "Minimal": "Minimal",
+    "Standard": "Standard",
+    "Ultimate": "Ultimate",
+    "Creative": "Creative",
+    "Claw": "Assistant",
+    "Cowork": "Cowork",
+    "DeepResearch": "Deep Research",
+    "ComputerUse": "Computer Use",
     "default": "Default Assistant"
   },
   "tools": {
@@ -33,7 +37,6 @@
   },
   "connectionMethods": {
     "lan": "LAN",
-    "ngrok": "Ngrok",
     "openbitfunServer": "OpenBitFun Server",
     "customServer": "Custom Server",
     "botFeishu": "Feishu Bot",

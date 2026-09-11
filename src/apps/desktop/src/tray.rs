@@ -149,7 +149,6 @@ async fn tray_toggle_desktop_pet(app: &AppHandle) -> Result<(), String> {
         })
         .await
         .map_err(|e| e.to_string())?;
-    crate::api::remote_connect_api::notify_settings_changed();
 
     if show {
         crate::appearance::show_agent_companion_desktop_pet(app.clone()).await?;

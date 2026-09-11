@@ -218,7 +218,6 @@ export function CommandToolCard({
                 data-openbitfun-part="command"
                 data-empty={resolvedCommand ? "false" : "true"}
                 data-testid={commandTestId}
-                title={resolvedCommand ?? undefined}
               ><OverflowText>
                 {resolvedCommand ?? emptyCommand}
               </OverflowText></code>

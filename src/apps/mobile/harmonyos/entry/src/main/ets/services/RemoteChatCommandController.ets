@@ -41,6 +41,7 @@ export interface RemoteChatCommandCallbacks {
   // before any request has been sent. Without it the loading skeleton would
   // outlive the messages it is standing in for.
   onTimelineReady: () => void;
+  onComposerSubmitted?: (sessionId: string, text: string, images: SelectedImageAttachment[]) => void;
   onSendSucceeded: (turnId: string, pendingActiveId: string, localMessageId: string) => void;
   onSteerSucceeded?: (
     steeringId: string,
@@ -334,6 +335,7 @@ export class RemoteChatCommandController {
       const turnId = images.length > 0 ?
         await this.client.sendMessageWithImages(sessionId, text, agentType, imageContexts, requestedTurnId) :
         await this.client.sendMessage(sessionId, text, agentType, requestedTurnId);
+      this.callbacks.onComposerSubmitted?.(sessionId, rawText, images);
       this.callbacks.onSendSucceeded(turnId, pendingActiveId, localMessageId);
       this.callbacks.onStatusText(RemoteI18n.t('status.sentWaiting'));
     } catch (err) {
@@ -367,6 +369,7 @@ export class RemoteChatCommandController {
         displayText,
         imageContexts
       );
+      this.callbacks.onComposerSubmitted?.(sessionId, displayText, images);
       if (this.callbacks.onSteerSucceeded) {
         this.callbacks.onSteerSucceeded(result.steeringId, result.turnId, displayText, images);
       }

@@ -18,7 +18,6 @@ pub const EXTERNAL_SOURCES_CAPABILITY: &str = "tui.externalSources";
 pub const NATIVE_HOOKS_CAPABILITY: &str = "tui.nativeHooks";
 pub const EXTERNAL_HOOKS_CAPABILITY: &str = "tui.externalHooks";
 pub const ACCOUNT_CAPABILITY: &str = "tui.account";
-pub const SETTINGS_SYNC_CAPABILITY: &str = "tui.settingsSync";
 pub const WORKTREES_CAPABILITY: &str = "tui.worktrees";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,7 +31,6 @@ pub struct AppManagementCapabilities {
     pub native_hooks: CapabilityAvailability,
     pub external_hooks: CapabilityAvailability,
     pub account: CapabilityAvailability,
-    pub settings_sync: CapabilityAvailability,
     pub worktrees: CapabilityAvailability,
 }
 
@@ -48,7 +46,6 @@ impl AppManagementCapabilities {
             native_hooks: CapabilityAvailability::Available,
             external_hooks: CapabilityAvailability::Available,
             account: CapabilityAvailability::Available,
-            settings_sync: CapabilityAvailability::Available,
             worktrees: CapabilityAvailability::Available,
         }
     }
@@ -65,7 +62,6 @@ impl AppManagementCapabilities {
             native_hooks: unavailable(&reason),
             external_hooks: unavailable(&reason),
             account: unavailable(&reason),
-            settings_sync: unavailable(&reason),
             worktrees: unavailable(&reason),
         }
     }
@@ -81,7 +77,6 @@ impl AppManagementCapabilities {
             NATIVE_HOOKS_CAPABILITY => Some(&self.native_hooks),
             EXTERNAL_HOOKS_CAPABILITY => Some(&self.external_hooks),
             ACCOUNT_CAPABILITY => Some(&self.account),
-            SETTINGS_SYNC_CAPABILITY => Some(&self.settings_sync),
             WORKTREES_CAPABILITY => Some(&self.worktrees),
             _ => None,
         }
@@ -156,22 +151,7 @@ impl AppManagementCapabilities {
             descriptor(
                 ACCOUNT_CAPABILITY,
                 self.account.clone(),
-                &[
-                    "account/snapshot",
-                    "account/login",
-                    "account/finalizeLogin",
-                    "account/logout",
-                ],
-            ),
-            descriptor(
-                SETTINGS_SYNC_CAPABILITY,
-                self.settings_sync.clone(),
-                &[
-                    "settingsSync/start",
-                    "settingsSync/snapshot",
-                    "settingsSync/cancel",
-                    "settingsSync/localChanged",
-                ],
+                &["account/snapshot", "account/login", "account/logout"],
             ),
             descriptor(
                 WORKTREES_CAPABILITY,

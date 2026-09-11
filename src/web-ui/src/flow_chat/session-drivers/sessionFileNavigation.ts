@@ -11,6 +11,18 @@ export function hasSessionFileProvider(sessionId: string | undefined): boolean {
   return Boolean(sessionFileProvider(sessionId));
 }
 
+export function readImageThroughSession(sessionId: string | undefined, filePath: string, refresh?: boolean): Promise<string> {
+  const provider = sessionFileProvider(sessionId);
+  if (!sessionId || !provider?.readImage) return Promise.reject(new Error('This session cannot provide image bytes'));
+  return provider.readImage(sessionId, filePath, refresh);
+}
+
+export function downloadFileThroughSession(sessionId: string | undefined, filePath: string): Promise<void> {
+  const provider = sessionFileProvider(sessionId);
+  if (!sessionId || !provider?.download) return Promise.reject(new Error('This session cannot provide file downloads'));
+  return provider.download(sessionId, filePath);
+}
+
 /** Returns true once the owning transport handles the request, including errors. */
 export function openFileThroughSession(
   sessionId: string | undefined,

@@ -134,6 +134,14 @@ impl AgentRegistry {
             }
         }
 
+        let canonical = openbitfun_core_types::agent_identity::canonical_agent_id(agent_type);
+        if canonical != agent_type {
+            if let Some(entry) = self.read_agents().get(canonical).cloned() {
+                if entry.source == types::AgentSource::Builtin {
+                    return Some(entry);
+                }
+            }
+        }
         let canonical = canonical_review_worker_agent_type(agent_type);
         (canonical != agent_type)
             .then(|| self.read_agents().get(canonical).cloned())

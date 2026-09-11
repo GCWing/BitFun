@@ -1,3 +1,5 @@
+import { hkdf } from '@noble/hashes/hkdf.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 /**
  * E2E encryption for the mobile web client.
  *
@@ -81,4 +83,24 @@ function randomBytes(len: number): Uint8Array {
   // crypto.getRandomValues works on HTTP too (it's not part of subtle)
   (globalThis.crypto || (globalThis as any).msCrypto).getRandomValues(buf);
   return buf;
+}
+
+/** Matches the Relay v1 device key contract used by desktop and CLI. */
+export function deriveDeviceMessageKey(privateKey: Uint8Array, peerPublicKey: Uint8Array): Uint8Array {
+  if (privateKey.length !== 32 || peerPublicKey.length !== 32) throw new Error('Invalid device key.');
+  const ownPublicKey = x25519.getPublicKey(privateKey);
+  const shared = x25519.getSharedSecret(privateKey, peerPublicKey);
+  if (shared.every((value: number) => value === 0)) throw new Error('Invalid peer key.');
+  let first = ownPublicKey;
+  let second = peerPublicKey;
+  for (let i = 0; i < 32; i += 1) {
+    if (ownPublicKey[i] === peerPublicKey[i]) continue;
+    if (ownPublicKey[i] > peerPublicKey[i]) [first, second] = [second, first];
+    break;
+  }
+  const info = new Uint8Array(64);
+  info.set(first); info.set(second, 32);
+  try {
+    return hkdf(sha256, shared, new TextEncoder().encode('OpenBitFun Relay v1.0.0 device key'), info, 32);
+  } finally { shared.fill(0); }
 }

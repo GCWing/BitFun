@@ -19,7 +19,7 @@ function metadata(
   return {
     sessionId,
     sessionName: sessionId,
-    agentType: parentSessionId ? 'Explore' : 'agentic',
+    agentType: parentSessionId ? 'Explore' : 'Standard',
     createdAtMs: createdAt,
     status: parentSessionId ? 'completed' : 'active',
     parentSessionId,

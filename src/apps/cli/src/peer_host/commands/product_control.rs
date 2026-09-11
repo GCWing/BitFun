@@ -37,7 +37,6 @@ pub(crate) async fn invoke(state: &PeerHostState, args: &Value) -> Result<Value,
                 .await?
                 .configure(&request)
                 .await?;
-            state.account_runtime.notify_local_settings_changed();
             Ok(result)
         }
         ProductControlAction::Open => Err(

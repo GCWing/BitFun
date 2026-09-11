@@ -1,4 +1,5 @@
 import {
+  Fragment,
   forwardRef,
   useId,
   useRef,
@@ -18,6 +19,8 @@ export interface TabGroupItem {
   icon?: ReactNode;
   id?: string;
   label: ReactNode;
+  /** Non-interactive identity or metadata that stays outside label overflow. */
+  labelSuffix?: ReactNode;
   /** Opt plain text into vertical replacement without remounting the tab. */
   labelTransitionKey?: string | number;
   panelId?: string;
@@ -34,6 +37,8 @@ export interface TabGroupProps
   defaultValue?: string;
   items: readonly TabGroupItem[];
   onValueChange?: (value: string) => void;
+  /** Wrap the standard item with product context menus or drag targets. Keep the supplied node intact. */
+  renderItem?: (item: TabGroupItem, node: ReactNode, index: number) => ReactNode;
   size?: TabGroupSize;
   value?: string;
 }
@@ -57,6 +62,7 @@ export const TabGroup = forwardRef<HTMLDivElement, TabGroupProps>(function TabGr
   defaultValue,
   items,
   onValueChange,
+  renderItem,
   size = "md",
   value,
   ...props
@@ -128,7 +134,7 @@ export const TabGroup = forwardRef<HTMLDivElement, TabGroupProps>(function TabGr
         const selected = item.value === selectedValue;
         const hasEndAction = item.endAction !== undefined && item.endAction !== null;
         const hasIcon = Boolean(item.icon);
-        return (
+        const node = (
           <div
             className={styles.item}
             data-openbitfun-part="item"
@@ -174,6 +180,11 @@ export const TabGroup = forwardRef<HTMLDivElement, TabGroupProps>(function TabGr
                   {item.label}
                 </OverflowText>
               )}
+              {item.labelSuffix != null && (
+                <span className={styles.labelSuffix} data-openbitfun-part="labelSuffix">
+                  {item.labelSuffix}
+                </span>
+              )}
             </button>
             {hasEndAction && (
               <span className={styles.endAction} data-openbitfun-part="endAction">
@@ -181,6 +192,11 @@ export const TabGroup = forwardRef<HTMLDivElement, TabGroupProps>(function TabGr
               </span>
             )}
           </div>
+        );
+        return (
+          <Fragment key={item.value}>
+            {renderItem ? renderItem(item, node, index) : node}
+          </Fragment>
         );
       })}
     </div>

@@ -32,26 +32,26 @@ test('prepares a versioned custom Windows installer asset', () => {
   );
 });
 
-test('latest.json keeps the updater URL separate from the manual installer URL', () => {
+test('1.0.0-beta manifest keeps the updater URL separate from the manual installer URL', () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-latest-manual-'));
   const updater = path.join(temp, 'updater');
   const manual = path.join(temp, 'manual');
-  const out = path.join(temp, 'latest.json');
+  const out = path.join(temp, 'latest-v1.json');
   fs.mkdirSync(updater, { recursive: true });
   fs.mkdirSync(manual, { recursive: true });
 
-  const updaterName = 'OpenBitFun_1.2.3_windows-x86_64-setup.exe';
+  const updaterName = 'OpenBitFun_1.0.0-beta_windows-x86_64-setup.exe';
   fs.writeFileSync(path.join(updater, updaterName), 'setup');
   fs.writeFileSync(path.join(updater, `${updaterName}.sig`), 'inline-updater-signature');
-  const installerName = 'OpenBitFun_1.2.3_windows-x86_64-installer.exe';
+  const installerName = 'OpenBitFun_1.0.0-beta_windows-x86_64-installer.exe';
   fs.writeFileSync(path.join(manual, installerName), 'installer');
   fs.writeFileSync(path.join(manual, `${installerName}.sig`), 'detached-signature');
 
   const generated = run('scripts/generate-tauri-latest-json.mjs', [
     '--assets-dir', updater,
     '--manual-assets-dir', manual,
-    '--version', '1.2.3',
-    '--tag', 'v1.2.3',
+    '--version', '1.0.0-beta',
+    '--tag', 'v1.0.0-beta',
     '--repo', 'GCWing/OpenBitFun',
     '--out', out,
     '--required-platforms', 'windows-x86_64',
@@ -68,7 +68,7 @@ test('latest.json keeps the updater URL separate from the manual installer URL',
 
   const verified = run('scripts/verify-tauri-latest-json.mjs', [
     '--manifest', out,
-    '--version', '1.2.3',
+    '--version', '1.0.0-beta',
     '--required-platforms', 'windows-x86_64',
     '--required-manual-platforms', 'windows-x86_64',
   ]);
@@ -118,10 +118,10 @@ test('rejects duplicate GitHub release asset names before upload', () => {
   assert.match(result.stderr, /macos-arm64/);
 });
 
-test('Beta Linux CLI and Relay manifests keep signed assets on the versioned repository release', (t) => {
+for (const version of ['1.0.0-beta', '1.0.0-beta.3']) {
+test(`${version} Linux CLI and Relay manifests keep signed assets on the versioned repository release`, (t) => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-beta-linux-'));
   t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
-  const version = '1.0.0-beta.3';
   const tag = `v${version}`;
   const assets = [];
   for (const target of ['x86_64-unknown-linux-gnu', 'aarch64-unknown-linux-gnu']) {
@@ -133,7 +133,7 @@ test('Beta Linux CLI and Relay manifests keep signed assets on the versioned rep
       }
     }
   }
-  const out = path.join(temp, 'linux-binaries.json');
+  const out = path.join(temp, 'linux-binaries-v1.json');
   const result = run('scripts/generate-linux-binaries-manifest.mjs', [
     '--assets-dir', temp, '--version', version, '--tag', tag,
     '--repo', 'test-owner/OpenBitFun', '--out', out,
@@ -163,6 +163,8 @@ test('Beta Linux CLI and Relay manifests keep signed assets on the versioned rep
   assert.notEqual(missing.status, 0);
   assert.match(missing.stderr, /Required Linux release asset was not found/);
 });
+
+}
 
 function run(script, args) {
   return spawnSync(process.execPath, [script, ...args], {

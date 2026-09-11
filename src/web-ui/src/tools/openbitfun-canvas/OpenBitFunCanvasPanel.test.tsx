@@ -25,7 +25,7 @@ const flowChatStoreMock = vi.hoisted(() => ({
   getActiveSession: vi.fn(() => ({ workspacePath: '/repo' })),
   getState: vi.fn(() => ({
     sessions: new Map([
-      ['session_1', { id: 'session_1', mode: 'agentic', workspacePath: '/repo' }],
+      ['session_1', { id: 'session_1', mode: 'Standard', workspacePath: '/repo' }],
     ]),
   })),
   switchSession: vi.fn(),

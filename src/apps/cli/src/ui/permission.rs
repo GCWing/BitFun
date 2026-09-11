@@ -300,7 +300,7 @@ mod tests {
             project_path: None,
             project_id: "project-1".to_string(),
             session_id: "session-1".to_string(),
-            agent_id: "agentic".to_string(),
+            agent_id: "Standard".to_string(),
             action: "edit".to_string(),
             resources: vec!["src/main.rs".to_string()],
             save_resources: vec!["src/main.rs".to_string()],

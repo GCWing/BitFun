@@ -15,6 +15,28 @@ fn metadata(session_id: &str) -> SessionMetadata {
     )
 }
 
+#[test]
+fn legacy_agent_identity_migrates_without_changing_session_history() {
+    let mut old = serde_json::to_value(metadata("legacy-session")).unwrap();
+    old["agentType"] = serde_json::json!("agentic");
+    old["lastUserDialogAgentType"] = serde_json::json!("Ultra");
+    old["lastSubmittedAgentType"] = serde_json::json!("minimal");
+    let migrated: SessionMetadata = serde_json::from_value(old.clone()).unwrap();
+    assert_eq!(migrated.agent_type, "Standard");
+    assert_eq!(
+        migrated.last_user_dialog_agent_type.as_deref(),
+        Some("Ultimate")
+    );
+    assert_eq!(
+        migrated.last_submitted_agent_type.as_deref(),
+        Some("Minimal")
+    );
+    old["agentType"] = serde_json::json!("Standard");
+    old["lastUserDialogAgentType"] = serde_json::json!("Ultimate");
+    old["lastSubmittedAgentType"] = serde_json::json!("Minimal");
+    assert_eq!(serde_json::to_value(migrated).unwrap(), old);
+}
+
 fn user_message(content: &str) -> UserMessageData {
     UserMessageData {
         id: format!("user-{content}"),

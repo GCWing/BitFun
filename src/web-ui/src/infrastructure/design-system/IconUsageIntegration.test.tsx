@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { Icon } from '@openbitfun/ui';
+import { HARNESS_PRESENTATION } from '@/shared/agents/harnessPresentation';
 import { ConfigRefreshButton } from '@/infrastructure/config/components/common';
 
 const sourceRoot = path.resolve(__dirname, '../..');
@@ -114,7 +115,8 @@ describe('catalog icon consumer integration', () => {
     expect(source('app/components/NavPanel/components/MiniAppEntry.tsx')).toContain('<Icon name="mini-app" size="md"');
     expect(source('app/components/NavBar/NavBar.tsx')).toContain('<Icon name="sidebar-left"');
     const harnessSource = source('app/scenes/agents/components/AgentHarnessOverview.tsx');
-    expect(harnessSource).toContain("{ id: 'creative', icon: 'creative'");
+    expect(harnessSource).toContain('HARNESS_PRESENTATION[id]');
+    expect(HARNESS_PRESENTATION.Creative.icon).toBe('creative');
     expect(harnessSource).toContain('<Icon name={icon}');
     expect(source('shared/context-menu-system/components/ContextMenuRenderer.tsx')).toContain("RefreshCw: 'refresh'");
     expect(source('shared/context-menu-system/components/ContextMenuRenderer.tsx')).toContain("MessageSquarePlus: 'side-chat'");
@@ -165,7 +167,7 @@ describe('catalog icon consumer integration', () => {
       'app/components/NavPanel/MainNav.tsx',
       'app/scenes/agents/AgentsScene.tsx',
       'app/scenes/skills/SkillsScene.tsx',
-      'app/scenes/skills/components/SkillsSuiteView.tsx',
+      'app/scenes/skills/components/SkillGroupsView.tsx',
     ]) {
       expect(source(normalizedSurface)).not.toContain('strokeWidth=');
     }

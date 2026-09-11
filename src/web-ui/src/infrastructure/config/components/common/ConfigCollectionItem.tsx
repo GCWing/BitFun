@@ -127,7 +127,9 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
             aria-hidden={!isExpanded}
             {...(!isExpanded ? { inert: '' } : {})}
           >
-            <div className="openbitfun-collection-item__details" data-openbitfun-component="config" data-openbitfun-part="collectionDetails">{details}</div>
+            <div className="openbitfun-collection-item__details-clip">
+              <div className="openbitfun-collection-item__details" data-openbitfun-component="config" data-openbitfun-part="collectionDetails">{details}</div>
+            </div>
           </div>
         </RetainedMountBoundary>
       ) : null}

@@ -88,7 +88,7 @@ test("ActionItem styles share action state and focus tokens", async () => {
   const styles = await readFile(new URL("../dist/styles.css", import.meta.url), "utf8");
 
   assert.match(styles, /--openbitfun-color-action-neutral-surface/);
-  assert.match(styles, /--openbitfun-color-action-neutral-surface-pressed/);
+  assert.match(styles, /--openbitfun-color-action-neutral-surface-hover/);
   assert.match(styles, /--openbitfun-color-action-neutral-content-disabled/);
   assert.match(styles, /--openbitfun-color-focus-ring/);
   assert.match(styles, /--openbitfun-control-height-sm/);

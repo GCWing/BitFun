@@ -517,7 +517,7 @@ async function observeVoiceTaskSession(
 /**
  * Delegation boundary between client-level Voice and workspace execution.
  *
- * This creates a regular `agentic` FlowChat session. That session follows the
+ * This creates a regular FlowChat session using the user's default Harness. It follows the
  * same product assembly, workspace adapters, tool registry, plugin/MCP setup,
  * and permission flow as a task started from the normal UI. Voice supplies only
  * the complete task intent and target workspace, then observes progress,
@@ -541,7 +541,6 @@ export async function runOpenBitFunVoiceTask(
   const manager = FlowChatManager.getInstance();
   const sessionId = await manager.createChatSession(
     flowChatSessionConfigForWorkspace(options.workspace),
-    'agentic',
   );
   options.onSessionCreated?.(sessionId);
   if (options.showSession !== false) {
@@ -553,7 +552,7 @@ export async function runOpenBitFunVoiceTask(
       normalizedTask,
       sessionId,
       normalizedTask,
-      'agentic',
+      'Standard',
       undefined,
       { userMessageMetadata: { source: 'realtime_voice' } },
     )

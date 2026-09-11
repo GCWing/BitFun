@@ -27,7 +27,7 @@ function jobWithInterval(everyMs: number): CronJob {
     target: {
       kind: 'workspace',
       workspace: { workspacePath: '/tmp/workspace' },
-      launch: { agentType: 'agentic' },
+      launch: { agentType: 'Standard' },
     },
     createdAtMs: 0,
     configUpdatedAtMs: 0,
@@ -64,7 +64,7 @@ describe('interval round trip', () => {
     ['half hourly', 30 * MINUTE_IN_MS],
     ['awkward', 90 * MINUTE_IN_MS],
   ])('rebuilds the exact interval for a %s job', (_label, everyMs) => {
-    const draft = jobToDraft(jobWithInterval(everyMs), 'agentic');
+    const draft = jobToDraft(jobWithInterval(everyMs), 'Standard');
     const schedule = buildScheduleFromDraft(draft);
 
     expect(schedule).toMatchObject({ kind: 'every', everyMs });

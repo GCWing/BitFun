@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import com.openbitfun.mobile.app.platform.LogcatCoreLog
 import com.openbitfun.mobile.app.platform.LEGACY_MOBILE_DEVICE_NAMES
 import com.openbitfun.mobile.app.platform.deviceIdentity
-import com.openbitfun.mobile.core.feature.CloudSettingsSource
 import com.openbitfun.mobile.core.feature.account.AccountIntent
 import com.openbitfun.mobile.core.feature.account.AccountStore
 import com.openbitfun.mobile.core.feature.account.AccountUiState
@@ -27,6 +26,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 internal class AccountViewModel(application: Application) : AndroidViewModel(application) {
+    private val completionNotifier = com.openbitfun.mobile.app.platform.TaskCompletionNotifier(application)
+    fun setBackground(value: Boolean) { completionNotifier.setBackground(value) }
     private val identity = application.deviceIdentity()
     private val store = AccountStore.create(
         viewModelScope,
@@ -65,7 +66,6 @@ internal class AccountViewModel(application: Application) : AndroidViewModel(app
     }
 
     /** The handle General Chat reads the account's synced models through. */
-    fun cloudSettingsSource(): CloudSettingsSource? = store.cloudSettingsSource()
 
     fun dispatchSession(intent: RemoteSessionIntent) {
         remoteStore?.dispatch(intent)
@@ -91,6 +91,10 @@ internal class AccountViewModel(application: Application) : AndroidViewModel(app
         if (deviceId == activeTarget) bindTarget(deviceId) else store.dispatch(AccountIntent.SelectDevice(deviceId))
     }
 
+    fun disconnectDevice() {
+        bindTarget(null)
+    }
+
     private fun bindTarget(target: String?) {
         remoteJob?.cancel()
         connectionJob?.cancel()
@@ -102,11 +106,15 @@ internal class AccountViewModel(application: Application) : AndroidViewModel(app
         _remoteState.value = RemoteSessionUiState.Idle
         _connectionPhase.value = ConnectionPhase.IDLE
         _workspaceState.value = RemoteWorkspaceUiState.Idle
+        completionNotifier.reset()
         activeTarget = target
         if (target == null) return
 
         remoteStore = store.createSessionStore(viewModelScope)?.also { created ->
-            remoteJob = viewModelScope.launch { created.state.collect { _remoteState.value = it } }
+            remoteJob = viewModelScope.launch { created.state.collect {
+                _remoteState.value = it
+                completionNotifier.observe(it, target)
+            } }
             connectionJob = viewModelScope.launch {
                 created.connectionPhase.collect { _connectionPhase.value = it }
             }

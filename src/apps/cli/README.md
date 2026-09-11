@@ -129,6 +129,12 @@ terminal bracketed paste to attach a clipboard image or a local PNG, JPEG, GIF,
 or WebP path. Quoted paths, `file://` URLs, and POSIX shell-escaped paths are
 accepted. A message may contain up to five images, each no larger than 20 MiB.
 
+A primary model with image input support receives the image pixels directly.
+With a text-only primary model, configure an enabled image-understanding model
+and keep the `analyze_image` tool enabled for the agent. The host saves uploaded
+images as durable runtime attachments so analysis and restored turns can read
+them; image handling also applies when this CLI hosts mobile or peer sessions.
+
 Images are read when pasted, so later file changes do not alter the submitted
 turn and local absolute paths are not sent to the Runtime. Slash commands and
 Shell mode do not accept images. Shared TUI currently reports image paste as

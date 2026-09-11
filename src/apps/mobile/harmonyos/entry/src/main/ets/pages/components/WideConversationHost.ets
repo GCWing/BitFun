@@ -38,7 +38,7 @@ const WIDE_DETAIL_CONTENT_MAX_WIDTH: number = 920;
 
 @ComponentV2
 export struct WideConversationHost {
-  @Param route: AppRoute = AppRoute.ChatHome;
+  @Param route: AppRoute = AppRoute.RemoteHome;
   @Param shellState: AppShellState = new AppShellState();
   @Param remotePageState: RemotePageState = new RemotePageState();
   @Param deviceDirectoryState: DeviceDirectoryState = new DeviceDirectoryState();
@@ -65,9 +65,7 @@ export struct WideConversationHost {
   @Event onOpenRemoteViewSettings: () => void = () => {};
 
   build() {
-    if (this.route === AppRoute.ChatHome || this.route === AppRoute.GeneralChat) {
-      this.GeneralChatContent();
-    } else if (this.showsRemoteConversation() &&
+    if (this.showsRemoteConversation() &&
       this.filePreviewLayout.placement === FilePreviewPlacement.WideMasterPreviewFocus) {
       this.RemoteMasterPreviewFocusContent();
     } else if (this.showsRemoteConversation() &&
@@ -78,18 +76,6 @@ export struct WideConversationHost {
     } else if (this.route === AppRoute.RemoteHome) {
       this.RemoteHomeContent();
     }
-  }
-
-  @Builder
-  private GeneralChatContent() {
-    Row() {
-      if (!this.wideMasterPaneCollapsed) {
-        this.MasterPane()
-        this.MasterDetailGap()
-      }
-      this.ConversationDetail(false)
-    }
-    .width('100%').height('100%').backgroundColor(PAGE_BG)
   }
 
   @Builder
@@ -144,17 +130,11 @@ export struct WideConversationHost {
     Column() {
       Column() {
         AppSidebar({
-          sessions: this.generalPageState.recentSessions(),
-          sessionDetailsPlacement: this.sessionDetailsPlacement,
-          pinnedSessionId: this.generalPageState.pinnedSessionId(),
-          selectedSessionId: AppRouteContract.isGeneralComposerRoute(this.route) ?
-            this.generalPageState.conversation.activeSession.sessionId : '',
           connectionState: this.remotePageState.connectionState,
           accountUserId: this.remotePageState.accountUserId,
           showCollapseButton: true,
           showViewSettingsButton: false,
           showWorkspaceSection: true,
-          showConversationSection: true,
           contentSlot: () => {
             this.WorkspaceMasterContent()
           },
@@ -170,10 +150,6 @@ export struct WideConversationHost {
           },
           onOpenSettings: this.actions.onSidebar.settings,
           onOpenAccount: this.actions.onSidebar.openAccount,
-          onOpenSession: this.actions.onSidebar.openSession,
-          onArchiveSession: this.actions.onSidebar.archive,
-          onExportSession: this.actions.onSidebar.exportSession,
-          onDeleteSession: this.actions.onSidebar.deleteSession
         })
       }
       .width('100%').height('100%').backgroundColor(CARD)

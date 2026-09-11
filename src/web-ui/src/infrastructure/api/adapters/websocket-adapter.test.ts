@@ -285,9 +285,9 @@ describe('encodeRequestBody', () => {
   });
 
   it('preserves the desktop success-string contract for profile mutations', () => {
-    expect(decodeResponseBody('set_agent_profile_config', { profile_id: 'agentic' }))
+    expect(decodeResponseBody('set_agent_profile_config', { profile_id: 'Standard' }))
       .toBe('Agent profile configuration updated successfully');
-    expect(decodeResponseBody('reset_agent_profile_config', { profile_id: 'agentic' }))
+    expect(decodeResponseBody('reset_agent_profile_config', { profile_id: 'Standard' }))
       .toBe('Agent profile configuration reset successfully');
   });
 });

@@ -918,7 +918,7 @@ static ACTION_SPECS: &[ActionSpec] = &[
         id: "logout",
         name: "Logout",
         aliases: &["/logout"],
-        description: "Log out of OpenBitFun account",
+        description: "Log out of GitHub account",
         contexts: BOTH,
         availability: ActionAvailability::Always,
         handler: ActionHandler::Logout,

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OverflowText, Button, Card, CardBody, CardFooter, CardHeader, Icon, ScrollArea } from '@openbitfun/ui';
 import { createPortal } from 'react-dom';
-import { Monitor, Server, Smartphone, Undo2 } from 'lucide-react';
+import { MessageCircle, Monitor, Server, Smartphone, Undo2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
@@ -55,7 +55,7 @@ function DeviceIcon({
     case 'message-app': {
       const chatApp = chatAppBrandFromIdentity(identity);
       if (chatApp) return <ChatAppBrandIcon app={chatApp} size={size} />;
-      return <Icon name="side-chat" size="lg" style={iconStyle} />;
+      return <Icon glyph={MessageCircle} size="lg" style={iconStyle} />;
     }
     default:
       return <Icon glyph={Monitor} size="lg" style={iconStyle} />;

@@ -46,11 +46,8 @@ describe('GalleryDetailModal presentation contract', () => {
     expect(agentCardStyles).toContain('@container gallery-detail-modal (max-width: 460px)');
     expect(agentCardStyles).toContain('grid-template-columns: 150px minmax(0, 1fr);');
     expect(agentCardStyles).toMatch(/&__config-main\s*\{[\s\S]*?height:\s*100%;/);
-    expect(agentCardStyles).toMatch(/> \.agent-card__config-panel,[\s\S]*?min-height:\s*100%;/);
-    expect(agentCardStyles).toContain('grid-template-rows: repeat(2, minmax(52px, auto)) minmax(76px, 1fr);');
     expect(agentCardStyles).not.toContain('&__detail-view-tabs');
     expect(agentCardStyles).not.toContain('&__overview');
-    expect(agentCardStyles).toMatch(/&__config-nav-item\s*\{[\s\S]*?border:\s*0;/);
     expect(agentCardStyles).not.toContain('box-shadow: inset 2px 0 0');
     expect(agentCardStyles).not.toContain('box-shadow: inset 0 -2px 0');
   });

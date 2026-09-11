@@ -854,7 +854,7 @@ fn materialize_launch_spec(launch: CronLaunchSpec) -> CronLaunchSpec {
 
 fn normalize_agent_type(agent_type: &str) -> String {
     if agent_type.trim().is_empty() {
-        "agentic".to_string()
+        "Standard".to_string()
     } else {
         agent_type.trim().to_string()
     }

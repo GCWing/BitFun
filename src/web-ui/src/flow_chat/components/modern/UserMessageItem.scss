@@ -9,18 +9,6 @@
     var(--openbitfun-control-flow-chat-flow-item-gap)
     var(--openbitfun-control-flow-chat-content-padding-inline);
 
-  &:hover,
-  &:focus-within {
-    .user-message-item__timestamp {
-      opacity: 1;
-    }
-
-    .user-message-item__actions {
-      opacity: 1;
-      pointer-events: auto;
-    }
-  }
-
   @media (max-width: 768px) {
     margin-left: var(--openbitfun-control-flow-chat-content-padding-inline-mobile);
     margin-right: var(--openbitfun-control-flow-chat-content-padding-inline-mobile);
@@ -69,24 +57,21 @@
   font-variant-numeric: tabular-nums;
   line-height: var(--openbitfun-type-flow-meta-line-height);
   white-space: nowrap;
-  opacity: 0;
+  opacity: 1;
   pointer-events: none;
-  transition: opacity 140ms ease;
+  margin-right: auto;
 }
 
 .user-message-item__meta {
   /* Keep the full action hit targets in the measured row, including when a
-     legacy message has no timestamp. Opacity-only hover/focus changes preserve
-     this height and leave the trailing item gap clear for the next response. */
+     legacy message has no timestamp. The always-visible metadata leaves the
+     trailing item gap clear for the next response. */
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 0.125rem;
   box-sizing: border-box;
   padding: var(--openbitfun-space-1) 0 0;
-  // Keep the shell hovered while the pointer travels from the bubble to the
-  // timestamp/actions row, so the controls do not disappear before they can
-  // be reached.
   pointer-events: auto;
 }
 
@@ -126,10 +111,9 @@
   align-items: center;
   gap: 0.125rem;
   flex-shrink: 0;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 140ms ease;
-  /* Hidden controls still occupy their full height in the meta row. */
+  opacity: 1;
+  pointer-events: auto;
+  /* Controls remain available without requiring hover or keyboard focus. */
   margin: 0;
 }
 
@@ -247,10 +231,6 @@
     background: transparent;
     color: var(--openbitfun-color-content-primary);
     box-shadow: none;
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.97);
   }
 
   &:focus-visible {
@@ -397,10 +377,6 @@
 
   &:hover {
     background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 30%, transparent);
-  }
-
-  &:active {
-    transform: scale(0.97);
   }
 
   &:focus-visible {

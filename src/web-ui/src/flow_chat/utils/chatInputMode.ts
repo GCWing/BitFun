@@ -1,29 +1,17 @@
+import { HARNESS_IDS, canonicalAgentId, canonicalHarnessId, type HarnessId } from '@/shared/agents/identity';
 import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 
-export const DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH = 'app.flow_chat.default_mode_id';
-
 const MAIN_AGENT_EXCLUDED_MODE_IDS = new Set([
-  'agentic',
+  ...HARNESS_IDS.map(id => id.toLowerCase()),
   'claw',
-  'creative',
-  'minimal',
   // Retired built-in modes that may still be advertised by an older peer.
   'multitask',
   'plan',
-  'ultra',
 ]);
 
-export type AgentExecutionTier = 'minimal' | 'balanced' | 'ultimate';
-
+export type AgentExecutionTier = HarnessId;
 export function agentExecutionTier(agentType: string | null | undefined): AgentExecutionTier {
-  switch (normalizeModeLookupId(agentType)) {
-    case 'minimal':
-      return 'minimal';
-    case 'ultra':
-      return 'ultimate';
-    default:
-      return 'balanced';
-  }
+  return canonicalHarnessId(agentType) ?? 'Standard';
 }
 
 export function canSwitchSessionMainAgent(params: {
@@ -78,7 +66,7 @@ function normalizeAgentTypeString(value: string | null | undefined): string | nu
     return null;
   }
 
-  return normalized;
+  return canonicalAgentId(normalized);
 }
 
 function normalizeWorkspacePath(value: string | null | undefined): string | null {
@@ -179,7 +167,11 @@ export function normalizeUserDefaultChatInputModeId(value: unknown): string | nu
   }
 
   const trimmed = value.trim();
-  return trimmed ? trimmed : null;
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.toLowerCase() === 'claw' ? 'Claw' : canonicalAgentId(trimmed);
 }
 
 export function resolveSessionAssistantWorkspace(params: {
@@ -205,7 +197,8 @@ export function resolveSessionAssistantWorkspace(params: {
 }
 
 function normalizeModeLookupId(value: string | null | undefined): string | null {
-  return normalizeOptionalString(value)?.toLowerCase() ?? null;
+  const id = normalizeOptionalString(value);
+  return id ? canonicalAgentId(id).toLowerCase() : null;
 }
 
 function canonicalFixedModeId(value: string | null | undefined): string | null {
@@ -266,7 +259,7 @@ export function resolveChatInputModePolicy(params: {
 
 /**
  * Main Agents are selected with the Harness control before the first Turn.
- * Standard, Minimal, and Ultra are already represented by Harness profiles;
+ * Minimal, Standard, Ultimate, and Creative are already represented by Harness profiles;
  * Claw belongs to Assistant workspaces. Retired built-in modes stay filtered
  * when an older peer still advertises them.
  */
@@ -285,7 +278,7 @@ export function resolveChatInputSendAgentType(params: {
   acpTargetAgentType?: string | null;
   composerMode: string;
 }): string {
-  const composerMode = normalizeAgentTypeString(params.composerMode) ?? 'agentic';
+  const composerMode = normalizeAgentTypeString(params.composerMode) ?? 'Standard';
   if (!params.isSubagentTarget) {
     return normalizeAgentTypeString(params.acpTargetAgentType) ?? composerMode;
   }
@@ -351,7 +344,7 @@ export function resolveWorkspaceChatInputMode(params: {
   isAssistantWorkspace: boolean;
   sessionMode?: string | null;
 }): string | null {
-  const normalizedSessionMode = params.sessionMode?.trim();
+  const normalizedSessionMode = normalizeAgentTypeString(params.sessionMode);
 
   if (params.isAssistantWorkspace) {
     return params.currentMode === 'Claw' ? null : 'Claw';
@@ -366,7 +359,7 @@ export function resolveWorkspaceChatInputMode(params: {
   }
 
   if (!normalizedSessionMode && params.currentMode === 'Claw') {
-    return 'agentic';
+    return 'Standard';
   }
 
   return null;
@@ -380,9 +373,9 @@ export function resolveAvailableChatInputMode(params: {
   availableModeIds: Iterable<string>;
 }): string | null {
   const availableModeIds = new Set(
-    Array.from(params.availableModeIds, (modeId) => modeId.trim()).filter(Boolean),
+    Array.from(params.availableModeIds, (modeId) => canonicalAgentId(modeId.trim())).filter(Boolean),
   );
-  const normalizedSessionMode = params.sessionMode?.trim();
+  const normalizedSessionMode = normalizeAgentTypeString(params.sessionMode);
   const synchronizedMode = resolveWorkspaceChatInputMode(params);
 
   // A persisted standard-Session mode is an execution binding, not a catalog
@@ -402,12 +395,12 @@ export function resolveAvailableChatInputMode(params: {
     return synchronizedMode;
   }
 
-  const normalizedCurrentMode = params.currentMode.trim();
+  const normalizedCurrentMode = canonicalAgentId(params.currentMode.trim());
   const normalizedUserDefaultModeId = normalizeUserDefaultChatInputModeId(params.userDefaultModeId);
   const effectiveUserDefaultModeId =
     normalizedUserDefaultModeId
-      // Do not restore retired built-in Agents from older user config.
-      && !['multitask', 'plan'].includes(normalizeModeLookupId(normalizedUserDefaultModeId) ?? '')
+      // Do not restore Assistant-fixed or retired Agents from user config.
+      && !['claw', 'multitask', 'plan'].includes(normalizeModeLookupId(normalizedUserDefaultModeId) ?? '')
       && availableModeIds.has(normalizedUserDefaultModeId)
       ? normalizedUserDefaultModeId
       : null;
@@ -416,7 +409,7 @@ export function resolveAvailableChatInputMode(params: {
     !normalizedSessionMode &&
     Boolean(effectiveUserDefaultModeId);
 
-  if (canUseUserDefaultMode && effectiveUserDefaultModeId && normalizedCurrentMode === 'agentic') {
+  if (canUseUserDefaultMode && effectiveUserDefaultModeId && normalizedCurrentMode === 'Standard') {
     return effectiveUserDefaultModeId;
   }
 
@@ -432,8 +425,8 @@ export function resolveAvailableChatInputMode(params: {
     return 'Claw';
   }
 
-  if (availableModeIds.has('agentic')) {
-    return 'agentic';
+  if (availableModeIds.has('Standard')) {
+    return 'Standard';
   }
 
   return availableModeIds.values().next().value ?? null;

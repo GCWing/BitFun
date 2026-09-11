@@ -40,11 +40,6 @@
     display: none;
   }
 
-  &__host-card {
-    min-inline-size: 0;
-    justify-content: flex-start;
-  }
-
   &__brand-image {
     display: block;
     flex: none;
@@ -58,21 +53,6 @@
     font-size: var(--openbitfun-type-body-sm-font-size);
     line-height: var(--openbitfun-type-body-sm-line-height);
     text-align: center;
-  }
-
-  &__sidebar-footer {
-    align-items: flex-start;
-    justify-content: flex-start;
-    gap: var(--openbitfun-space-2);
-    padding: var(--openbitfun-space-4);
-    color: var(--openbitfun-color-content-muted);
-    font-size: var(--openbitfun-type-meta-font-size);
-    line-height: var(--openbitfun-type-body-sm-line-height);
-
-    > [data-openbitfun-component='icon'] {
-      flex: none;
-      margin-block-start: var(--openbitfun-space-1);
-    }
   }
 
   &__main {
@@ -682,8 +662,7 @@
     }
 
     &__sidebar-title,
-    &__search,
-    &__sidebar-footer {
+    &__search {
       display: none;
     }
 

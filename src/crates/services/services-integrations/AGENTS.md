@@ -24,14 +24,19 @@ slices that are outside pure product logic but still platform-neutral.
   presentation/validation behavior remain outside this crate unless a reviewed
   owner move proves behavior equivalence.
 - Remote-connect platform-neutral primitives belong here: device identity,
-  pairing/encryption, QR payload generation, relay client protocol, dialog/cancel
-  orchestration ports, LAN/ngrok provider helpers, IM bot provider clients,
+  account device encryption, authenticated device invitation generation, relay client protocol, dialog/cancel
+  orchestration ports, LAN endpoint helpers, IM bot provider clients,
   provider-private cursor caches, mobile-web relay upload, image-context adapter
   contracts, remote workspace helpers, and command/response assembly.
 - The `remote-persistence` feature is the lightweight persisted-shape owner shared
   by Remote Connect, remote SSH, and offline migration. Keep it free of network,
   SSH transport, and runtime orchestration dependencies so owner readers and
   writers can validate staged data without enabling those heavier families.
+- `remote_connect::file_projection` performs bounded output reads through the
+  session-selected `WorkspaceFileSystem`; `remote-connect` therefore selects
+  `runtime-ports/workspace-ports` without enabling an SSH implementation. Core
+  supplies the session root and provider. IM adapters consume authorized bytes
+  and must not re-resolve paths on the bot host.
 - Remote workspace facts, session metadata, file projection DTOs, and
   workspace/projection host traits belong in `openbitfun-runtime-ports`.
 - Workspace-root source selection, persistence/workspace service reads,
@@ -44,12 +49,12 @@ slices that are outside pure product logic but still platform-neutral.
   SSH features. Stable workspace path/session identity is owned by
   `services-core::workspace_identity`; `remote_ssh::paths` is only its legacy
   compatibility re-export and must not regain transport-independent logic.
-- One-click relay self-deploy (`remote_ssh/relay_deploy.rs`) stages embedded
+- Retained developer Relay deployment tooling (`remote_ssh/relay_deploy.rs`) stages embedded
   scripts under `~/.openbitfun/relay-deploy/` and clones source to
   `~/.openbitfun/relay-src/` (never `$HOME/openbitfun`). Embeds
   `src/apps/relay-server/mirror.sh` and runs `openbitfun_mirror_init` before apt /
   Docker install / GitHub sync so mainland China hosts use configured mirrors.
-  Invariants: `src/web-ui/src/features/relay-deploy/README.md`. Desktop Tauri
+  Operator guide: `src/apps/relay-server/README.md`. The product wizard is retired. Desktop Tauri
   wrapper: `src/apps/desktop/src/api/relay_deploy_api.rs`.
 - Workspace search owns the local flashgrep daemon/session lifecycle and
   indexed-search result conversion behind `workspace-search`; product config
@@ -121,6 +126,7 @@ cargo test -p openbitfun-services-integrations --no-default-features --features 
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features remote-ssh-concrete --lib remote_ssh::relay_deploy::tests::
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features remote-connect --lib remote_connect::relay_client::tests::
 cargo test -p openbitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts
+cargo test --locked -p openbitfun-services-integrations --no-default-features --features workspace-search --test workspace_search_contracts
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features deep-research --lib deep_research::tests::
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features review-platform --lib review_platform
 pnpm run check:core-boundaries

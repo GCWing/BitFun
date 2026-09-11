@@ -38,9 +38,9 @@ impl OpenBitFunAcpRuntime {
         let cwd = request.cwd.to_string_lossy().to_string();
         let mcp_servers = request.mcp_servers;
         self.validate_mcp_servers(&mcp_servers)?;
-        let modes = build_session_modes(Some("agentic")).await;
+        let modes = build_session_modes(Some("Standard")).await;
         let models = build_session_model_state(None).await?;
-        let config_options = build_session_config_options(None, Some("agentic")).await?;
+        let config_options = build_session_config_options(None, Some("Standard")).await?;
         let session_id = uuid::Uuid::new_v4().to_string();
         Self::validate_session_target(&session_id, Path::new(&cwd))?;
         let _session_transition = self.claim_session_transition(&session_id)?;
@@ -56,7 +56,7 @@ impl OpenBitFunAcpRuntime {
                 "ACP Session - {}",
                 chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
             ),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             agent_route_key: None,
             workspace_path: Some(cwd.clone()),
             project_workspace_path: None,
@@ -545,11 +545,11 @@ async fn build_session_modes(preferred_mode_id: Option<&str>) -> SessionModeStat
         .or_else(|| {
             available_modes
                 .iter()
-                .find(|mode| mode.id.to_string() == "agentic")
+                .find(|mode| mode.id.to_string() == "Standard")
                 .or_else(|| available_modes.first())
                 .map(|mode| mode.id.clone())
         })
-        .unwrap_or_else(|| "agentic".into());
+        .unwrap_or_else(|| "Standard".into());
 
     SessionModeState::new(current_mode_id, available_modes)
 }

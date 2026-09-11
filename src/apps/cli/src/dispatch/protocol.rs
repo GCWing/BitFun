@@ -87,6 +87,7 @@ pub(crate) struct DispatchSubmitRequest {
     pub(crate) job_id: String,
     pub(crate) session_id: String,
     pub(crate) workspace_path: String,
+    #[serde(deserialize_with = "openbitfun_core_types::agent_identity::deserialize_agent_id")]
     pub(crate) agent_type: String,
     pub(crate) prompt: String,
     pub(crate) approval_policy: DispatchApprovalPolicy,
@@ -453,6 +454,9 @@ pub(crate) struct DispatchQueryRequest {
     pub(crate) kind: DispatchQueryKind,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) file_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) file_chunk:
+        Option<openbitfun_services_core::dispatch_contract::DispatchFileChunkRequest>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -460,6 +464,7 @@ pub(crate) struct DispatchQueryRequest {
 pub(crate) enum DispatchQueryKind {
     UsageReport,
     ReadFile,
+    ReadFileChunk,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
@@ -630,6 +635,7 @@ pub(crate) struct DispatchJobListEntry {
     pub(crate) started_at: Option<String>,
     pub(crate) workspace_path: String,
     pub(crate) title: String,
+    #[serde(deserialize_with = "openbitfun_core_types::agent_identity::deserialize_agent_id")]
     pub(crate) agent_type: String,
     pub(crate) approval_policy: DispatchApprovalPolicy,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -716,7 +722,7 @@ mod tests {
             started_at: None,
             workspace_path: "/repo".to_string(),
             title: "Reasoning job".to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             approval_policy: DispatchApprovalPolicy::Remote,
             model: Some("model-1".to_string()),
             reasoning_preset: Some("high".to_string()),

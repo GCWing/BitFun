@@ -1,24 +1,24 @@
 {
   "version": 1,
-  "description": "No-growth baseline for i18n governance candidates. Lower counts when shared-term or l10n debt is removed; do not raise without review.",
+  "description": "No-growth baseline for i18n governance candidates. Lower counts when shared-term or l10n debt is removed; do not raise without review. Agent identity unification removes duplicate labels; agents.Minimal and agents.Standard only inventory existing reasoning, review, and Markdown-preview homonyms.",
   "budgets": {
     "confirmedUnusedKeys": {
       "maxTotal": 0
     },
     "sharedTermDuplicates": {
-      "maxTotal": 168,
+      "maxTotal": 154,
       "bySurface": {
         "core": 15,
         "installer": 0,
         "mobile-web": 0,
         "relay-static-homepage": 0,
-        "web-ui": 153
+        "web-ui": 139
       },
       "bySharedKey": {
-        "agents.claw": 3,
+        "agents.claw": 0,
         "agents.code": 0,
         "agents.cowork": 0,
-        "agents.default": 2,
+        "agents.default": 0,
         "connectionMethods.openbitfunServer": 0,
         "connectionMethods.lan": 0,
         "features.codeAgent": 1,
@@ -30,15 +30,17 @@
         "modes.expert": 2,
         "modes.review": 0,
         "product.name": 0,
-        "statuses.cancelled": 27,
-        "statuses.done": 24,
-        "statuses.failed": 39,
+        "statuses.cancelled": 24,
+        "statuses.done": 20,
+        "statuses.failed": 32,
         "statuses.loading": 5,
-        "statuses.running": 10,
+        "statuses.running": 6,
         "tools.edit": 33,
         "tools.explore": 2,
         "tools.search": 10,
-        "tools.shell": 7
+        "tools.shell": 7,
+        "agents.Minimal": 3,
+        "agents.Standard": 6
       }
     },
     "l10nQualityCandidates": {

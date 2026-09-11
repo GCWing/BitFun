@@ -16,7 +16,8 @@ pub use definitions::custom::{CustomMode, CustomSubagent, CustomSubagentKind};
 pub(crate) use definitions::external::ExternalProvidedAgent;
 pub use definitions::hidden::{CodeReviewAgent, DeepReviewAgent, GenerateDocAgent};
 pub use definitions::modes::{
-    AgenticMode, ClawMode, CoworkMode, CreativeMode, DeepResearchMode, MinimalMode, UltraMode,
+    ClawMode, CoworkMode, CreativeHarness, DeepResearchMode, MinimalHarness, StandardHarness,
+    UltimateHarness,
 };
 pub use definitions::review::{ReviewFixerAgent, ReviewJudgeAgent, ReviewWorkerAgent};
 pub use definitions::shared::ReadonlySubagent;
@@ -28,9 +29,9 @@ use indexmap::IndexMap;
 pub use openbitfun_agent_runtime::agents::{
     is_swarm_delegate_agent_type, is_swarm_planner_agent_type, mode_config_profile_label,
     mode_config_profile_member_mode_ids, mode_presentation_rank, resolve_mode_config_profile_id,
-    shared_coding_mode_user_context_policy, SHARED_CODING_MODE_CONFIG_PROFILE_ID,
-    SHARED_CODING_MODE_CONFIG_PROFILE_LABEL, SHARED_CODING_MODE_IDS,
-    SHARED_CODING_MODE_PROMPT_TEMPLATE, SWARM_DELEGATE_AGENT_TYPES, SWARM_PLANNER_AGENT_TYPES,
+    standard_harness_user_context_policy, STANDARD_HARNESS_CONFIG_ID,
+    STANDARD_HARNESS_CONFIG_LABEL, STANDARD_HARNESS_CONFIG_MEMBERS,
+    STANDARD_HARNESS_PROMPT_TEMPLATE, SWARM_DELEGATE_AGENT_TYPES, SWARM_PLANNER_AGENT_TYPES,
 };
 pub use openbitfun_agent_runtime::custom_agent::{
     custom_agent_model_or_default, custom_agent_review_writable_tools, default_custom_agent_tools,
@@ -82,17 +83,7 @@ static EMPTY_AGENT_TOOL_POLICY_OVERRIDES: std::sync::LazyLock<AgentToolPolicyOve
 static EMPTY_PERMISSION_CONSTRAINTS: std::sync::LazyLock<PermissionConstraintLayer> =
     std::sync::LazyLock::new(PermissionConstraintLayer::default);
 
-pub fn shared_coding_mode_tool_exposure_overrides() -> AgentToolPolicyOverrides {
-    // Web research is a baseline capability of the shared coding modes; keep
-    // WebSearch/WebFetch expanded so models do not need a GetToolSpec
-    // unlock round-trip when switching between those modes.
-    let mut overrides = AgentToolPolicyOverrides::default();
-    overrides.insert("WebSearch".to_string(), ToolExposure::Direct);
-    overrides.insert("WebFetch".to_string(), ToolExposure::Direct);
-    overrides
-}
-
-pub fn shared_coding_mode_tools() -> Vec<String> {
+pub fn standard_harness_tools() -> Vec<String> {
     vec![
         "Task".to_string(),
         "ListModels".to_string(),
@@ -263,8 +254,8 @@ pub trait Agent: Send + Sync + 'static {
 #[cfg(test)]
 mod tests {
     use super::{
-        get_embedded_prompt, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
-        shared_coding_mode_user_context_policy, Agent, AgenticMode, MinimalMode, EMBEDDED_PROMPTS,
+        get_embedded_prompt, standard_harness_tools, standard_harness_user_context_policy, Agent,
+        MinimalHarness, StandardHarness, EMBEDDED_PROMPTS,
     };
 
     #[test]
@@ -278,14 +269,14 @@ mod tests {
     #[test]
     fn minimal_agent_prompt_resolves_to_embedded_prompt() {
         assert!(
-            get_embedded_prompt(MinimalMode::new().prompt_template_name(None)).is_some(),
+            get_embedded_prompt(MinimalHarness::new().prompt_template_name(None)).is_some(),
             "minimal Agent prompt must resolve through the embedded prompt catalog"
         );
     }
 
     #[test]
-    fn shared_coding_mode_tools_exclude_create_plan_and_include_goal_tools() {
-        let tools = shared_coding_mode_tools();
+    fn standard_harness_tools_exclude_create_plan_and_include_goal_tools() {
+        let tools = standard_harness_tools();
 
         assert!(tools.contains(&"ListModels".to_string()));
         assert!(!tools.contains(&"CreatePlan".to_string()));
@@ -294,15 +285,15 @@ mod tests {
     }
 
     #[test]
-    fn shared_coding_mode_tools_include_review_platform() {
-        let tools = shared_coding_mode_tools();
+    fn standard_harness_tools_include_review_platform() {
+        let tools = standard_harness_tools();
 
         assert!(tools.contains(&"ReviewPlatform".to_string()));
     }
 
     #[test]
-    fn shared_coding_mode_tools_keep_canvas_provider_tools_opt_in() {
-        let tools = shared_coding_mode_tools();
+    fn standard_harness_tools_keep_canvas_provider_tools_opt_in() {
+        let tools = standard_harness_tools();
 
         assert!(!tools.contains(&"CreateCanvas".to_string()));
         assert!(!tools.contains(&"ReadCanvas".to_string()));
@@ -312,23 +303,15 @@ mod tests {
 
     #[test]
     fn agentic_mode_uses_shared_coding_tools() {
-        let shared_tools = shared_coding_mode_tools();
+        let shared_tools = standard_harness_tools();
 
-        assert_eq!(AgenticMode::new().default_tools(), shared_tools);
+        assert_eq!(StandardHarness::new().default_tools(), shared_tools);
     }
 
     #[test]
     fn agentic_mode_uses_shared_coding_user_context_policy() {
-        let shared_policy = shared_coding_mode_user_context_policy();
+        let shared_policy = standard_harness_user_context_policy();
 
-        assert_eq!(AgenticMode::new().user_context_policy(), shared_policy);
-    }
-
-    #[test]
-    fn agentic_mode_uses_shared_coding_tool_exposure_overrides() {
-        let shared_overrides = shared_coding_mode_tool_exposure_overrides();
-        let agentic = AgenticMode::new();
-
-        assert_eq!(agentic.tool_exposure_overrides(), &shared_overrides);
+        assert_eq!(StandardHarness::new().user_context_policy(), shared_policy);
     }
 }

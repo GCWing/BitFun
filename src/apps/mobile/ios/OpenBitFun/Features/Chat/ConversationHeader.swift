@@ -22,7 +22,7 @@ struct ConversationHeader: View {
         if model.surface == .local && model.localSessionSelected { return model.localized("本地会话") }
         if model.remoteConnected {
             return model.accountDeviceName
-                ?? model.directPairingDeviceName
+
                 ?? model.localized("已连接桌面端")
         }
         return nil
@@ -202,20 +202,8 @@ struct ConversationActionsPopover: View {
                 .foregroundStyle(OpenBitFunTheme.muted)
                 .frame(height: 28)
                 .padding(.leading, 8)
-            if model.surface == .local {
-                action(
-                    model.selectedSession?.pinned == true ? "取消置顶" : "置顶",
-                    icon: "checkmark.circle",
-                    selected: model.selectedSession?.pinned == true,
-                    perform: model.togglePinSelectedSession
-                )
-            }
             action("已上传文件", icon: "cloud", perform: model.showUploadedFiles)
-            if model.surface == .local {
-                Divider().overlay(OpenBitFunTheme.line).padding(.vertical, 8)
-                action("归档", icon: "folder", perform: model.archiveSelectedSession)
-                action("删除", icon: "gearshape", perform: model.deleteSelectedSession)
-            } else if model.isSending {
+            if model.isSending {
                 Divider().overlay(OpenBitFunTheme.line).padding(.vertical, 8)
                 action("停止", icon: "gearshape", perform: model.stopSending)
             }

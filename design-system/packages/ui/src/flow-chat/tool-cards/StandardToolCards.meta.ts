@@ -1,6 +1,8 @@
 import type { ComponentMeta } from "../../registry.types";
 
 const ambientTokens = [
+  "control.flowChat.rowIconSize",
+  "control.flowChat.rowIconGap",
   "color.content.primary",
   "color.content.secondary",
   "color.content.muted",

@@ -280,32 +280,29 @@ mod tests {
             );
         }
 
-        for (mutation, end) in [
-            (
-                "pub async fn account_import_remote_sessions",
-                "pub async fn account_fetch_session_turns",
-            ),
-            (
-                "pub async fn account_fetch_session_turns",
-                "pub async fn account_execute_on_device",
-            ),
-            (
-                "async fn import_session_bundle",
-                "async fn pull_and_reconcile",
-            ),
+        for retired_mutation in [
+            "pub async fn account_import_remote_sessions",
+            "pub async fn account_fetch_session_turns",
+            "async fn import_session_bundle",
+            "async fn pull_and_reconcile",
         ] {
-            let source = remote_connect_api
-                .split_once(mutation)
-                .unwrap_or_else(|| panic!("missing relay mutation: {mutation}"))
-                .1
-                .split_once(end)
-                .unwrap_or_else(|| panic!("missing relay mutation boundary: {end}"))
-                .0;
             assert!(
-                source.contains("ensure_workspace_runtime_ownership"),
-                "relay mutation {mutation} must pass through the Core ownership owner"
+                !remote_connect_api.contains(retired_mutation),
+                "retired cloud import {retired_mutation} must not mutate controller sessions"
             );
         }
+        let device_dispatch = remote_connect_api
+            .split_once("async fn execute_local_remote_command(")
+            .expect("device command dispatcher")
+            .1
+            .split_once("#[cfg(test)]")
+            .expect("device command dispatcher boundary")
+            .0;
+        assert!(
+            device_dispatch.contains("crate::api::peer_host_invoke::dispatch(command, args.clone())")
+                && device_dispatch.contains("server.dispatch(other).await"),
+            "device commands must reuse the host and RemoteServer dispatchers that own runtime access"
+        );
 
         for mutation in [
             "pub async fn rollback_session",

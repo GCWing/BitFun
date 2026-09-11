@@ -494,7 +494,7 @@ impl DialogScheduler {
         turn_id: String,
         content: String,
         display_content: Option<String>,
-        attachments: Vec<AgentInputAttachment>,
+        mut attachments: Vec<AgentInputAttachment>,
         metadata: serde_json::Map<String, serde_json::Value>,
     ) -> Result<DialogSteerOutcome, String> {
         if content.trim().is_empty() && attachments.is_empty() {
@@ -503,7 +503,9 @@ impl DialogScheduler {
         // Reject a malformed attachment here rather than at the round boundary:
         // the caller is still holding the user's message and can surface the
         // failure, whereas the injection consumer would have to drop it.
-        agent_dialog_turn_image_contexts(&attachments).map_err(|error| error.to_string())?;
+        let mut images = agent_dialog_turn_image_contexts(&attachments)
+            .map_err(|error| error.to_string())?
+            .unwrap_or_default();
         let _operation_guard = self.lock_session_operation(&session_id).await;
         let active_turn_id = match self
             .session_manager
@@ -520,6 +522,23 @@ impl DialogScheduler {
             }
             _ => None,
         };
+
+        if active_turn_id.as_deref() == Some(turn_id.as_str()) && !images.is_empty() {
+            self.coordinator
+                .prepare_input_images(&session_id, &mut images)
+                .await
+                .map_err(|error| error.to_string())?;
+            for (attachment, image) in attachments.iter_mut().zip(&images) {
+                if let Some(path) = &image.image_path {
+                    attachment
+                        .metadata
+                        .insert("imagePath".into(), serde_json::json!(path));
+                }
+                attachment
+                    .metadata
+                    .insert("mimeType".into(), serde_json::json!(image.mime_type));
+            }
+        }
 
         let steering_id = Uuid::new_v4().to_string();
         match resolve_dialog_steering_action(
@@ -1083,7 +1102,7 @@ impl DialogScheduler {
         };
         let agent_type = session.agent_type.trim();
         if agent_type.is_empty() {
-            Ok("agentic".to_string())
+            Ok("Standard".to_string())
         } else {
             Ok(agent_type.to_string())
         }
@@ -1231,6 +1250,13 @@ impl DialogScheduler {
             return Err(SchedulerSubmitError::Message(
                 "Session state does not allow starting new dialog: Processing".to_string(),
             ));
+        }
+
+        if let Some(images) = queued_turn.image_contexts.as_mut() {
+            self.coordinator
+                .prepare_input_images(&session_id, images)
+                .await
+                .map_err(SchedulerSubmitError::Core)?;
         }
 
         // OpenCode-compatible semantics: accepting a new prompt while history
@@ -3279,7 +3305,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Reverted".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().into_owned()),
                     ..Default::default()
@@ -3341,7 +3367,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Parent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().into_owned()),
                     ..Default::default()
@@ -3363,7 +3389,7 @@ mod tests {
         scheduler
             .deliver_background_result(
                 session_id.to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 None,
                 None,
                 None,
@@ -3401,7 +3427,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "External parent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().into_owned()),
                     model_id: Some("model-original".to_string()),
@@ -3456,7 +3482,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Interrupted".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().into_owned()),
                     ..Default::default()
@@ -3467,7 +3493,7 @@ mod tests {
         session_manager
             .start_dialog_turn(
                 session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "finish this".to_string(),
                 Some(turn_id.to_string()),
                 None,
@@ -3533,7 +3559,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Goal parent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().into_owned()),
                     ..Default::default()
@@ -3555,7 +3581,7 @@ mod tests {
         scheduler
             .deliver_thread_goal_objective_updated(
                 session_id.to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 None,
                 None,
                 None,
@@ -3591,7 +3617,7 @@ mod tests {
             original_user_input: None,
             prepended_messages: Vec::new(),
             turn_id: Some(turn_id.to_string()),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             workspace_path: Some("/workspace".to_string()),
             remote_connection_id: None,
             remote_ssh_host: None,
@@ -3664,7 +3690,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Interrupted queue hold".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().into_owned()),
                     ..Default::default()
@@ -3675,7 +3701,7 @@ mod tests {
         session_manager
             .start_dialog_turn(
                 session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "original work".to_string(),
                 Some(turn_id.to_string()),
                 None,
@@ -3720,7 +3746,7 @@ mod tests {
             .create_session_with_id(
                 Some(parent_session_id.to_string()),
                 "Parent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().to_string()),
                     ..Default::default()
@@ -3798,7 +3824,7 @@ mod tests {
                 original_message: None,
                 turn_id: Some("missing-turn".to_string()),
                 execution: Default::default(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 workspace_path: Some(workspace.to_string_lossy().to_string()),
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -3837,7 +3863,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Queued".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().to_string()),
                     ..Default::default()
@@ -3864,7 +3890,7 @@ mod tests {
                 original_message: None,
                 turn_id: Some(turn_id.to_string()),
                 execution: Default::default(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 workspace_path: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -3913,7 +3939,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Delegated".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().to_string()),
                     ..Default::default()
@@ -3944,7 +3970,7 @@ mod tests {
                         ecosystem_id: "opencode".to_string(),
                         logical_id: "reviewer".to_string(),
                     },
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 workspace_path: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -3972,7 +3998,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Delegated".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().to_string()),
                     ..Default::default()
@@ -3999,7 +4025,7 @@ mod tests {
                 original_message: None,
                 turn_id: Some("queued-turn".to_string()),
                 execution: Default::default(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 workspace_path: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -4034,7 +4060,7 @@ mod tests {
                         ecosystem_id: "opencode".to_string(),
                         logical_id: "reviewer".to_string(),
                     },
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 workspace_path: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -4066,7 +4092,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "ACP".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().to_string()),
                     ..Default::default()
@@ -4093,7 +4119,7 @@ mod tests {
                 original_message: None,
                 turn_id: Some("rejected-turn".to_string()),
                 execution: Default::default(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 workspace_path: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -4136,7 +4162,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Duplicate".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().to_string()),
                     ..Default::default()
@@ -4166,7 +4192,7 @@ mod tests {
                 original_message: None,
                 turn_id: Some(turn_id.to_string()),
                 execution: Default::default(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 workspace_path: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -4195,7 +4221,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Workspace".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace_a.to_string_lossy().to_string()),
                     ..Default::default()
@@ -4211,7 +4237,7 @@ mod tests {
                 original_message: None,
                 turn_id: Some(turn_id.to_string()),
                 execution: Default::default(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 workspace_path: Some(workspace_b.to_string_lossy().to_string()),
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -4245,7 +4271,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Invalid agent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().to_string()),
                     ..Default::default()
@@ -4289,7 +4315,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Known turn".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().to_string()),
                     ..Default::default()
@@ -4300,7 +4326,7 @@ mod tests {
         session_manager
             .start_dialog_turn(
                 session_id,
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "hello".to_string(),
                 Some(turn_id.to_string()),
                 None,
@@ -4335,7 +4361,7 @@ mod tests {
             Some("/workspace".to_string()),
             None,
             None,
-            "agentic".to_string(),
+            "Standard".to_string(),
             "hello".to_string(),
             None,
             DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
@@ -4355,7 +4381,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Steering".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().into_owned()),
                     ..Default::default()
@@ -4559,7 +4585,7 @@ mod tests {
             .create_session_with_id(
                 Some(session_id.to_string()),
                 "Maintenance retire".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 SessionConfig {
                     workspace_path: Some(workspace.to_string_lossy().to_string()),
                     ..Default::default()
@@ -4628,7 +4654,7 @@ mod tests {
             Some("/workspace".to_string()),
             None,
             None,
-            "agentic".to_string(),
+            "Standard".to_string(),
             "hello".to_string(),
             None,
             DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),

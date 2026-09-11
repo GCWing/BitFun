@@ -1,12 +1,9 @@
 import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
-import { RemoteModelCatalog, RemoteModelConfig } from '../../model/RemoteModels';
-import { ModelServiceSettingsPolicy } from '../policy/ModelServiceSettingsPolicy';
 import { SettingsSheetState } from '../state/SettingsSheetState';
 import { CARD, INK, LINE, MUTED, PAGE_BG, SOFT, STATUS_DANGER } from './Theme';
 import { AccountProfilePanel } from './AccountProfilePanel';
 import { LanguageSettingsPanel } from './LanguageSettingsPanel';
-import { ModelServiceSettingsPanel } from './ModelServiceSettingsPanel';
 import { SheetCloseHeader } from './SheetCloseHeader';
 import { SHEET_HORIZONTAL_PADDING, SHEET_TOP_RADIUS } from './SheetLayout';
 import { CloudAccountDevice } from '../../services/CloudAccountClient';
@@ -14,16 +11,8 @@ import { CloudAccountDevice } from '../../services/CloudAccountClient';
 @ComponentV2
 export struct SettingsSheet {
   @Param sheetState: SettingsSheetState = new SettingsSheetState();
-  @Param generalChatApiUrl: string = '';
-  @Param generalChatModelName: string = '';
-  @Param hasGeneralChatApiKey: boolean = false;
-  @Param generalChatModelCatalog: RemoteModelCatalog = {
-    version: 0,
-    models: [],
-    default_models: {}
-  };
-  @Param selectedGeneralChatModelId: string = '';
   @Param accountUsername: string = '';
+  @Param accountAvatarUrl: string = '';
   @Param authenticatedUserId: string = '';
   @Param fallbackUserId: string = '';
   @Param desktopName: string = '';
@@ -43,43 +32,10 @@ export struct SettingsSheet {
   @Event cloudSelectDevice: (device: CloudAccountDevice) => Promise<void> =
     async (_device: CloudAccountDevice): Promise<void> => {};
   @Event onSetLanguage: (language: string) => Promise<void> = async (_language: string) => {};
-  @Event onSelectGeneralChatModel: (modelId: string) => Promise<boolean> = async (_modelId: string) => false;
-  @Event onSaveGeneralChatConfig: (
-    apiUrl: string,
-    apiKey: string,
-    modelName: string,
-    clearApiKey: boolean
-  ) => Promise<string> = async (
-    _apiUrl: string,
-    _apiKey: string,
-    _modelName: string,
-    _clearApiKey: boolean
-  ) => '';
-  @Event onTestGeneralChatConfig: (
-    apiUrl: string,
-    apiKey: string,
-    modelName: string,
-    clearApiKey: boolean
-  ) => Promise<string> = async (
-    _apiUrl: string,
-    _apiKey: string,
-    _modelName: string,
-    _clearApiKey: boolean
-  ) => '';
-  aboutToAppear(): void {
-    this.syncGeneralChatConfig(this.generalChatApiUrl, this.generalChatModelName, this.hasGeneralChatApiKey);
-  }
-
   build() {
     Stack({ alignContent: Alignment.TopEnd }) {
       if (this.sheetState.page === 'language') {
         this.LanguagePanel()
-      } else if (this.sheetState.page === 'overview') {
-        this.ModelOverviewSheet()
-      } else if (this.sheetState.page === 'account') {
-        this.AccountModelsSheet()
-      } else if (this.sheetState.page === 'local') {
-        this.LocalEditorSheet()
       } else {
         this.SettingsHome()
       }
@@ -103,6 +59,7 @@ export struct SettingsSheet {
         Column({ space: 0 }) {
           AccountProfilePanel({
             accountUsername: this.accountUsername,
+            accountAvatarUrl: this.accountAvatarUrl,
             accountUserId: this.authenticatedUserId,
             fallbackUserId: this.fallbackUserId,
             deviceId: this.deviceId,
@@ -228,8 +185,6 @@ export struct SettingsSheet {
   private GeneralSettingsSection() {
     this.SectionTitle(RemoteI18n.t('settings.general.section'))
     this.GeneralCard()
-    this.SectionTitle(RemoteI18n.t('settings.model.section'))
-    this.ModelCard()
   }
 
   @Builder
@@ -260,25 +215,6 @@ export struct SettingsSheet {
           this.sheetState.setPage('language');
         },
         $r('sys.symbol.textformat')
-      )
-    }
-    .width('100%')
-    .backgroundColor(CARD)
-    .borderRadius(MobileDesignGeometry.settingsCardRadius)
-    .margin({ bottom: 24 })
-  }
-
-  @Builder
-  ModelCard() {
-    Column() {
-      this.SettingsRow(
-        RemoteI18n.t('settings.model.default'),
-        this.modelServiceStatus(),
-        true,
-        () => {
-          this.sheetState.setPage('overview');
-        },
-        $r('sys.symbol.square_grid_2x2')
       )
     }
     .width('100%')
@@ -359,97 +295,10 @@ export struct SettingsSheet {
     LanguageSettingsPanel({
       selectedLanguage: RemoteI18n.language(),
       onClose: () => {
-        this.sheetState.setPage(ModelServiceSettingsPolicy.parentSettingsPage('language'));
+        this.sheetState.setPage('main');
       },
       onSelect: (language: string) => {
         return this.onSetLanguage(language);
-      }
-    })
-  }
-
-  @Builder
-  ModelOverviewSheet() {
-    ModelServiceSettingsPanel({
-      page: 'overview',
-      sheetState: this.sheetState,
-      apiUrl: this.sheetState.savedGeneralChatApiUrl,
-      modelName: this.sheetState.savedGeneralChatModelName,
-      hasApiKey: this.sheetState.savedGeneralChatHasApiKey,
-      modelCatalog: this.generalChatModelCatalog,
-      selectedModelId: this.selectedGeneralChatModelId,
-      onClose: () => {
-        this.sheetState.setPage(ModelServiceSettingsPolicy.parentSettingsPage('overview'));
-      },
-      onOpenAccountModels: () => {
-        this.sheetState.setPage('account');
-      },
-      onOpenLocalEditor: () => {
-        this.sheetState.setPage('local');
-      },
-      onSelectModel: (modelId: string) => {
-        void this.selectGeneralChatModel(modelId);
-      }
-    })
-  }
-
-  @Builder
-  AccountModelsSheet() {
-    ModelServiceSettingsPanel({
-      page: 'account',
-      sheetState: this.sheetState,
-      apiUrl: this.sheetState.savedGeneralChatApiUrl,
-      modelName: this.sheetState.savedGeneralChatModelName,
-      hasApiKey: this.sheetState.savedGeneralChatHasApiKey,
-      modelCatalog: this.generalChatModelCatalog,
-      selectedModelId: this.selectedGeneralChatModelId,
-      onClose: () => {
-        this.sheetState.setPage(ModelServiceSettingsPolicy.parentSettingsPage('account'));
-      },
-      onSelectModel: (modelId: string) => {
-        void this.selectGeneralChatModel(modelId).then((selected: boolean) => {
-          if (selected) {
-            this.sheetState.setPage('overview');
-          }
-        });
-      }
-    })
-  }
-
-  @Builder
-  LocalEditorSheet() {
-    ModelServiceSettingsPanel({
-      page: 'local',
-      sheetState: this.sheetState,
-      apiUrl: this.sheetState.savedGeneralChatApiUrl,
-      modelName: this.sheetState.savedGeneralChatModelName,
-      hasApiKey: this.sheetState.savedGeneralChatHasApiKey,
-      modelCatalog: this.generalChatModelCatalog,
-      selectedModelId: this.selectedGeneralChatModelId,
-      onClose: () => {
-        this.sheetState.setPage(ModelServiceSettingsPolicy.parentSettingsPage('local'));
-      },
-      onSaved: (
-        apiUrl: string,
-        modelName: string,
-        hasApiKey: boolean
-      ) => {
-        this.syncGeneralChatConfig(apiUrl, modelName, hasApiKey);
-      },
-      onTest: (
-        apiUrl: string,
-        apiKey: string,
-        modelName: string,
-        clearApiKey: boolean
-      ) => {
-        return this.onTestGeneralChatConfig(apiUrl, apiKey, modelName, clearApiKey);
-      },
-      onSave: (
-        apiUrl: string,
-        apiKey: string,
-        modelName: string,
-        clearApiKey: boolean
-      ) => {
-        return this.onSaveGeneralChatConfig(apiUrl, apiKey, modelName, clearApiKey);
       }
     })
   }
@@ -482,23 +331,4 @@ export struct SettingsSheet {
       RemoteI18n.t('remote.settings.accountDevice');
   }
 
-  private modelServiceStatus(): string {
-    const model = this.selectedGeneralChatModel();
-    return ModelServiceSettingsPolicy.modelLabel(model, RemoteI18n.t('settings.modelService.notConfigured'));
-  }
-
-  private selectedGeneralChatModel(): RemoteModelConfig | undefined {
-    return ModelServiceSettingsPolicy.currentModel(
-      this.generalChatModelCatalog,
-      this.selectedGeneralChatModelId
-    );
-  }
-
-  private async selectGeneralChatModel(modelId: string): Promise<boolean> {
-    return this.onSelectGeneralChatModel(modelId);
-  }
-
-  private syncGeneralChatConfig(apiUrl: string, modelName: string, hasApiKey: boolean): void {
-    this.sheetState.syncSaved(apiUrl, modelName, hasApiKey);
-  }
 }

@@ -18,8 +18,7 @@
     transition:
       min-block-size var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
       border-radius var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
-      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-      transform var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+      box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .root[data-interactive="true"] {
@@ -29,7 +28,6 @@
   }
 
   .root[data-interactive="true"]:active {
-    transform: scale(0.99);
     box-shadow: var(--openbitfun-shadow-sm);
   }
 

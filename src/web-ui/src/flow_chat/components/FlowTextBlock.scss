@@ -10,12 +10,10 @@
   @include markdownTypography.apply;
 
   width: 100%;
-  margin: 0 0 var(--openbitfun-control-flow-chat-flow-item-gap) 0;
+  margin: 0;
   font-size: var(--openbitfun-type-flow-body-font-size);
   line-height: var(--openbitfun-type-flow-body-line-height);
-  /* Transparent border to match the box-sizing of bordered FlowChat cards,
-   * TerminalRegion, etc.) so that text and card content share the same left edge. */
-  border: 1px solid transparent;
+  border: 0;
   box-sizing: border-box;
 
   .markdown-renderer {
@@ -97,25 +95,21 @@
     height: 26px;
     padding: 0.2rem;
     transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       opacity 140ms ease;
   }
 
   .markdown-renderer .code-block-wrapper .copy-button:hover {
     background: transparent;
     color: var(--openbitfun-color-content-muted);
-    transform: scale(1.08);
   }
 
   .markdown-renderer .code-block-wrapper .copy-button:active {
     background: transparent;
     color: var(--openbitfun-color-content-muted);
-    transform: scale(1.02);
   }
 
   .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
     color: var(--openbitfun-color-status-success-content);
-    transform: scale(1.08);
   }
 
   .text-content {

@@ -11,18 +11,16 @@ pub mod account;
 pub mod bot;
 mod chat_projection;
 pub mod device;
+pub mod device_crypto;
 pub mod encryption;
+pub mod file_projection;
 mod lan;
-pub mod miniapp;
-mod mobile_web_upload;
-mod ngrok;
 mod page_upload;
 pub mod pairing;
 pub mod qr_generator;
 pub mod relay_client;
 mod relay_http;
 pub mod session_store;
-pub mod sync_state;
 
 pub use chat_projection::{
     agent_input_attachment_from_remote_image_context, project_remote_chat_user,
@@ -35,10 +33,6 @@ pub use lan::{
     LocalNetworkInterface,
 };
 use log::info;
-pub use mobile_web_upload::upload_mobile_web_to_relay;
-pub use ngrok::{
-    cleanup_all_ngrok, detect_running_ngrok, is_ngrok_available, start_ngrok_tunnel, NgrokTunnel,
-};
 use openbitfun_core_types::{
     ModelsDevReasoningCatalog, ProviderCatalog, ReasoningCatalogProjection,
 };
@@ -63,7 +57,7 @@ pub use page_upload::{
     update_page_on_relay, PageContentPublishResult, PageInfo, PageOpenLink, PagePublishResult,
     PageSaveVersionResult, PageVersionInfo,
 };
-pub use pairing::{PairingChallenge, PairingProtocol, PairingResponse, PairingState, QrPayload};
+pub use pairing::PairingState;
 pub use qr_generator::QrGenerator;
 pub use relay_client::{
     ensure_rustls_crypto_provider, ConnectionState, RelayClient, RelayEvent, RelayMessage,
@@ -556,15 +550,11 @@ pub const REMOTE_CAPABILITY_DIALOG_STEER_V1: &str = "dialog_steer_v1";
 pub const REMOTE_CAPABILITY_PLAN_BUILD_V1: &str = "plan_build_v1";
 
 fn remote_host_capabilities() -> Vec<String> {
-    let mut capabilities = vec![
+    vec![
         REMOTE_CAPABILITY_HARNESS_PROFILES_V1.to_string(),
         REMOTE_CAPABILITY_DIALOG_STEER_V1.to_string(),
         REMOTE_CAPABILITY_PLAN_BUILD_V1.to_string(),
-    ];
-    if miniapp::is_available() {
-        capabilities.push(miniapp::CAPABILITY.to_string());
-    }
-    capabilities
+    ]
 }
 
 pub fn resolve_remote_file_chunk_range(
@@ -642,6 +632,9 @@ pub fn detect_remote_mime_type(path: &Path) -> &'static str {
         "gif" => "image/gif",
         "webp" => "image/webp",
         "svg" => "image/svg+xml",
+        "avif" => "image/avif",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
         "zip" => "application/zip",
         "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -741,6 +734,7 @@ pub async fn read_remote_workspace_file_chunk(
         .unwrap_or(total_size);
 
     Ok(RemoteWorkspaceFileChunk {
+        revision: String::new(),
         name: remote_file_display_name(abs_path.file_name().and_then(|n| n.to_str())),
         bytes: chunk,
         offset,
@@ -803,6 +797,7 @@ pub fn remote_file_chunk_response(
         Ok(chunk) => {
             use base64::Engine as _;
             RemoteResponse::FileChunk {
+                revision: chunk.revision,
                 name: chunk.name,
                 chunk_base64: base64::engine::general_purpose::STANDARD.encode(&chunk.bytes),
                 offset: chunk.offset,
@@ -837,6 +832,14 @@ where
 {
     match command {
         RemoteCommand::ReadFile { path, session_id } => {
+            match host
+                .read_remote_file(path, session_id.as_deref(), REMOTE_FILE_MAX_READ_BYTES)
+                .await
+            {
+                Ok(Some(file)) => return remote_file_content_response(Ok(file)),
+                Err(error) => return remote_file_content_response(Err(error)),
+                Ok(None) => {}
+            }
             let workspace_root = host
                 .resolve_remote_file_workspace_root(session_id.as_deref())
                 .await;
@@ -855,6 +858,14 @@ where
             offset,
             limit,
         } => {
+            match host
+                .read_remote_file_chunk(path, session_id.as_deref(), *offset, *limit)
+                .await
+            {
+                Ok(Some(file)) => return remote_file_chunk_response(Ok(file)),
+                Err(error) => return remote_file_chunk_response(Err(error)),
+                Ok(None) => {}
+            }
             let workspace_root = host
                 .resolve_remote_file_workspace_root(session_id.as_deref())
                 .await;
@@ -864,6 +875,11 @@ where
             )
         }
         RemoteCommand::GetFileInfo { path, session_id } => {
+            match host.remote_file_info(path, session_id.as_deref()).await {
+                Ok(Some(file)) => return remote_file_info_response(Ok(file)),
+                Err(error) => return remote_file_info_response(Err(error)),
+                Ok(None) => {}
+            }
             let workspace_root = host
                 .resolve_remote_file_workspace_root(session_id.as_deref())
                 .await;
@@ -972,18 +988,24 @@ pub fn remote_workspace_info_response(workspace: Option<RemoteWorkspaceFacts>) -
 pub fn remote_recent_workspaces_response(
     workspaces: Vec<RemoteRecentWorkspaceFacts>,
 ) -> RemoteResponse {
+    remote_workspace_catalog_response(workspaces, None)
+}
+
+fn remote_workspace_catalog_response(
+    workspaces: Vec<RemoteRecentWorkspaceFacts>,
+    opened_workspaces: Option<Vec<RemoteRecentWorkspaceFacts>>,
+) -> RemoteResponse {
+    let project = |workspace: RemoteRecentWorkspaceFacts| RecentWorkspaceEntry {
+        path: workspace.path,
+        name: workspace.name,
+        last_opened: workspace.last_opened,
+        workspace_kind: Some(workspace.kind.as_wire_str().to_string()),
+        remote_connection_id: workspace.remote_connection_id,
+        remote_ssh_host: workspace.remote_ssh_host,
+    };
     RemoteResponse::RecentWorkspaces {
-        workspaces: workspaces
-            .into_iter()
-            .map(|workspace| RecentWorkspaceEntry {
-                path: workspace.path,
-                name: workspace.name,
-                last_opened: workspace.last_opened,
-                workspace_kind: Some(workspace.kind.as_wire_str().to_string()),
-                remote_connection_id: workspace.remote_connection_id,
-                remote_ssh_host: workspace.remote_ssh_host,
-            })
-            .collect(),
+        workspaces: workspaces.into_iter().map(project).collect(),
+        opened_workspaces: opened_workspaces.map(|rows| rows.into_iter().map(project).collect()),
     }
 }
 
@@ -1140,9 +1162,10 @@ where
         RemoteCommand::GetWorkspaceInfo => {
             remote_workspace_info_response(host.current_workspace().await)
         }
-        RemoteCommand::ListRecentWorkspaces => {
-            remote_recent_workspaces_response(host.recent_workspaces().await)
-        }
+        RemoteCommand::ListRecentWorkspaces => match host.opened_workspaces().await {
+            Ok(opened) => remote_workspace_catalog_response(host.recent_workspaces().await, opened),
+            Err(message) => RemoteResponse::Error { message },
+        },
         RemoteCommand::SetWorkspace {
             path,
             remote_connection_id,
@@ -1871,22 +1894,27 @@ pub struct RemoteModelCatalogPollDelta {
 }
 
 pub fn resolve_remote_agent_type(mobile_type: Option<&str>) -> &'static str {
+    if let Some(harness) =
+        mobile_type.and_then(openbitfun_core_types::agent_identity::HarnessId::from_legacy_id)
+    {
+        return harness.as_str();
+    }
     match mobile_type {
-        Some(value) if value.eq_ignore_ascii_case("minimal") => "minimal",
+        Some(value) if value.eq_ignore_ascii_case("minimal") => "Minimal",
         Some(value)
             if value.eq_ignore_ascii_case("ultra") || value.eq_ignore_ascii_case("ultimate") =>
         {
-            "Ultra"
+            "Ultimate"
         }
         Some(value)
             if value.eq_ignore_ascii_case("balanced") || value.eq_ignore_ascii_case("standard") =>
         {
-            "agentic"
+            "Standard"
         }
-        Some("code") | Some("agentic") | Some("Agentic") => "agentic",
+        Some("code") => "Standard",
         Some("cowork") | Some("Cowork") => "Cowork",
         Some("claw") | Some("Claw") | Some("assistant") | Some("chat") => "Claw",
-        _ => "agentic",
+        _ => "Standard",
     }
 }
 
@@ -1901,6 +1929,10 @@ pub struct ImageAttachment {
 pub struct SessionInfo {
     pub session_id: String,
     pub name: String,
+    #[serde(
+        serialize_with = "openbitfun_core_types::agent_identity_wire::serialize_legacy_agent_id",
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_agent_id"
+    )]
     pub agent_type: String,
     pub created_at: String,
     pub updated_at: String,
@@ -2284,9 +2316,6 @@ pub struct RemoteControlClient {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "cmd", rename_all = "snake_case")]
 pub enum RemoteCommand {
-    Miniapp {
-        request: miniapp::MiniAppRequest,
-    },
     GetWorkspaceInfo,
     ListRecentWorkspaces,
     SetWorkspace {
@@ -2417,26 +2446,8 @@ pub enum RemoteCommand {
         path: String,
         session_id: Option<String>,
     },
-    /// Ask the paired desktop to delegate its logged-in account identity
-    /// (token + master_key) to this room-channel client so it can call the
-    /// relay device APIs directly. Answered by the host runtime; other hosts
-    /// return an error response.
-    GetDelegatedIdentity,
-    /// Ask the paired desktop to mint a *full* account device credential for a
-    /// separate device that cannot type a password (a watch). The desktop calls
-    /// the relay's `/api/auth/provision-device` with its own device token, then
-    /// returns the minted credential together with the account master key over
-    /// this already-encrypted room channel. The relay never sees the master key.
-    ///
-    /// Unlike `GetDelegatedIdentity` this yields a 30-day full credential rather
-    /// than a 24-hour delegated one, because the provisioned device is a primary
-    /// surface and cannot re-authenticate on its own when the token lapses.
-    ///
-    /// `request_id` is minted by the device being provisioned, not by the
-    /// desktop, so that a retry anywhere along the watch → phone → desktop chain
-    /// replays one idempotent relay request instead of registering a second
-    /// device. Answered by the host runtime; other hosts return an error
-    /// response.
+    /// Provision a separate device through this authenticated controller.
+    /// The target host owns token issuance and idempotent request handling.
     ProvisionPeerDevice {
         /// 32 lowercase hex characters; the relay rejects any other shape.
         device_id: String,
@@ -2497,9 +2508,6 @@ pub enum RemoteCommand {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "resp", rename_all = "snake_case")]
 pub enum RemoteResponse {
-    MiniappResult {
-        value: serde_json::Value,
-    },
     WorkspaceInfo {
         has_workspace: bool,
         path: Option<String>,
@@ -2518,6 +2526,10 @@ pub enum RemoteResponse {
     },
     RecentWorkspaces {
         workspaces: Vec<RecentWorkspaceEntry>,
+        /// Presence negotiates the authoritative opened-workspace catalog.
+        /// Keep `workspaces` as recent history for older clients and pickers.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        opened_workspaces: Option<Vec<RecentWorkspaceEntry>>,
     },
     WorkspaceUpdated {
         success: bool,
@@ -2633,6 +2645,8 @@ pub enum RemoteResponse {
         size: u64,
     },
     FileChunk {
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        revision: String,
         name: String,
         chunk_base64: String,
         offset: u64,
@@ -2676,18 +2690,8 @@ pub enum RemoteResponse {
     },
     /// Event already delivered out-of-band; ack only.
     DeviceEventAccepted,
-    /// Delegated account identity for a paired room-channel client.
-    /// `master_key` is base64-encoded; `device_id` is the delegating host.
-    DelegateIdentity {
-        token: String,
-        user_id: String,
-        master_key: String,
-        device_id: String,
-    },
-    /// A full account device credential minted for a paired client's peer
-    /// device. `master_key` is base64-encoded; `device_id` echoes the *newly
-    /// provisioned* device, not the delegating host — the opposite of
-    /// `DelegateIdentity`, whose `device_id` names the desktop.
+    /// A device credential and its independent private key, delivered only
+    /// over the authenticated encrypted device channel.
     PeerDeviceProvisioned {
         token: String,
         user_id: String,
@@ -2749,7 +2753,6 @@ where
     H: RemoteCommandRuntimeHost + ?Sized,
 {
     match command {
-        RemoteCommand::Miniapp { request } => miniapp::dispatch(request).await,
         RemoteCommand::Ping { .. } => RemoteResponse::Pong,
 
         RemoteCommand::GetWorkspaceInfo
@@ -2797,7 +2800,7 @@ where
             );
             info!(
                 "Remote send_message: session={session_id}, agent_type={}, image_contexts={}",
-                agent_type.as_deref().unwrap_or("agentic"),
+                agent_type.as_deref().unwrap_or("Standard"),
                 resolved_contexts.len()
             );
             remote_dialog_submit_response(
@@ -2892,15 +2895,7 @@ where
             .await,
         ),
 
-        // Answered by the host runtime (which owns the delegated identity
-        // provider) before dispatch reaches this router; this is the fallback
-        // for hosts that cannot delegate an account identity.
-        RemoteCommand::GetDelegatedIdentity => RemoteResponse::Error {
-            message: "Delegated identity is not available on this host".to_string(),
-        },
-
-        // Same contract as GetDelegatedIdentity above: the host runtime owns the
-        // account credentials and answers before dispatch reaches this router.
+        // The authenticated host owns credential provisioning.
         RemoteCommand::ProvisionPeerDevice { .. } => RemoteResponse::Error {
             message: "Device provisioning is not available on this host".to_string(),
         },
@@ -4061,6 +4056,19 @@ mod tests {
             }]
         }
 
+        async fn opened_workspaces(
+            &self,
+        ) -> Result<Option<Vec<RemoteRecentWorkspaceFacts>>, String> {
+            Ok(Some(vec![RemoteRecentWorkspaceFacts {
+                path: "/assistant/workspace".into(),
+                name: "Mina".into(),
+                last_opened: "2026-05-29T00:00:00Z".into(),
+                kind: RemoteWorkspaceKind::Assistant,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            }]))
+        }
+
         async fn open_workspace(
             &self,
             path: &str,
@@ -4094,6 +4102,44 @@ mod tests {
                 remote_ssh_host: None,
             })
         }
+    }
+
+    #[tokio::test]
+    async fn remote_workspace_catalog_advertises_opened_rows_without_repurposing_recent_history() {
+        let response = handle_remote_workspace_command(
+            &FakeWorkspaceHost,
+            &RemoteCommand::ListRecentWorkspaces,
+        )
+        .await;
+        let json = serde_json::to_value(&response).unwrap();
+        assert_eq!(json["workspaces"][0]["path"], "/workspace/project");
+        assert_eq!(json["opened_workspaces"][0]["name"], "Mina");
+        assert_eq!(json["opened_workspaces"][0]["workspace_kind"], "assistant");
+        assert_eq!(
+            serde_json::from_value::<RemoteResponse>(json).unwrap(),
+            response
+        );
+
+        let legacy = serde_json::json!({
+            "resp": "recent_workspaces",
+            "workspaces": [{ "path": "/legacy", "name": "Legacy", "last_opened": "" }]
+        });
+        assert_eq!(
+            serde_json::to_value(serde_json::from_value::<RemoteResponse>(legacy.clone()).unwrap())
+                .unwrap(),
+            legacy
+        );
+        let empty = remote_workspace_catalog_response(Vec::new(), Some(Vec::new()));
+        assert_eq!(
+            serde_json::to_value(empty).unwrap()["opened_workspaces"],
+            serde_json::json!([])
+        );
+        assert!(
+            serde_json::to_value(remote_recent_workspaces_response(Vec::new()))
+                .unwrap()
+                .get("opened_workspaces")
+                .is_none()
+        );
     }
 
     #[tokio::test]
@@ -4160,7 +4206,7 @@ mod tests {
                 RemoteSessionMetadata {
                     session_id: "session-a".to_string(),
                     name: "keep me".to_string(),
-                    agent_type: "agentic".to_string(),
+                    agent_type: "Standard".to_string(),
                     created_at_ms: 1_000,
                     last_active_at_ms: 2_000,
                     turn_count: 3,
@@ -4168,7 +4214,7 @@ mod tests {
                 RemoteSessionMetadata {
                     session_id: "session-b".to_string(),
                     name: "other".to_string(),
-                    agent_type: "agentic".to_string(),
+                    agent_type: "Standard".to_string(),
                     created_at_ms: 1_000,
                     last_active_at_ms: 2_000,
                     turn_count: 1,

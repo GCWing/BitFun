@@ -443,9 +443,8 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     store.toggleAllRemediation(childSessionId ?? undefined);
   }, [childSessionId, store]);
 
-  const handleToggleGroup = useCallback((groupId: string) => {
-    if (groupId === 'ungrouped') return;
-    store.toggleGroupRemediation(groupId as RemediationGroupId, childSessionId ?? undefined);
+  const handleToggleGroup = useCallback((groupId: RemediationGroupId | 'ungrouped') => {
+    store.toggleGroupRemediation(groupId, childSessionId ?? undefined);
   }, [childSessionId, store]);
 
   const handleToggleDecisionExpansion = useCallback((id: string) => {
@@ -513,7 +512,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
               : 'Start fixing review findings',
           }),
         'ReviewFixer',
-        'agentic',
+        'Standard',
       );
     } catch (error) {
       log.error('Failed to start review remediation', { childSessionId, reviewMode, error });
@@ -716,7 +715,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
           count: retryableSlices.length,
         }),
         'DeepReview',
-        'agentic',
+        'Standard',
       );
       store.minimize(childSessionId);
     } catch (error) {

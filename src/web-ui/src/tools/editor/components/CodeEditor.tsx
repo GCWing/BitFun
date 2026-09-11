@@ -12,6 +12,7 @@ import type * as monaco from 'monaco-editor';
 import { monacoInitManager } from '../services/MonacoInitManager';
 import { getMonacoRuntime, monacoApi } from '../services/monacoRuntime';
 import { monacoModelManager } from '../services/MonacoModelManager';
+import { useEditorDocument } from '../services/EditorDocument';
 import { applyModelIndentation, readModelIndentation, setModelIndentation, type Indentation } from '../services/ModelIndentation';
 import { activeEditTargetService, createMonacoEditTarget } from '../services/ActiveEditTargetService';
 import { monacoAppearanceAdapter } from '@/infrastructure/appearance/adapters/MonacoAppearanceAdapter';
@@ -24,6 +25,7 @@ import { createLogger } from '@/shared/utils/logger';
 import { sendDebugProbe } from '@/shared/utils/debugProbe';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { isSamePath } from '@/shared/utils/pathUtils';
+import { resourcePathKey } from '@/shared/utils/resourcePath';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import {
   isPeerDeviceModeActive,
@@ -185,8 +187,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   autoSave = false,
   autoSaveDelayMs = 800,
 }) => {
+  const documentSession = useEditorDocument();
   // Decode URL-encoded paths before handing them to the editor.
   const filePath = useMemo(() => {
+    if (documentSession) return rawFilePath;
     try {
       if (rawFilePath.includes('%')) {
         return decodeURIComponent(rawFilePath);
@@ -195,7 +199,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       log.warn('Failed to decode path', { rawFilePath, error: err });
     }
     return rawFilePath;
-  }, [rawFilePath]);
+  }, [rawFilePath, documentSession]);
+  const modelKey = documentSession?.modelKey ?? filePath;
+  const documentFiles = documentSession?.files;
+  const documentInvoke = documentSession?.invoke;
 
   const { t } = useI18n('tools');
   
@@ -398,11 +405,11 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         isLoadingContentRef.current = false;
         if (modelRef.current && !isUnmountedRef.current && filePath) {
           savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
-          monacoModelManager.markAsSaved(filePath);
+          monacoModelManager.markAsSaved(modelKey);
         }
       });
     },
-    [applyExternalContentToModel, filePath, onContentChange, reportFileMissingFromDisk, updateLargeFileMode]
+    [applyExternalContentToModel, filePath, modelKey, onContentChange, reportFileMissingFromDisk, updateLargeFileMode]
   );
 
   const shouldBlockLargeFileExpansionClick = useCallback((target: EventTarget | null): boolean => {
@@ -677,8 +684,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         model = monacoModelManager.getOrCreateModel(
           filePath,
           detectedLanguage,
-          contentRef.current || '',
-          workspacePathRuntimeRef.current
+          documentSession?.snapshot?.content ?? contentRef.current ?? '',
+          workspacePathRuntimeRef.current,
+          modelKey
         );
         
         modelRef.current = model;
@@ -691,7 +699,8 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         largeFileModeRef.current = initialLargeFileMode;
         setLargeFileMode(initialLargeFileMode);
         
-        const modelMetadata = monacoModelManager.getModelMetadata(filePath);
+        if (documentSession?.snapshot) monacoModelManager.markAsSaved(modelKey, documentSession.snapshot.savedContent);
+        const modelMetadata = monacoModelManager.getModelMetadata(modelKey);
         if (modelMetadata) {
           const isDirty = modelMetadata.isDirty;
           
@@ -801,6 +810,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
         editor = monacoApi.editor.create(container, editorOptions);
         editorRef.current = editor;
+        if (documentSession?.viewState) editor.restoreViewState(documentSession.viewState as monaco.editor.ICodeEditorViewState);
         const editTarget = createMonacoEditTarget(editor);
         const unbindEditTarget = activeEditTargetService.bindTarget(editTarget);
         const focusDisposable = editor.onDidFocusEditorText(() => {
@@ -886,7 +896,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
                   normalizedPath,
                   targetLine,
                   targetColumn,
-                  { workspacePath: workspacePathRuntimeRef.current }
+                  { workspacePath: workspacePathRuntimeRef.current, scope: documentSession?.scope }
                 );
               } catch (error) {
                 log.error('Cross-file jump failed', error);
@@ -901,10 +911,11 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           }
           
           const newContent = model!.getValue();
+          documentSession?.capture(newContent, newContent !== originalContentRef.current, originalContentRef.current);
           setContent(newContent);
           
           const currentVersionId = model!.getAlternativeVersionId();
-          const changed = currentVersionId !== savedVersionIdRef.current;
+          const changed = documentSession ? newContent !== originalContentRef.current : currentVersionId !== savedVersionIdRef.current;
           
           setHasChanges(changed);
           hasChangesRef.current = changed;
@@ -1001,18 +1012,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
         setMonacoReady(true);
         
-        import('@/shared/services/EditorJumpService').then(({ editorJumpService }) => {
-          editorJumpService.registerEditor(filePath, editor);
-        }).catch(err => {
-          log.error('Failed to register EditorJumpService', err);
-        });
-        
-        import('@/tools/editor/services/EditorReadyManager').then(({ editorReadyManager }) => {
-          editorReadyManager.markEditorReady(filePath, editor);
-        }).catch(err => {
-          log.error('Failed to load EditorReadyManager', err);
-        });
-        
       } catch (error) {
         log.error('Failed to initialize editor', error);
         setError(tRef.current('editor.codeEditor.initFailedWithMessage', { message: String(error) }));
@@ -1043,6 +1042,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       }
       
       if (editorRef.current) {
+        if (documentSession) documentSession.viewState = editorRef.current.saveViewState();
         editorRef.current.dispose();
         editorRef.current = null;
       }
@@ -1051,21 +1051,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         delete (container as any).__monacoEditor;
       }
 
-      monacoModelManager.releaseModel(filePath);
+      monacoModelManager.releaseModel(modelKey);
 
-      import('@/shared/services/EditorJumpService').then(({ editorJumpService }) => {
-        editorJumpService.unregisterEditor(filePath);
-      }).catch(err => {
-        log.error('Failed to unregister EditorJumpService', err);
-      });
-      
-      import('@/tools/editor/services/EditorReadyManager').then(({ editorReadyManager }) => {
-        editorReadyManager.cleanup(filePath);
-      }).catch(err => {
-        log.error('Failed to cleanup EditorReadyManager', err);
-      });
     };
-  }, [clearScheduledNavigationSettlement, filePath, detectedLanguage, detectLargeFileMode]);
+  }, [clearScheduledNavigationSettlement, detectedLanguage, detectLargeFileMode, documentSession, filePath, modelKey]);
 
   useEffect(() => {
     if (monacoReady && pendingModelContentRef.current !== null) {
@@ -1396,16 +1385,16 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
   const fetchFileMetadata = useCallback(async () => {
     if (isMemoryContent) return null;
-    const { workspaceAPI } = await import('@/infrastructure/api');
+    const workspaceAPI = documentFiles ?? (await import('@/infrastructure/api')).workspaceAPI;
     return workspaceAPI.getFileMetadata(filePath);
-  }, [filePath, isMemoryContent]);
+  }, [documentFiles, filePath, isMemoryContent]);
 
   const handleEncodingConfirm = useCallback(async (newEncoding: string) => {
     if (isMemoryContent) return;
     setEncoding(newEncoding);
     if (!filePath) return;
     try {
-      const { workspaceAPI } = await import('@/infrastructure/api');
+      const workspaceAPI = documentFiles ?? (await import('@/infrastructure/api')).workspaceAPI;
       const content = await workspaceAPI.readFileContent(filePath, newEncoding);
       updateLargeFileMode(content);
       setContent(content);
@@ -1433,7 +1422,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       queueMicrotask(() => {
         if (modelRef.current && !isUnmountedRef.current) {
           savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
-          monacoModelManager.markAsSaved(filePath);
+          monacoModelManager.markAsSaved(modelKey);
         }
       });
     } catch (err) {
@@ -1442,7 +1431,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       }
       log.warn('Failed to reload file with new encoding', err);
     }
-  }, [applyExternalContentToModel, fetchFileMetadata, filePath, isMemoryContent, reportFileMissingFromDisk, updateLargeFileMode]);
+  }, [applyExternalContentToModel, documentFiles, fetchFileMetadata, filePath, isMemoryContent, modelKey, reportFileMissingFromDisk, updateLargeFileMode]);
 
   const handleLanguageConfirm = useCallback((languageId: string) => {
     userLanguageOverrideRef.current = true;
@@ -1456,6 +1445,20 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const loadFileContent = useCallback(async () => {
     if (!filePath) {
       setLoading(false);
+      return;
+    }
+
+    if (documentSession?.snapshot) {
+      const snapshot = documentSession.snapshot;
+      setError(null);
+      setContent(snapshot.content);
+      originalContentRef.current = snapshot.savedContent;
+      setHasChanges(snapshot.isDirty);
+      hasChangesRef.current = snapshot.isDirty;
+      applyExternalContentToModel(snapshot.content);
+      setLoading(false);
+      isLoadingContentRef.current = false;
+      onContentChangeRef.current?.(snapshot.content, snapshot.isDirty);
       return;
     }
 
@@ -1474,7 +1477,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       queueMicrotask(() => {
         if (modelRef.current && !isUnmountedRef.current) {
           savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
-          monacoModelManager.markAsSaved(filePath);
+          monacoModelManager.markAsSaved(modelKey);
         }
         if (!isUnmountedRef.current) {
           setLoading(false);
@@ -1514,7 +1517,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     isLoadingContentRef.current = true;
 
     try {
-      const { workspaceAPI } = await import('@/infrastructure/api');
+      const workspaceAPI = documentFiles ?? (await import('@/infrastructure/api')).workspaceAPI;
 
       const fileContent = await workspaceAPI.readFileContent(filePath);
       reportFileMissingFromDisk(false);
@@ -1540,6 +1543,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         log.warn('Failed to get file metadata', err);
       }
 
+      documentSession?.capture(fileContent, false);
       updateLargeFileMode(fileContent, fileSizeBytes);
       
       setContent(fileContent);
@@ -1557,7 +1561,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       queueMicrotask(() => {
         if (modelRef.current && !isUnmountedRef.current) {
           savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
-          monacoModelManager.markAsSaved(filePath);
+          monacoModelManager.markAsSaved(modelKey);
         }
       });
 
@@ -1585,10 +1589,13 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     }
   }, [
     applyExternalContentToModel,
+    documentFiles,
+    documentSession,
     fetchFileMetadata,
     filePath,
     initialContent,
     isMemoryContent,
+    modelKey,
     reportFileMissingFromDisk,
     t,
     updateLargeFileMode,
@@ -1602,6 +1609,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     // Read latest hasChanges state from ref to avoid closure issues
     const currentHasChanges = hasChangesRef.current;
     const currentContent = modelRef.current?.getValue() || '';
+    const savedVersion = modelRef.current?.getAlternativeVersionId();
     
     // Use ref value instead of state
     if (!currentHasChanges) {
@@ -1612,7 +1620,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     setError(null);
 
     try {
-      const { workspaceAPI } = await import('@/infrastructure/api');
+      const workspaceAPI = documentFiles ?? (await import('@/infrastructure/api')).workspaceAPI;
 
       const fileInfoPre = await fetchFileMetadata();
       if (isFileMissingFromMetadata(fileInfoPre)) {
@@ -1643,17 +1651,16 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
       await workspaceAPI.writeFileContent(workspacePath || '', filePath, currentContent);
 
-      monacoModelManager.markAsSaved(filePath);
-
+      monacoModelManager.markAsSaved(modelKey, currentContent, savedVersion);
       originalContentRef.current = currentContent;
-      setHasChanges(false);
-      hasChangesRef.current = false;
-
-      if (modelRef.current) {
-        savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
-      }
-
+      const latestContent = modelRef.current?.getValue() ?? currentContent;
+      const stillDirty = latestContent !== currentContent;
+      setHasChanges(stillDirty);
+      hasChangesRef.current = stillDirty;
+      if (savedVersion !== undefined) savedVersionIdRef.current = savedVersion;
+      documentSession?.capture(latestContent, stillDirty, currentContent);
       onSave?.(currentContent);
+      onContentChangeRef.current?.(latestContent, stillDirty);
 
       try {
         const fileInfo = await fetchFileMetadata();
@@ -1678,9 +1685,12 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     }
   }, [
     applyDiskSnapshotToEditor,
+    documentFiles,
+    documentSession,
     fetchFileMetadata,
     filePath,
     isMemoryContent,
+    modelKey,
     onSave,
     reportFileMissingFromDisk,
     t,
@@ -1689,10 +1699,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   
   useEffect(() => {
     saveFileContentRef.current = saveFileContent;
-  }, [saveFileContent]);
+    if (documentSession) documentSession.save = saveFileContent;
+  }, [documentSession, saveFileContent]);
 
   useEffect(() => {
-    if (!autoSave || !filePath || !hasChanges || loading || saving) {
+    if (!loading && (!error || documentSession?.snapshot)) documentSession?.capture(content, hasChanges, originalContentRef.current);
+  }, [documentSession, content, hasChanges, loading, error]);
+
+  useEffect(() => {
+    if (!isActiveTab || !autoSave || !filePath || !hasChanges || loading || saving) {
       return;
     }
 
@@ -1703,7 +1718,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [autoSave, autoSaveDelayMs, filePath, hasChanges, loading, saving, content]);
+  }, [isActiveTab, autoSave, autoSaveDelayMs, filePath, hasChanges, loading, saving, content]);
 
   // Container-level keyboard event handler, solves global conflict issues with multiple editor instances
   const handleContainerKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -1789,7 +1804,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
       const bufferBeforeRead = modelRef.current?.getValue();
       try {
-        const hashRes: any = await api.invoke('get_file_editor_sync_hash', {
+        const hashRes: any = await (documentInvoke ?? api.invoke.bind(api))('get_file_editor_sync_hash', {
           request: { path: filePath },
         });
         const diskHash =
@@ -1819,7 +1834,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         });
       }
 
-      const { workspaceAPI } = await import('@/infrastructure/api');
+      const workspaceAPI = documentFiles ?? (await import('@/infrastructure/api')).workspaceAPI;
       const editorBuffer = modelRef.current?.getValue();
       if (
         bufferBeforeRead !== undefined &&
@@ -1885,7 +1900,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       }
       isCheckingFileRef.current = false;
     }
-  }, [applyDiskSnapshotToEditor, fetchFileMetadata, filePath, isActiveTab, reportFileMissingFromDisk, t]);
+  }, [applyDiskSnapshotToEditor, documentFiles, documentInvoke, fetchFileMetadata, filePath, isActiveTab, reportFileMissingFromDisk, t]);
 
   // Initial file load - only run once when filePath changes
   const loadFileContentCalledRef = useRef(false);
@@ -1896,11 +1911,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   }, [filePath]);
   
   useEffect(() => {
-    if (!loadFileContentCalledRef.current) {
+    if ((!documentSession || documentSession.isCurrent()) && !loadFileContentCalledRef.current) {
       loadFileContentCalledRef.current = true;
       loadFileContent();
     }
-  }, [loadFileContent]);
+  }, [loadFileContent, isActiveTab, documentSession]);
+
+  useEffect(() => {
+    if (isActiveTab && documentSession?.isCurrent() && !documentSession.snapshot && error) void loadFileContent();
+  }, [documentSession, error, isActiveTab, loadFileContent]);
 
   useEffect(() => {
     if (!filePath || !isActiveTab || isMemoryContent) {
@@ -1949,7 +1968,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     const unsubscribers: Array<() => void> = [];
 
     const matchesEventFile = (data: { filePath?: string }): boolean =>
-      isSamePath(data.filePath || '', filePath || '');
+      isActiveTab && (!documentSession || documentSession.isCurrent())
+      && (documentSession ? resourcePathKey(data.filePath || '', documentSession.scope) === resourcePathKey(filePath, documentSession.scope)
+        : isSamePath(data.filePath || '', filePath || ''));
 
     const runSupportedEditorAction = async (
       actionId: string,
@@ -2042,15 +2063,15 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
     const unsubFileChanged = globalEventBus.on('editor:file-changed', async (data: { filePath: string }) => {
       if (isMemoryContent) return;
-      if (!isSamePath(data.filePath || '', filePath || '')) {
+      if (!matchesEventFile(data)) {
         return;
       }
 
       try {
-        const { workspaceAPI } = await import('@/infrastructure/api');
+        const workspaceAPI = documentSession?.files ?? (await import('@/infrastructure/api')).workspaceAPI;
         const bufferBeforeRead = modelRef.current?.getValue();
         try {
-          const hashRes: any = await api.invoke('get_file_editor_sync_hash', {
+          const hashRes: any = await (documentSession?.invoke ?? api.invoke.bind(api))('get_file_editor_sync_hash', {
             request: { path: filePath },
           });
           const diskHash =
@@ -2144,7 +2165,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     unsubscribers.push(unsubFileChanged);
 
     const unsubSaveFile = globalEventBus.on('editor:save-file', (data: { filePath: string }) => {
-      if (isSamePath(data.filePath || '', filePath || '')) {
+      if (matchesEventFile(data)) {
         saveFileContentRef.current?.();
       }
     });
@@ -2153,7 +2174,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
-  }, [applyDiskSnapshotToEditor, fetchFileMetadata, monacoReady, filePath, isMemoryContent, t, workspacePath]);
+  }, [applyDiskSnapshotToEditor, fetchFileMetadata, monacoReady, filePath, isMemoryContent, isActiveTab, documentSession, t, workspacePath]);
 
   useEffect(() => {
     userLanguageOverrideRef.current = false;

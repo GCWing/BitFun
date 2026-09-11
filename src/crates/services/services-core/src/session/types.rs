@@ -93,7 +93,10 @@ pub struct SessionMetadata {
     pub session_name: String,
 
     /// Agent type
-    #[serde(alias = "agent_type")]
+    #[serde(
+        alias = "agent_type",
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_agent_id"
+    )]
     pub agent_type: String,
     /// Mode of the last surviving user dialog turn in the persisted history.
     ///
@@ -104,6 +107,9 @@ pub struct SessionMetadata {
         skip_serializing_if = "Option::is_none",
         alias = "last_user_dialog_agent_type"
     )]
+    #[serde(
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_optional_agent_id"
+    )]
     pub last_user_dialog_agent_type: Option<String>,
     /// Mode of the most recent user submission accepted by the scheduler.
     ///
@@ -113,6 +119,9 @@ pub struct SessionMetadata {
         default,
         skip_serializing_if = "Option::is_none",
         alias = "last_submitted_agent_type"
+    )]
+    #[serde(
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_optional_agent_id"
     )]
     pub last_submitted_agent_type: Option<String>,
 
@@ -525,6 +534,9 @@ pub struct DialogTurnData {
     /// Maintenance/local utility turns leave this empty so they do not affect
     /// mode-transition reminder semantics.
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "agent_type")]
+    #[serde(
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_optional_agent_id"
+    )]
     pub agent_type: Option<String>,
 
     /// User message
@@ -1142,7 +1154,8 @@ impl SessionMetadata {
         Self {
             session_id,
             session_name,
-            agent_type,
+            agent_type: openbitfun_core_types::agent_identity::canonical_agent_id(&agent_type)
+                .to_owned(),
             last_user_dialog_agent_type: None,
             last_submitted_agent_type: None,
             created_by: None,
@@ -1494,7 +1507,7 @@ mod tests {
         let metadata = SessionMetadata::new(
             "session-1".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         );
         assert_eq!(metadata.memory_mode, SessionMemoryMode::Enabled);
@@ -1502,7 +1515,7 @@ mod tests {
         let payload = serde_json::json!({
             "sessionId": "session-1",
             "sessionName": "Legacy",
-            "agentType": "agentic",
+            "agentType": "Standard",
             "sessionKind": "standard",
             "modelName": "model",
             "createdAt": 1,
@@ -1523,7 +1536,7 @@ mod tests {
             let mut metadata = SessionMetadata::new(
                 "session-1".to_string(),
                 "Session".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 "model".to_string(),
             );
             metadata.memory_mode = mode;
@@ -1623,7 +1636,7 @@ mod tests {
         let metadata = SessionMetadata::new(
             "session-1".to_string(),
             "Normal Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         );
 

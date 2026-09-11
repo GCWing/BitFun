@@ -62,9 +62,24 @@ component token is absent, and keeps explicit component overrides intact.
 
 - `color.surface.scene`, `panel`, and `raised` own primary content and elevated planes.
 - `color.surface.chrome` owns persistent application structure such as navigation and window-control regions.
-- `color.surface.tertiary` is an opaque low-emphasis fill for persistent grouped content such as cards and field groups.
+- `color.surface.tertiary` is an opaque low-emphasis fill for persistent containers such as cards.
+- `color.field.groupBackground` owns grouped form surfaces: light mode uses a 3% black tint so the underlying surface remains visible; dark and high-contrast modes retain their tertiary fill. Opaque tertiary containers and transient `surface.subtle` feedback cannot express this form-specific contract. Imported appearances inherit an explicitly supplied legacy tertiary color unless they supply the new field token.
 - `color.surface.subtle` is a translucent local tint for transient feedback and small inset details. It must not define a persistent application plane.
 - `color.selection.surface` owns persistent neutral selection. Hover and pressed colors remain action feedback and are not substitutes for selection.
 - `color.codeChange.added` (`#1aa73e`) and `color.codeChange.removed` (`#ec221f`) also anchor success and danger emphasis. Warning emphasis uses `#ff8c00`; information uses the existing creative-action blue (`#2e7eff`). These clear hues share light tints instead of separate per-component palettes.
 - `color.status.*.emphasis` colors icons and short emphasis. `content` derives a readable shade from that anchor for text; `surface` and `border` derive 10% and 30% tints. High-contrast themes may strengthen text contrast without changing the emphasis anchors.
 - Status source tokens retain their `color-mix()` references. The theme build resolves these mixes to concrete hex/RGBA values so CSS, plugins, and renderer payloads consume the same palette without relying on renderer-specific CSS color support.
+
+`color.content.caption` distinguishes low-emphasis menu/navigation group headings
+from body descriptions and input placeholders. Light mode supplies final black
+40%; dark and high-contrast modes reuse readable muted content. An imported
+appearance's explicit old muted color is retained when the caption token is absent.
+The built-in light Appearance preserves the public neutral action content (80%)
+in both root and chrome; generic palette projection previously reduced product
+menu labels to secondary text (60%). Explicit imported action colors still win.
+
+Action cards own `color.actionCard.background`: the light entry surface is black at 3% opacity. `surface.subtle` is a transient navy tint and `field.groupBackground` belongs to form groups, so neither represents this persistent action surface. Other modes retain their neutral action surface. Product Appearance preserves explicit legacy neutral-surface overrides in root and chrome.
+
+Compact indicators own `color.numberBadge.background` and `color.keyHint.content` so reference light values (8% fill and 60% text) can coexist with existing dark/contrast values and explicit legacy Appearance overrides. The light Switch off track and resting scrollbar thumb use 10% black; KeyHint and Launcher resting fills use 8%. Long status labels keep content colors; StatusPill emphasis is opt-in.
+
+`color.composer.border` and `color.composer.contextBackground` are the shared editor-surface contract for Composer and ChatComposer. Reference light uses an 8% border and 3% context tint; persistent entry cards and form groups keep their separate owners. Legacy explicit field-border and subtle-surface overrides populate the new keys only when absent. Composer shadow uses a 12px CSS box-shadow blur (the Figma effect radius; its generated filter drop-shadow uses a 6px standard deviation).

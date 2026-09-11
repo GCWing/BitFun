@@ -49,10 +49,6 @@
     pointer-events: none;
   }
 
-  &:active {
-    transform: scale(0.97);
-  }
-
   &:focus-visible {
     outline: 3px solid var(--openbitfun-color-content-primary);
     outline-offset: 3px;

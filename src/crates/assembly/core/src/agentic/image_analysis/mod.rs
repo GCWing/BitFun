@@ -2,6 +2,7 @@
 //!
 //! Implements image pre-understanding functionality, converting image content to text descriptions
 
+pub(crate) mod attachments;
 pub mod enhancer;
 pub mod image_processing;
 pub mod processor;

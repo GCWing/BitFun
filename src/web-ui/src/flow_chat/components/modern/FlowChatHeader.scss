@@ -467,7 +467,7 @@
 
   &__background-command-menu {
     position: fixed;
-    z-index: 10000;
+    z-index: calc(var(--openbitfun-layer-popover) + 1);
 
     &--portal {
       top: auto;

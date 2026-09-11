@@ -82,6 +82,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '22.18.0'
+          # Signing uses Node built-ins only; pnpm is not installed in this job.
+          package-manager-cache: false
       - uses: actions/download-artifact@v7
         with:
           pattern: data-migrator-*

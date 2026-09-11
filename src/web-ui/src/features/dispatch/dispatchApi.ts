@@ -168,6 +168,18 @@ export const dispatchApi = {
     });
   },
 
+  async readFileChunk(jobId: string, filePath: string, fileChunk: {
+    offset: number; limit: number; expectedRevision?: string;
+  }): Promise<{
+    kind: 'readFileChunk'; jobId: string; sessionId: string; filePath: string;
+    name: string; mimeType: string; totalSize: number; offset: number;
+    chunkSize: number; contentBase64: string; revision: string;
+  }> {
+    return api.invoke('dispatch_query', {
+      request: { jobId, kind: 'readFileChunk', filePath, fileChunk },
+    });
+  },
+
   async status(jobId: string, cursor: number): Promise<DispatchStatusResponse> {
     return api.invoke<DispatchStatusResponse>('dispatch_status', {
       request: { jobId, cursor },

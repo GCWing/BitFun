@@ -45,7 +45,6 @@ use std::time::Duration;
 
 use crate::account::{
     account_login_status_message, account_snapshot_projection, redact_login_error,
-    settings_sync_progress,
 };
 use crate::agent::runtime_client::{CliAgentMode as TuiAgentMode, CliAgentRuntimeClient};
 use crate::model_selection::{
@@ -379,9 +378,6 @@ impl StartupPage {
         let mut event_reader = crate::ui::input::EventReader::default();
 
         loop {
-            if self.login_form.is_visible() {
-                self.refresh_account_panel_live();
-            }
             terminal.draw(|f| self.render(f))?;
 
             if let Some(events) = event_reader.read_event_batch(Duration::from_millis(50))? {
@@ -916,7 +912,6 @@ impl StartupPage {
         }
 
         if self.login_form.is_visible() {
-            self.refresh_account_panel_live();
             let action = self.login_form.handle_key_event(key);
             return self.handle_login_form_action(action);
         }
@@ -1314,9 +1309,6 @@ impl StartupPage {
                         anyhow::anyhow!("Account management is unavailable for this TUI Host")
                     })?;
                     account.logout().await?;
-                    account
-                        .mark_sync_cancelled(format!("tui-account-{}", uuid::Uuid::new_v4()))
-                        .await;
                     Ok::<(), anyhow::Error>(())
                 })
             }) {
@@ -1412,250 +1404,30 @@ impl StartupPage {
             self.login_form.show();
             return;
         };
-        self.login_form
-            .show_account(info, snapshot.devices, snapshot.sync);
-    }
-
-    fn refresh_account_panel_live(&mut self) {
-        if !self.login_form.is_visible() {
-            return;
-        }
-        let Ok(progress) = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                let account = self.account_runtime.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("Account management is unavailable for this TUI Host")
-                })?;
-                Ok::<_, anyhow::Error>(settings_sync_progress(
-                    account.current_sync_progress().await,
-                ))
-            })
-        }) else {
-            return;
-        };
-        let progress = progress;
-        // Refresh devices occasionally while syncing / after done.
-        let devices = if matches!(
-            progress.status,
-            openbitfun_product_domains::account::SettingsSyncStatus::Syncing
-                | openbitfun_product_domains::account::SettingsSyncStatus::Done
-        ) {
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(async {
-                    let account = self.account_runtime.as_ref()?;
-                    Some(account_snapshot_projection(account.snapshot().await).devices)
-                })
-            })
-        } else {
-            None
-        };
-        self.login_form.update_account_progress(devices, progress);
-    }
-
-    fn start_sync_and_show_account(&mut self, is_first_login: bool) {
-        let result = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                let account = self.account_runtime.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("Account management is unavailable for this TUI Host")
-                })?;
-                if !account.is_logged_in().await {
-                    anyhow::bail!("Account login must be finalized before settings sync starts")
-                }
-                if !account
-                    .start_auto_sync_background(
-                        format!("tui-account-{}", uuid::Uuid::new_v4()),
-                        is_first_login,
-                        std::path::PathBuf::from(self.agent.workspace_path_string()),
-                    )
-                    .await
-                {
-                    anyhow::bail!("Account settings sync is already in progress")
-                }
-                Ok::<(), anyhow::Error>(())
-            })
-        });
-        if let Err(error) = result {
-            self.status = Some(format!("Account settings sync failed: {error}"));
-            return;
-        }
-        if let Ok(snapshot) = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                let account = self.account_runtime.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("Account management is unavailable for this TUI Host")
-                })?;
-                Ok::<_, anyhow::Error>(account_snapshot_projection(account.snapshot().await))
-            })
-        }) {
-            self.open_account_panel(snapshot);
-        }
-        self.status = Some(if is_first_login {
-            "Sync started (use local / upload settings).".to_string()
-        } else {
-            "Sync started (use cloud / download settings).".to_string()
-        });
+        self.login_form.show_account(info, snapshot.devices);
     }
 
     fn handle_login_form_action(&mut self, action: LoginFormAction) -> Option<StartupResult> {
         match action {
-            LoginFormAction::Submit(creds) => {
+            LoginFormAction::Submit(transaction_id) => {
                 let result = tokio::task::block_in_place(|| {
                     tokio::runtime::Handle::current().block_on(async {
                         let account = self.account_runtime.as_ref().ok_or_else(|| {
                             anyhow::anyhow!("Account management is unavailable for this TUI Host")
                         })?;
-                        let relay_url = creds.relay_url;
-                        let username = creds.username;
-                        let password = creds.password;
-                        let result = account
-                            .login_with_credentials(&relay_url, &username, &password)
-                            .await
-                            .map_err(|error| {
-                                redact_login_error(error, [&relay_url, &username, &password])
-                            })?;
-                        let status_message = account_login_status_message(&result);
-                        Ok::<_, anyhow::Error>(
-                            openbitfun_product_domains::account::AccountLoginProjection {
-                                user_id: result.user_id,
-                                relay_url: result.relay_url,
-                                has_cloud_settings: result.has_cloud_settings,
-                                status_message,
-                            },
-                        )
+                        account.advance_github_login(transaction_id).await
                     })
                 });
+                use openbitfun_core::service::remote_connect::account_runtime::AccountLoginProgress;
                 match result {
-                    Ok(login) => {
-                        self.status = Some(login.status_message.clone());
-                        if login.has_cloud_settings {
-                            self.login_form
-                                .show_sync_choice(&login.user_id, &login.relay_url);
-                        } else {
-                            self.start_sync_and_show_account(true);
-                        }
+                    Ok(AccountLoginProgress::Authorization(authorization)) => self.login_form.set_authorization(authorization),
+                    Ok(AccountLoginProgress::Waiting) => self.login_form.set_status("Waiting for GitHub authorization. Complete it in your browser, then press Enter."),
+                    Ok(AccountLoginProgress::Complete(login)) => {
+                        self.status = Some(account_login_status_message(&login));
+                        self.show_login_form();
                     }
-                    Err(e) => {
-                        self.login_form.set_error(format!("Login failed: {e}"));
-                    }
+                    Err(error) => self.login_form.set_error(format!("Login failed: {error}")),
                 }
-            }
-            LoginFormAction::SyncUseLocal => {
-                let result = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(async {
-                        let account = self.account_runtime.as_ref().ok_or_else(|| {
-                            anyhow::anyhow!("Account management is unavailable for this TUI Host")
-                        })?;
-                        account.finalize_login_after_sync_choice().await?;
-                        if !account
-                            .start_auto_sync_background(
-                                format!("tui-account-{}", uuid::Uuid::new_v4()),
-                                true,
-                                std::path::PathBuf::from(self.agent.workspace_path_string()),
-                            )
-                            .await
-                        {
-                            anyhow::bail!("Account settings sync is already in progress")
-                        }
-                        Ok::<_, anyhow::Error>(account_snapshot_projection(
-                            account.snapshot().await,
-                        ))
-                    })
-                });
-                match result {
-                    Ok(snapshot) => {
-                        self.open_account_panel(snapshot);
-                        self.status =
-                            Some("Sync started (use local / upload settings).".to_string());
-                    }
-                    Err(error) => {
-                        self.login_form
-                            .set_error(format!("Finalize login failed: {error}"));
-                        let _ = tokio::task::block_in_place(|| {
-                            tokio::runtime::Handle::current().block_on(async {
-                                let account = self.account_runtime.as_ref().ok_or_else(|| {
-                                    anyhow::anyhow!(
-                                        "Account management is unavailable for this TUI Host"
-                                    )
-                                })?;
-                                account.logout().await?;
-                                account
-                                    .mark_sync_cancelled(format!(
-                                        "tui-account-{}",
-                                        uuid::Uuid::new_v4()
-                                    ))
-                                    .await;
-                                Ok::<(), anyhow::Error>(())
-                            })
-                        });
-                        self.login_form.show();
-                    }
-                }
-            }
-            LoginFormAction::SyncUseCloud => {
-                let result = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(async {
-                        let account = self.account_runtime.as_ref().ok_or_else(|| {
-                            anyhow::anyhow!("Account management is unavailable for this TUI Host")
-                        })?;
-                        account.finalize_login_after_sync_choice().await?;
-                        if !account
-                            .start_auto_sync_background(
-                                format!("tui-account-{}", uuid::Uuid::new_v4()),
-                                false,
-                                std::path::PathBuf::from(self.agent.workspace_path_string()),
-                            )
-                            .await
-                        {
-                            anyhow::bail!("Account settings sync is already in progress")
-                        }
-                        Ok::<_, anyhow::Error>(account_snapshot_projection(
-                            account.snapshot().await,
-                        ))
-                    })
-                });
-                match result {
-                    Ok(snapshot) => {
-                        self.open_account_panel(snapshot);
-                        self.status =
-                            Some("Sync started (use cloud / download settings).".to_string());
-                    }
-                    Err(error) => {
-                        self.login_form
-                            .set_error(format!("Finalize login failed: {error}"));
-                        let _ = tokio::task::block_in_place(|| {
-                            tokio::runtime::Handle::current().block_on(async {
-                                let account = self.account_runtime.as_ref().ok_or_else(|| {
-                                    anyhow::anyhow!(
-                                        "Account management is unavailable for this TUI Host"
-                                    )
-                                })?;
-                                account.logout().await?;
-                                account
-                                    .mark_sync_cancelled(format!(
-                                        "tui-account-{}",
-                                        uuid::Uuid::new_v4()
-                                    ))
-                                    .await;
-                                Ok::<(), anyhow::Error>(())
-                            })
-                        });
-                        self.login_form.show();
-                    }
-                }
-            }
-            LoginFormAction::SyncCancel => {
-                let _ = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(async {
-                        let account = self.account_runtime.as_ref().ok_or_else(|| {
-                            anyhow::anyhow!("Account management is unavailable for this TUI Host")
-                        })?;
-                        Ok::<_, anyhow::Error>(settings_sync_progress(
-                            account
-                                .cancel_sync(format!("tui-account-{}", uuid::Uuid::new_v4()))
-                                .await?,
-                        ))
-                    })
-                });
-                self.login_form.show();
-                self.status = Some("Sync cancelled; logged out.".to_string());
             }
             LoginFormAction::Logout => {
                 match tokio::task::block_in_place(|| {
@@ -1664,9 +1436,6 @@ impl StartupPage {
                             anyhow::anyhow!("Account management is unavailable for this TUI Host")
                         })?;
                         account.logout().await?;
-                        account
-                            .mark_sync_cancelled(format!("tui-account-{}", uuid::Uuid::new_v4()))
-                            .await;
                         Ok::<_, anyhow::Error>(account_snapshot_projection(
                             account.snapshot().await,
                         ))
@@ -1843,7 +1612,6 @@ impl StartupPage {
                         let Some(account) = self.account_runtime.as_ref() else {
                             return Ok(());
                         };
-                        account.notify_local_settings_changed();
                         Ok::<_, anyhow::Error>(())
                     })
                 });
@@ -1906,9 +1674,7 @@ impl StartupPage {
             tracing::info!("Added new AI model: {}", model_id);
             let _ = tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(async {
-                    if let Some(account) = self.account_runtime.as_ref() {
-                        account.notify_local_settings_changed();
-                    }
+                    if let Some(account) = self.account_runtime.as_ref() {}
                     Ok::<_, anyhow::Error>(())
                 })
             });
@@ -1990,9 +1756,7 @@ impl StartupPage {
             tracing::info!("Updated AI model: {}", model_id);
             let _ = tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(async {
-                    if let Some(account) = self.account_runtime.as_ref() {
-                        account.notify_local_settings_changed();
-                    }
+                    if let Some(account) = self.account_runtime.as_ref() {}
                     Ok::<_, anyhow::Error>(())
                 })
             });
@@ -2737,8 +2501,8 @@ mod logo_contract_tests {
     #[test]
     fn external_or_unknown_startup_modes_do_not_change_the_shared_default() {
         let local = TuiAgentMode {
-            id: "agentic".to_string(),
-            route_key: "agentic".to_string(),
+            id: "Standard".to_string(),
+            route_key: "Standard".to_string(),
             description: String::new(),
             model_id: None,
             is_external: false,

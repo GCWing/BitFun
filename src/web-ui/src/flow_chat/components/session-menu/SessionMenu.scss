@@ -22,7 +22,6 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: var(--openbitfun-radius-sm);
   cursor: pointer;
   transition:
-    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
     background-color 160ms ease,
     color 160ms ease,
     opacity 160ms ease;
@@ -30,11 +29,6 @@ $session-menu-timing: cubic-bezier(0.4, 0, 0.2, 1);
   &:hover:not(:disabled) {
     background: var(--openbitfun-color-action-secondary-hover);
     color: var(--openbitfun-color-accent-default);
-    transform: scale(1.1);
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.95);
   }
 
   &:disabled {

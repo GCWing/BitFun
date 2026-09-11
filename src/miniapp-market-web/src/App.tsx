@@ -87,6 +87,30 @@ function navigate(path: string) {
 }
 
 function App() {
+  const path = window.location.pathname;
+  if (window.location.hostname === 'auth.openbitfun.com' || path === '/miniapp/auth/complete' || path === '/miniapp/auth/desktop-complete') {
+    return <GitHubIdentityPage complete={path.endsWith('complete')} />;
+  }
+  return <MarketApp />;
+}
+
+function GitHubIdentityPage({ complete }: { complete: boolean }) {
+  const { t } = useLocale();
+  useTheme();
+  useEffect(() => { document.title = `OpenBitFun · ${t('signIn')}`; }, [t]);
+  return <IconContext.Provider value={{ size: 24, weight: 'regular' }}>
+    {complete ? <DesktopComplete t={t} /> : <main className="form-page">
+      <section className="auth-gate">
+        <GithubLogo size={40} aria-hidden="true" />
+        <h1>{t('signIn')}</h1>
+        <p>{t('authSharedIdentity')}</p>
+        <a className="button primary" href="/sign-in?returnTo=/miniapp/">{t('signIn')}</a>
+      </section>
+    </main>}
+  </IconContext.Provider>;
+}
+
+function MarketApp() {
   const { locale, setLocale, t } = useLocale();
   const { theme, toggleTheme } = useTheme();
   const [route, setRoute] = useState<RouteState>(currentRoute);

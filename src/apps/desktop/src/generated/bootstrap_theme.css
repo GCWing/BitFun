@@ -32,11 +32,15 @@
     --openbitfun-color-action-secondary-content: #e8e8e8;
     --openbitfun-color-action-secondary-hover: rgba(255, 255, 255, 0.1);
     --openbitfun-color-action-secondary-pressed: rgba(255, 255, 255, 0.12);
+    --openbitfun-color-action-card-background: rgba(255, 255, 255, 0.1);
     --openbitfun-color-border-default: rgba(255, 255, 255, 0.18);
     --openbitfun-color-border-strong: rgba(255, 255, 255, 0.3);
     --openbitfun-color-border-subtle: rgba(255, 255, 255, 0.12);
     --openbitfun-color-code-change-added: #1aa73e;
     --openbitfun-color-code-change-removed: #ec221f;
+    --openbitfun-color-composer-border: rgba(255, 255, 255, 0.18);
+    --openbitfun-color-composer-context-background: rgba(255, 255, 255, 0.06);
+    --openbitfun-color-content-caption: #858585;
     --openbitfun-color-content-disabled: #555555;
     --openbitfun-color-content-inverse: #0e0e10;
     --openbitfun-color-content-muted: #858585;
@@ -63,6 +67,7 @@
     --openbitfun-color-field-border-active: #858585;
     --openbitfun-color-field-border-focus: #858585;
     --openbitfun-color-field-border-hover: rgba(255, 255, 255, 0.24);
+    --openbitfun-color-field-group-background: #0e0e10;
     --openbitfun-color-field-placeholder: #858585;
     --openbitfun-color-focus-ring: #60a5fa;
     --openbitfun-color-identity-assistant-border: color-mix(in srgb, #ec4899 15%, transparent);
@@ -81,8 +86,10 @@
     --openbitfun-color-identity-harness-standard: #1aa73e;
     --openbitfun-color-identity-harness-ultimate: #ff8c00;
     --openbitfun-color-key-hint-background: rgba(255, 255, 255, 0.1);
+    --openbitfun-color-key-hint-content: #858585;
     --openbitfun-color-link-default: #60a5fa;
     --openbitfun-color-link-hover: #93c5fd;
+    --openbitfun-color-number-badge-background: rgba(255, 255, 255, 0.1);
     --openbitfun-color-overlay-scrim: rgba(0, 0, 0, 0.56);
     --openbitfun-color-scrollbar-thumb: rgba(255, 255, 255, 0.12);
     --openbitfun-color-scrollbar-thumb-hover: rgba(255, 255, 255, 0.15);

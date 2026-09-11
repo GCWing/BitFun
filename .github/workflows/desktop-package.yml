@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: "Release tag (stable: v1.0.0, beta: v1.0.0-beta.1)."
+        description: "Release tag (stable: v1.0.0-beta or v1.0.0, beta: v1.0.0-beta.1)."
         required: false
         type: string
       checkout_ref:
@@ -125,6 +125,10 @@ jobs:
             echo "Existing tag ${TAG} points to ${TAG_SHA}, not requested commit ${CHECKOUT_SHA}." >&2
             exit 1
           fi
+          if [[ "${UPLOAD}" == "true" && -z "${TAG_SHA}" ]]; then
+            echo "Publishing requires existing tag ${TAG} at ${CHECKOUT_SHA}. Push the tag before dispatching." >&2
+            exit 1
+          fi
           CHECKOUT_REF="${CHECKOUT_SHA}"
 
           echo "version=$VERSION"          >> "$GITHUB_OUTPUT"
@@ -144,8 +148,8 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=6144
       OPENBITFUN_ENABLE_UPDATER_ARTIFACTS: ${{ needs.prepare.outputs.upload_to_release }}
       OPENBITFUN_RELEASE_CHANNEL: ${{ needs.prepare.outputs.release_channel }}
-      TAURI_UPDATER_ENDPOINT: ${{ github.repository != 'GCWing/OpenBitFun' && needs.prepare.outputs.release_channel == 'beta' && format('https://github.com/{0}/releases/download/channel-beta/latest.json', github.repository) || '' }}
-      TAURI_UPDATER_FALLBACK_ENDPOINT: ${{ github.repository != 'GCWing/OpenBitFun' && needs.prepare.outputs.release_channel == 'beta' && format('https://github.com/{0}/releases/download/channel-beta/latest.json', github.repository) || '' }}
+      TAURI_UPDATER_ENDPOINT: ${{ github.repository != 'GCWing/OpenBitFun' && (needs.prepare.outputs.release_channel == 'beta' && format('https://github.com/{0}/releases/download/channel-v1-beta/latest-v1.json', github.repository) || format('https://github.com/{0}/releases/latest/download/latest-v1.json', github.repository)) || '' }}
+      TAURI_UPDATER_FALLBACK_ENDPOINT: ${{ github.repository != 'GCWing/OpenBitFun' && (needs.prepare.outputs.release_channel == 'beta' && format('https://github.com/{0}/releases/download/channel-v1-beta/latest-v1.json', github.repository) || format('https://github.com/{0}/releases/latest/download/latest-v1.json', github.repository)) || '' }}
       TAURI_UPDATER_PUBKEY: ${{ secrets.TAURI_UPDATER_PUBKEY }}
       # Same trust root, compiled into the Desktop binary so one-click relay
       # deploy can verify the signed checksum locally and hand the remote host
@@ -623,13 +627,13 @@ jobs:
             --version "${{ needs.prepare.outputs.version }}" \
             --tag "${{ needs.prepare.outputs.release_tag }}" \
             --repo "${{ github.repository }}" \
-            --out release-updater-assets/latest.json \
+            --out release-updater-assets/latest-v1.json \
             --required-platforms "${REQUIRED_UPDATER_PLATFORMS}"
 
       - name: Verify updater manifest
         run: |
           node scripts/verify-tauri-latest-json.mjs \
-            --manifest release-updater-assets/latest.json \
+            --manifest release-updater-assets/latest-v1.json \
             --version "${{ needs.prepare.outputs.version }}" \
             --required-platforms "${REQUIRED_UPDATER_PLATFORMS}" \
             --required-manual-platforms "windows-x86_64"
@@ -641,7 +645,7 @@ jobs:
             --version "${{ needs.prepare.outputs.version }}" \
             --tag "${{ needs.prepare.outputs.release_tag }}" \
             --repo "${{ github.repository }}" \
-            --out linux-release-assets/linux-binaries.json
+            --out linux-release-assets/linux-binaries-v1.json
 
       # The Tauri bundler signs the five updater artifacts during `tauri build`,
       # but the installers people download by hand from the release page — dmg,
@@ -698,25 +702,76 @@ jobs:
             linux-release-assets/openbitfun-relay-server-*.tar.gz.sha256 \
             linux-release-assets/*.tar.gz.sig \
             linux-release-assets/*.tar.gz.sha256.sig \
-            linux-release-assets/linux-binaries.json \
+            linux-release-assets/linux-binaries-v1.json \
             relay-image-assets/relay-image.json \
             relay-image-assets/relay-image.json.sig
 
+      # Old Desktop and CLI clients follow GitHub Latest. Keep their feeds on
+      # the final 0.2 release; only versioned manifests may advertise 1.x.
+      - name: Preserve legacy update feeds
+        if: needs.prepare.outputs.release_channel == 'stable'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for manifest in latest.json linux-binaries.json; do
+            curl -fsSL --retry 5 --retry-delay 3 \
+              "https://github.com/GCWing/OpenBitFun/releases/download/v0.2.19/${manifest}" \
+              -o "release-upload-assets/${manifest}"
+            jq -e '.version == "0.2.19"' "release-upload-assets/${manifest}" >/dev/null
+          done
+
       - name: Upload to release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ needs.prepare.outputs.release_tag }}
-          target_commitish: ${{ needs.prepare.outputs.checkout_ref }}
-          prerelease: ${{ needs.prepare.outputs.release_channel == 'beta' }}
-          name: ${{ needs.prepare.outputs.release_channel == 'beta' && format('OpenBitFun {0} Beta', needs.prepare.outputs.version) || format('OpenBitFun {0}', needs.prepare.outputs.version) }}
-          generate_release_notes: true
-          files: release-upload-assets/*
-          fail_on_unmatched_files: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+          RELEASE_PRERELEASE: ${{ needs.prepare.outputs.release_channel == 'beta' }}
+          RELEASE_LATEST: ${{ needs.prepare.outputs.release_channel == 'stable' }}
+        run: |
+          set -euo pipefail
+          # The immutable tag was checked before building. Do not send
+          # target_commitish: GitHub can require workflows:write even when the
+          # tag already exists. action-gh-release also resends the stored value.
+          status="$(curl -sS --retry 5 --retry-delay 3 \
+            --output release-state.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}")"
+          case "${status}" in
+            200) ;;
+            404)
+              gh release create "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+                --verify-tag --draft --title "OpenBitFun ${RELEASE_VERSION}" \
+                --generate-notes
+              ;;
+            *)
+              echo "Could not inspect release (GitHub API returned ${status})." >&2
+              exit 1
+              ;;
+          esac
+          gh release upload "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+            --clobber release-upload-assets/*
+          gh release edit "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" \
+            --title "OpenBitFun ${RELEASE_VERSION}" --draft=false \
+            --prerelease="${RELEASE_PRERELEASE}" --latest="${RELEASE_LATEST}"
+
+      - name: Verify published legacy update feeds
+        if: needs.prepare.outputs.release_channel == 'stable'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for manifest in latest.json linux-binaries.json; do
+            curl -fsSL --retry 5 --retry-delay 3 \
+              "https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.release_tag }}/${manifest}" \
+              -o "legacy-${manifest}"
+            cmp "release-upload-assets/${manifest}" "legacy-${manifest}"
+          done
 
       - name: Verify published updater manifest
         run: |
           curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.release_tag }}/latest.json" \
+            "https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.release_tag }}/latest-v1.json" \
             -o latest.published.json
           node scripts/verify-tauri-latest-json.mjs \
             --manifest latest.published.json \
@@ -728,7 +783,7 @@ jobs:
       - name: Verify published Linux binaries manifest
         run: |
           curl -fsSL --retry 5 --retry-delay 3 \
-            "https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.release_tag }}/linux-binaries.json" \
+            "https://github.com/${{ github.repository }}/releases/download/${{ needs.prepare.outputs.release_tag }}/linux-binaries-v1.json" \
             -o linux-binaries.published.json
           test "$(jq -r '.version' linux-binaries.published.json)" = "${{ needs.prepare.outputs.version }}"
           jq -e '.platforms | has("linux-x86_64") and has("linux-aarch64")' linux-binaries.published.json >/dev/null
@@ -773,12 +828,12 @@ jobs:
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H 'Accept: application/vnd.github+json' \
             -H 'X-GitHub-Api-Version: 2022-11-28' \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/channel-beta")"
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/channel-v1-beta")"
           case "${channel_status}" in
             200)
               echo "channel_exists=true" >>"$GITHUB_OUTPUT"
               curl -fsSL --retry 5 --retry-delay 3 \
-                "https://github.com/${GITHUB_REPOSITORY}/releases/download/channel-beta/latest.json" \
+                "https://github.com/${GITHUB_REPOSITORY}/releases/download/channel-v1-beta/latest-v1.json" \
                 -o current.beta.json
               ;;
             404)
@@ -790,7 +845,7 @@ jobs:
               fi
               ;;
             *)
-              echo "Could not inspect channel-beta release (GitHub API returned ${channel_status})." >&2
+              echo "Could not inspect channel-v1-beta release (GitHub API returned ${channel_status})." >&2
               exit 1
               ;;
           esac
@@ -811,7 +866,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${CHANNEL_EXISTS}" != "true" ]]; then
-            gh release create channel-beta \
+            gh release create channel-v1-beta \
               --repo "${GITHUB_REPOSITORY}" \
               --target "${CHECKOUT_REF}" \
               --prerelease \
@@ -819,18 +874,18 @@ jobs:
               --notes "Mutable updater pointer. Installable beta releases use immutable version tags."
           fi
           mkdir -p beta-channel
-          cp latest.published.json beta-channel/latest.json
-          gh release upload channel-beta beta-channel/latest.json \
+          cp latest.published.json beta-channel/latest-v1.json
+          gh release upload channel-v1-beta beta-channel/latest-v1.json \
             --repo "${GITHUB_REPOSITORY}" \
             --clobber
           # A successful HTTP response can still contain the previous CDN object.
           # Retry content validation as well as transport failures after replacement.
           for attempt in {1..12}; do
             if curl -fsSL --max-time 30 \
-              "https://github.com/${GITHUB_REPOSITORY}/releases/download/channel-beta/latest.json" \
-              -o channel-beta.published.json && \
+              "https://github.com/${GITHUB_REPOSITORY}/releases/download/channel-v1-beta/latest-v1.json" \
+              -o channel-v1-beta.published.json && \
               jq -e --arg version "${CANDIDATE_VERSION}" \
-                '.version == $version' channel-beta.published.json >/dev/null; then
+                '.version == $version' channel-v1-beta.published.json >/dev/null; then
               echo "Beta channel manifest verified: ${CANDIDATE_VERSION}"
               exit 0
             fi

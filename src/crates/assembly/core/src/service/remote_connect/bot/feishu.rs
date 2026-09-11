@@ -87,6 +87,7 @@ impl FeishuBot {
         }
     }
 
+    #[cfg(test)]
     pub fn new(config: FeishuConfig) -> Self {
         Self::new_fenced(config, BotRuntimeFence::standalone())
     }
@@ -232,47 +233,51 @@ impl FeishuBot {
         }
     }
 
-    async fn send_file_to_feishu_chat(&self, chat_id: &str, file_path: &str) -> Result<()> {
-        self.api.send_file_to_chat(chat_id, file_path).await
-    }
-
-    async fn notify_files_ready(&self, chat_id: &str, text: &str) {
+    async fn notify_files_ready(
+        &self,
+        chat_id: &str,
+        session_id: &str,
+        remote_target: Option<&super::command_router::RemoteBotTarget>,
+        text: &str,
+        identity_epoch: u64,
+    ) {
         let language = current_bot_language().await;
-        let workspace_root = {
-            let states = self.chat_states.read().await;
-            states.get(chat_id).and_then(|s| s.active_workspace_path())
-        };
-        let files = super::collect_auto_push_files(
-            text,
-            workspace_root.as_deref().map(std::path::Path::new),
-        );
-        if files.is_empty() {
-            return;
-        }
-
-        for file in files {
-            if file.size > MAX_FEISHU_FILE_BYTES {
-                let notice = super::auto_push_skip_too_large_message(
-                    language,
-                    &file.name,
-                    file.size,
-                    MAX_FEISHU_FILE_BYTES,
-                );
-                let _ = self.send_message(chat_id, &notice).await;
-                continue;
+        for reference in super::extract_output_file_references(text) {
+            if !self.runtime_fence.is_lifecycle_current()
+                || self.runtime_fence.identity_epoch() != identity_epoch
+            {
+                return;
             }
-            match self.send_file_to_feishu_chat(chat_id, &file.abs_path).await {
-                Ok(()) => info!(
-                    "Feishu auto-pushed file to chat {chat_id}: {}",
-                    file.abs_path
-                ),
-                Err(e) => {
-                    warn!(
-                        "Feishu auto-push failed for {} in chat {chat_id}: {e}",
-                        file.name
-                    );
-                    let notice =
-                        super::auto_push_failed_message(language, &file.name, &e.to_string());
+            let content = super::read_output_file(
+                session_id,
+                remote_target,
+                &reference,
+                MAX_FEISHU_FILE_BYTES,
+                &|| {
+                    self.runtime_fence.is_lifecycle_current()
+                        && self.runtime_fence.identity_epoch() == identity_epoch
+                },
+            )
+            .await;
+            if !self.runtime_fence.is_lifecycle_current()
+                || self.runtime_fence.identity_epoch() != identity_epoch
+            {
+                return;
+            }
+            let result = match content {
+                Ok(content) => self
+                    .api
+                    .send_artifact_to_chat(chat_id, content)
+                    .await
+                    .map_err(|error| error.to_string()),
+                Err(error) => Err(error),
+            };
+            if let Err(error) = result {
+                warn!("Feishu output file delivery failed: {error}");
+                let notice = super::auto_push_failed_message(language, &reference, &error);
+                if self.runtime_fence.is_lifecycle_current()
+                    && self.runtime_fence.identity_epoch() == identity_epoch
+                {
                     let _ = self.send_message(chat_id, &notice).await;
                 }
             }
@@ -536,6 +541,7 @@ impl FeishuBot {
             return;
         }
         let mut states = self.chat_states.write().await;
+        let command_identity_epoch = self.runtime_fence.identity_epoch();
         self.runtime_fence.reconcile_states(&mut states);
         let state = states.entry(chat_id.to_string()).or_insert_with(|| {
             let mut s = BotChatState::new(chat_id.to_string());
@@ -577,6 +583,9 @@ impl FeishuBot {
             return;
         }
 
+        if self.runtime_fence.identity_epoch() != command_identity_epoch {
+            return;
+        }
         let cmd = parse_command(text);
         let result = handle_command(state, cmd, images).await;
 
@@ -586,13 +595,18 @@ impl FeishuBot {
         }
         drop(states);
 
-        if !self.runtime_fence.is_lifecycle_current() {
+        if !self.runtime_fence.is_lifecycle_current()
+            || self.runtime_fence.identity_epoch() != command_identity_epoch
+        {
             return;
         }
 
         self.send_handle_result(chat_id, &result).await.ok();
 
         if let Some(forward) = result.forward_to_session {
+            let output_session_id = forward.session_id.clone();
+            let output_remote_target = forward.remote_target.clone();
+            let output_identity_epoch = command_identity_epoch;
             let bot = self.clone();
             let cid = chat_id.to_string();
             tokio::spawn(async move {
@@ -604,7 +618,11 @@ impl FeishuBot {
                         let interaction_chat_id = interaction_chat_id.clone();
                         Box::pin(async move {
                             interaction_bot
-                                .deliver_interaction(&interaction_chat_id, interaction)
+                                .deliver_interaction(
+                                    &interaction_chat_id,
+                                    interaction,
+                                    output_identity_epoch,
+                                )
                                 .await;
                         })
                     });
@@ -614,26 +632,67 @@ impl FeishuBot {
                     let msg_bot = msg_bot.clone();
                     let msg_cid = msg_cid.clone();
                     Box::pin(async move {
+                        if !msg_bot.runtime_fence.is_lifecycle_current()
+                            || msg_bot.runtime_fence.identity_epoch() != output_identity_epoch
+                        {
+                            return;
+                        }
                         if let Err(err) = msg_bot.send_message(&msg_cid, &text).await {
                             warn!("Failed to send Feishu intermediate message to {msg_cid}: {err}");
                         }
                     })
                 });
                 let verbose_mode = load_bot_persistence().verbose_mode;
-                let result =
-                    execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode)
+                let result = execute_forwarded_turn(
+                    forward,
+                    Some(handler),
+                    Some(sender),
+                    verbose_mode,
+                    &bot.runtime_fence,
+                    output_identity_epoch,
+                )
+                .await;
+                if !bot.runtime_fence.is_lifecycle_current()
+                    || bot.runtime_fence.identity_epoch() != output_identity_epoch
+                {
+                    return;
+                }
+                if let Some(next) = super::retire_remote_interactions(
+                    &bot.chat_states,
+                    &cid,
+                    output_remote_target.as_ref(),
+                    &result.completed_remote_tools,
+                    &bot.runtime_fence,
+                    output_identity_epoch,
+                )
+                .await
+                {
+                    bot.deliver_interaction(&cid, next, output_identity_epoch)
                         .await;
+                }
                 if !result.display_text.is_empty() {
                     if let Err(err) = bot.send_message(&cid, &result.display_text).await {
                         warn!("Failed to send Feishu final message to {cid}: {err}");
                     }
                 }
-                bot.notify_files_ready(&cid, &result.full_text).await;
+                bot.notify_files_ready(
+                    &cid,
+                    &output_session_id,
+                    output_remote_target.as_ref(),
+                    &result.full_text,
+                    output_identity_epoch,
+                )
+                .await;
             });
         }
     }
 
-    async fn deliver_interaction(&self, chat_id: &str, interaction: BotInteractiveRequest) {
+    async fn deliver_interaction(
+        &self,
+        chat_id: &str,
+        interaction: BotInteractiveRequest,
+        identity_epoch: u64,
+    ) {
         if !self.runtime_fence.is_lifecycle_current() {
             return;
         }
@@ -644,7 +703,12 @@ impl FeishuBot {
             s.paired = true;
             s
         });
-        super::command_router::apply_interactive_request(state, &interaction);
+        if self.runtime_fence.identity_epoch() != identity_epoch {
+            return;
+        }
+        if !super::command_router::apply_interactive_request(state, &interaction) {
+            return;
+        }
         self.persist_chat_state(chat_id, state).await;
         drop(states);
 
@@ -660,6 +724,7 @@ impl FeishuBot {
     async fn persist_chat_state(&self, chat_id: &str, state: &BotChatState) {
         let snapshot = self.runtime_fence.persistence_snapshot(state);
         let connection = SavedBotConnection {
+            account_user_id: self.runtime_fence.account_user_id(),
             bot_type: "feishu".to_string(),
             chat_id: chat_id.to_string(),
             config: BotConfig::Feishu {

@@ -9,12 +9,95 @@ use openbitfun_services_integrations::workspace_search::{
     ContentSearchOutputMode, ContentSearchRequest, WorkspaceSearchService,
 };
 
+#[tokio::test]
+async fn indexed_search_requires_a_local_worktree_with_a_commit() {
+    use openbitfun_services_integrations::workspace_search::workspace_search_supports_local_root;
+
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let root = directory.path();
+    std::fs::write(root.join("example.txt"), "Cas fixture\n").unwrap();
+    assert!(!workspace_search_supports_local_root(root).await);
+
+    git(root, &["init", "--quiet"]);
+    assert!(!workspace_search_supports_local_root(root).await);
+
+    git(root, &["add", "."]);
+    git(
+        root,
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-m",
+            "fixture",
+        ],
+    );
+    assert!(workspace_search_supports_local_root(root).await);
+
+    let subdirectory = root.join("nested");
+    std::fs::create_dir(&subdirectory).unwrap();
+    assert!(workspace_search_supports_local_root(&subdirectory).await);
+
+    let linked = root.join("linked");
+    git(
+        root,
+        &["worktree", "add", "--detach", linked.to_str().unwrap()],
+    );
+    assert!(workspace_search_supports_local_root(&linked).await);
+
+    let bare = root.join("bare.git");
+    git(root, &["clone", "--bare", ".", bare.to_str().unwrap()]);
+    assert!(!workspace_search_supports_local_root(&bare).await);
+}
+
 #[test]
 fn daemon_binary_contract_lists_current_platform_candidate() {
     let primary = workspace_search_daemon_binary_name();
 
     assert!(!primary.is_empty());
     assert!(workspace_search_daemon_binary_names().contains(&primary));
+}
+
+#[tokio::test]
+async fn non_indexable_folders_can_search_contents_without_a_daemon() {
+    use openbitfun_services_core::filesystem::{FileSearchOptions, FileSystemService};
+    use openbitfun_services_integrations::workspace_search::workspace_search_supports_local_root;
+
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    std::fs::write(root.join("example.txt"), "Cas fixture\n").unwrap();
+    let filesystem = FileSystemService::default();
+    for initialized in [false, true] {
+        if initialized {
+            git(root, &["init", "--quiet"]);
+        }
+        assert!(!workspace_search_supports_local_root(root).await);
+        let result = filesystem
+            .search_file_contents_with_progress(
+                root.to_str().unwrap(),
+                "Cas",
+                FileSearchOptions {
+                    include_content: true,
+                    include_directories: false,
+                    max_results: Some(100),
+                    ..Default::default()
+                },
+                None,
+                None,
+            )
+            .await
+            .expect("ordinary folders and unborn repositories remain searchable");
+        assert_eq!(result.results.len(), 1);
+        assert_eq!(result.results[0].line_number, Some(1));
+        assert_eq!(
+            result.results[0].matched_content.as_deref(),
+            Some("Cas fixture")
+        );
+    }
 }
 
 #[test]
