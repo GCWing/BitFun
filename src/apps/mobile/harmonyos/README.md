@@ -83,3 +83,16 @@ node --test miniapps/*.test.cjs
 Before claiming device verification, exercise local/offline launches, saved data
 after relaunch, clipboard, keyboard input, compact/wide layouts, light/dark
 appearance, and a live resize/fold transition on supported hardware.
+
+### Home and launch presentation
+
+Cold launches reuse the desktop contour mark and reveal the OpenBitFun wordmark
+letter by letter in approximately 1.3 seconds. This presentation does not wait
+for network/account initialization, is dismissed when backgrounded, and does not
+replay on foreground. The system reduced-motion preference skips it where the
+platform exposes that preference (API 23+). Native launch artwork and the app
+surface both follow the system light/dark theme.
+
+The welcome surface keeps connection actions at the bottom and offers bundled
+MiniApps without a desktop connection. Connected, connecting, and empty wide
+surfaces retain their existing remote capability and session routing behavior.

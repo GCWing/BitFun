@@ -183,6 +183,51 @@
         "label_small"
       ],
       "platformNotes": "Use a two-column library of square previews on compact screens and three columns when the gallery reaches 600vp. Clip previews to 24vp corners with 14vp column and 20vp row gaps; keep app names below images. The centered gallery caps at 1000vp, while open apps use full width. Reuse established showcase assets. Resize the grid without reloading an open app."
+    },
+    "welcome_home": {
+      "purpose": "Introduces the mobile companion and provides a direct connection action with an offline MiniApp alternative.",
+      "anatomy": [
+        "desktop_contour_brand_mark",
+        "centered_heading",
+        "connection_guidance",
+        "bottom_primary_action",
+        "quiet_miniapp_action"
+      ],
+      "states": [
+        "disconnected",
+        "connecting",
+        "connected",
+        "light",
+        "dark",
+        "compact",
+        "wide"
+      ],
+      "tokens": [
+        "page_bg",
+        "ink",
+        "muted",
+        "primary_action",
+        "content_on_action",
+        "body_medium"
+      ],
+      "platformNotes": "Reuse the desktop contour mark at 104vp. Use a 22vp medium heading and 14vp supporting copy, a scrollable hero, 24vp side margins, and a 52vp capsule action constrained to 360vp. Keep connection state truthful; offline MiniApps remain available."
+    },
+    "startup_brand_reveal": {
+      "purpose": "Provides a short desktop-inspired identity transition on cold launch without waiting for network or account loading.",
+      "anatomy": [
+        "theme_background",
+        "desktop_contour_brand_mark"
+      ],
+      "states": [
+        "cold_start",
+        "reduced_motion",
+        "backgrounded"
+      ],
+      "tokens": [
+        "page_bg",
+        "ink"
+      ],
+      "platformNotes": "Center the shared mark at 104vp above a 24vp medium OpenBitFun wordmark. Scale the mark from 0.94 to 1 over 360ms; reveal letters with opacity and an 8vp rise over 260ms each, starting at 140ms with 55ms staggering. Reserve the full wordmark width. Dissolve the overlay over 240ms starting at 1050ms. Remove on completion or background; never replay on foreground. Skip when the system reduced-motion setting is available and enabled. Clean up timers on removal."
     }
   }
 }
