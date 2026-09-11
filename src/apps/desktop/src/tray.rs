@@ -204,6 +204,7 @@ pub fn setup_tray(
     let tray = TrayIconBuilder::new()
         .icon(icon)
         .menu(&initial_menu)
+        .show_menu_on_left_click(false)
         .tooltip("OpenBitFun")
         .on_menu_event(|app, event| {
             let id = event.id.as_ref();
