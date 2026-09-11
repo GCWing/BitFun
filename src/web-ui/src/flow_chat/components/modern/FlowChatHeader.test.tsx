@@ -97,8 +97,8 @@ vi.mock('./SessionFilesBadge', () => ({
 }));
 
 vi.mock('./SessionTreePopover', () => ({
-  SessionTreePopover: ({ embedded }: { embedded?: boolean }) => embedded
-    ? <div data-testid="flowchat-header-session-tree-content" />
+  SessionTreePopover: ({ embedded, activeOnly }: { embedded?: boolean; activeOnly?: boolean }) => embedded
+    ? <div data-testid="flowchat-header-session-tree-content" data-active-only={activeOnly} />
     : null,
 }));
 
@@ -443,6 +443,12 @@ describe('FlowChatHeader', () => {
     expect(panel?.querySelector('[data-testid="flowchat-header-pull-requests-empty"]')?.textContent)
       .toBe('flowChatHeader.pullRequestEmpty');
     expect(panel?.querySelector('[data-testid="flowchat-header-session-overview-back"]')).toBeNull();
+    const activeSwitch = panel?.querySelector<HTMLInputElement>('[aria-label="flowChatHeader.agentTreeActiveOnly"]');
+    expect(activeSwitch?.checked).toBe(true);
+    expect(panel?.querySelector('[data-testid="flowchat-header-session-tree-content"]')?.getAttribute('data-active-only')).toBe('true');
+    await act(async () => activeSwitch?.click());
+    expect(activeSwitch?.checked).toBe(false);
+    expect(panel?.querySelector('[data-testid="flowchat-header-session-tree-content"]')?.getAttribute('data-active-only')).toBe('false');
   });
 
   it('shows the empty background terminal state without navigating', async () => {

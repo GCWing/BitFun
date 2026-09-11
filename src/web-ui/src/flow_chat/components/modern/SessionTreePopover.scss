@@ -27,6 +27,12 @@
     min-height: 30px;
   }
 
+  &--embedded &__expand,
+  &--embedded &__expand-spacer {
+    width: 12px;
+    flex-basis: 12px;
+  }
+
   &--embedded &__node--subagent {
     min-height: 30px;
   }
@@ -45,13 +51,13 @@
   }
 
   &--embedded &__node-title {
-    max-width: 40%;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
   }
 
   &--embedded &__node-meta {
     min-width: 0;
-    flex: 1 1 auto;
+    max-width: 45%;
+    flex: 0 1 auto;
   }
 
   &__trigger {

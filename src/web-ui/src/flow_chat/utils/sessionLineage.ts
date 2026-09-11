@@ -69,6 +69,17 @@ function isActiveSessionLineageLifecycle(lifecycle: SessionLineageLifecycle): bo
   return lifecycle === 'running' || lifecycle === 'finishing';
 }
 
+/** Keep active nodes and the ancestor paths needed to reach them. */
+export function filterActiveSessionLineageTree(node: SessionLineageNode | null): SessionLineageNode | null {
+  if (!node) return null;
+  const children = node.children
+    .map(filterActiveSessionLineageTree)
+    .filter((child): child is SessionLineageNode => child !== null);
+  return isActiveSessionLineageLifecycle(node.lifecycle) || children.length > 0
+    ? { ...node, children }
+    : null;
+}
+
 function nodeFromMetadata(metadata: SessionLineageEntry): FlatSessionLineageNode {
   return {
     sessionId: metadata.sessionId,

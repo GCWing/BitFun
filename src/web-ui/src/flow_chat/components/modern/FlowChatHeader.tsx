@@ -7,7 +7,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Keyboard, Square } from 'lucide-react';
-import { OverflowText, Icon, IconButton, Menu, MenuItem, SearchField, Tooltip } from '@openbitfun/ui';
+import { OverflowText, Icon, IconButton, Menu, MenuItem, SearchField, Switch, Tooltip } from '@openbitfun/ui';
 import { SceneChromeContribution } from '@/app/components/SceneTopBar/SceneChrome';
 import { useSceneChromeContext } from '@/app/components/SceneTopBar/sceneChromeContext';
 import { useTranslation } from 'react-i18next';
@@ -72,6 +72,7 @@ export interface FlowChatHeaderProps {
   hasActiveSessionTreeDescendants?: boolean;
   /** Cancel one running session from the active Agent tree without cancelling descendants. */
   onCancelSessionTreeSession?: (selection: SessionTreeSelection) => Promise<boolean>;
+  onDeleteSessionTreeSession?: (selection: SessionTreeSelection) => Promise<boolean>;
   /** Long-running background commands launched by the active parent session. */
   backgroundCommands?: FlowChatHeaderCommandSummary[];
   /** Open a read-only output panel for a background command. */
@@ -101,6 +102,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   onOpenSessionTreeSession,
   hasActiveSessionTreeDescendants = false,
   onCancelSessionTreeSession,
+  onDeleteSessionTreeSession,
   backgroundCommands = [],
   onOpenBackgroundCommandOutput,
   onRequestBackgroundCommandInput,
@@ -114,6 +116,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const sceneChrome = useSceneChromeContext();
   const isSceneChromeActive = sceneChrome?.activeSceneId === 'session';
   const [isSessionOverviewOpen, setIsSessionOverviewOpen] = useState(false);
+  const [activeAgentsOnly, setActiveAgentsOnly] = useState(true);
   const [isBackgroundCommandSectionMenuOpen, setIsBackgroundCommandSectionMenuOpen] = useState(false);
   const [openBackgroundCommandMenuId, setOpenBackgroundCommandMenuId] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -759,6 +762,13 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                         <span className="flowchat-header__session-overview-section-status" aria-hidden="true" />
                       ) : null}
                     </span>
+                    <Tooltip content={t('flowChatHeader.agentTreeActiveOnly')}>
+                      <Switch
+                        checked={activeAgentsOnly}
+                        aria-label={t('flowChatHeader.agentTreeActiveOnly')}
+                        onChange={(event) => setActiveAgentsOnly(event.currentTarget.checked)}
+                      />
+                    </Tooltip>
                   </div>
                   {sessionId ? (
                     <SessionTreePopover
@@ -767,7 +777,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                       onSelectSession={onOpenSessionTreeSession}
                       hasActiveDescendants={hasActiveSessionTreeDescendants}
                       onCancelSession={onCancelSessionTreeSession}
+                      onDeleteSession={onDeleteSessionTreeSession}
                       embedded
+                      activeOnly={activeAgentsOnly}
                       open={isSessionOverviewOpen}
                       onRequestClose={() => closeSessionOverview(false)}
                       t={t}
