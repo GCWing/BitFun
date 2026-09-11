@@ -35,7 +35,6 @@ import {
 } from '@/shared/utils/startupTrace';
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { normalizeRemoteSessionScope } from '@/shared/utils/remoteSessionScope';
-import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import { isSurfaceReconcileEnabled } from '@/infrastructure/peer-device/deviceSurfaceReconcile';
 import { persistedMayWriteTurn } from '@/flow_chat/session-stream/SessionStream';
 import { sessionCompletionReceipt } from '../utils/sessionCompletionReceipt';
@@ -325,14 +324,14 @@ function sameDispatchTargetIdentity(
 // Retired built-in ids remain readable for historical sessions and older peer
 // hosts; new-session selection filters them from the current Agent catalog.
 const VALID_AGENT_TYPES = new Set([
-  'agentic',
+  'Standard',
   'Multitask',
   'debug',
   'Plan',
   'Cowork',
   'Claw',
   'DeepResearch',
-  'Ultra',
+  'Ultimate',
 ]);
 const METADATA_LIST_RECENT_DEDUPE_TTL_MS = 1000;
 const HISTORICAL_SESSION_INITIAL_REMOTE_TAIL_TURN_COUNT = 3;
@@ -4083,6 +4082,7 @@ export class FlowChatStore {
         titleSource: titleState.titleSource,
         titleI18nKey: titleState.titleI18nKey,
         titleI18nParams: titleState.titleI18nParams,
+        workspaceSessionNumber: titleState.workspaceSessionNumber,
         titleStatus: undefined,
         dialogTurns: [],
         status: 'idle',
@@ -4093,7 +4093,7 @@ export class FlowChatStore {
         error: null,
         historyState: 'new',
         maxContextTokens: maxContextTokens || 128128,
-        mode: mode || 'agentic',
+        mode: mode || 'Standard',
         lastUserDialogMode: undefined,
         lastSubmittedMode: undefined,
         workspacePath,
@@ -4182,7 +4182,7 @@ export class FlowChatStore {
         lastFinishedAt: undefined,
         error: null,
         maxContextTokens: 128128,
-        mode: mode || 'agentic',
+        mode: mode || 'Standard',
         lastUserDialogMode: undefined,
         lastSubmittedMode: undefined,
         isHistorical: false,
@@ -4250,7 +4250,7 @@ export class FlowChatStore {
     });
     
     window.dispatchEvent(new CustomEvent('openbitfun:session-switched', {
-      detail: { sessionId, mode: sessionMode || 'agentic' }
+      detail: { sessionId, mode: sessionMode || 'Standard' }
     }));
 
     if (targetSessionExists && previousSessionId !== sessionId) {
@@ -4261,7 +4261,7 @@ export class FlowChatStore {
   /**
    * Update session mode
    * @param sessionId Session ID
-   * @param mode Mode ID (e.g., 'agentic', 'Plan')
+   * @param mode Mode ID (e.g., 'Standard', 'Plan')
    */
   public updateSessionMode(sessionId: string, mode: string): void {
     this.setState(prev => {
@@ -6923,8 +6923,8 @@ export class FlowChatStore {
             return prev;
           }
 
-          const rawAgentType = metadata.agentType || 'agentic';
-          const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
+          const rawAgentType = metadata.agentType || 'Standard';
+          const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'Standard';
           const restoredCurrentTokenUsage = isAcpAgentType(validatedAgentType)
             ? undefined
             : deriveRestoredCurrentTokenUsage(persistedCurrentContextUsage);
@@ -6939,6 +6939,7 @@ export class FlowChatStore {
             titleSource: titleState.titleSource,
             titleI18nKey: titleState.titleI18nKey,
             titleI18nParams: titleState.titleI18nParams,
+            workspaceSessionNumber: titleState.workspaceSessionNumber,
             titleStatus: hasDynamicDefaultTitle ? undefined : 'generated',
             dialogTurns: [],
             status: 'idle',
@@ -7384,8 +7385,8 @@ export class FlowChatStore {
               return prev;
             }
 
-            const rawAgentType = metadata.agentType || 'agentic';
-            const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'agentic';
+            const rawAgentType = metadata.agentType || 'Standard';
+            const validatedAgentType = isValidPersistedAgentType(rawAgentType) ? rawAgentType : 'Standard';
             const restoredCurrentTokenUsage = isAcpAgentType(validatedAgentType)
               ? undefined
               : deriveRestoredCurrentTokenUsage(persistedCurrentContextUsage);
@@ -7400,6 +7401,7 @@ export class FlowChatStore {
               titleSource: titleState.titleSource,
               titleI18nKey: titleState.titleI18nKey,
               titleI18nParams: titleState.titleI18nParams,
+              workspaceSessionNumber: titleState.workspaceSessionNumber,
               titleStatus: hasDynamicDefaultTitle ? undefined : 'generated',
               dialogTurns: [],
               status: 'idle',
@@ -8088,50 +8090,6 @@ export class FlowChatStore {
       let restoredTiming: SessionViewRestoreTiming | undefined;
       let restoredCurrentContextUsage: SessionContextUsage | null | undefined;
       let restoredRuntimeEventSnapshot: SessionRuntimeEventSnapshot | undefined;
-
-      // Finish or resume relay history import before Core restores its model
-      // context. Ordinary local sessions return after one metadata read, while
-      // an incomplete relay import fails closed instead of publishing a
-      // truncated UI/Core history pair.
-      //
-      // Peer Device Mode: cloud turn fetch is paused on the controller; session
-      // history must come from the peer host via restore_session_view.
-      if (!remote && storageWorkspacePath && !isPeerDeviceModeActive()) {
-        const relayImportStartedAt = nowMs();
-        startupTrace.markPhase('historical_session_relay_import_start', {
-          remote,
-          sessionId,
-          sessionTraceId,
-        });
-        try {
-          const { remoteConnectAPI } = await import(
-            '@/infrastructure/api/service-api/RemoteConnectAPI'
-          );
-          const fetched = await remoteConnectAPI.accountFetchSessionTurns(
-            sessionId,
-            storageWorkspacePath
-          );
-          startupTrace.markPhase('historical_session_relay_import_end', {
-            remote,
-            sessionId,
-            sessionTraceId,
-            fetched,
-            durationMs: elapsedMs(relayImportStartedAt),
-          });
-        } catch (fetchErr) {
-          startupTrace.markPhase('historical_session_relay_import_failed', {
-            remote,
-            sessionId,
-            sessionTraceId,
-            durationMs: elapsedMs(relayImportStartedAt),
-          });
-          log.warn('Relay session history is incomplete; retry opening the session', {
-            sessionId,
-            error: fetchErr,
-          });
-          throw fetchErr;
-        }
-      }
 
       const stateMachineManagerPromise = import('../state-machine');
       if (!isAcpSession) {

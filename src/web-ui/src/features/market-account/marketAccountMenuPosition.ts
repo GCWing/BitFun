@@ -3,16 +3,16 @@ import {
   type FixedPopoverViewport,
 } from '@/shared/utils/fixedPopoverViewport';
 
-export interface MarketAccountMenuPosition {
+export interface AccountIdentityMenuPosition {
   top: number;
   left: number;
 }
 
-export function calculateMarketAccountMenuPosition(
+export function calculateAccountIdentityMenuPosition(
   triggerRect: Pick<DOMRect, 'top' | 'right' | 'bottom'>,
   menuRect: Pick<DOMRect, 'width' | 'height'>,
   viewport: FixedPopoverViewport,
-): MarketAccountMenuPosition {
+): AccountIdentityMenuPosition {
   return computeFixedPopoverPositionInViewport(
     {
       left: triggerRect.right - menuRect.width,

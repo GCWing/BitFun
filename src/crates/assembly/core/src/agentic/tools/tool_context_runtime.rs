@@ -877,7 +877,7 @@ mod context_facts_tests {
     fn tool_context_facts_preserve_portable_fields_without_runtime_handles() {
         let context = ToolUseContext {
             tool_call_id: Some("call-1".to_string()),
-            agent_type: Some("Agentic".to_string()),
+            agent_type: Some("Standard".to_string()),
             session_id: Some("session-1".to_string()),
             dialog_turn_id: Some("turn-1".to_string()),
             workspace: Some(WorkspaceBinding::new(None, PathBuf::from("/repo/project"))),
@@ -898,7 +898,7 @@ mod context_facts_tests {
         let facts = context.to_tool_context_facts();
 
         assert_eq!(facts.tool_call_id.as_deref(), Some("call-1"));
-        assert_eq!(facts.agent_type.as_deref(), Some("Agentic"));
+        assert_eq!(facts.agent_type.as_deref(), Some("Standard"));
         assert_eq!(facts.session_id.as_deref(), Some("session-1"));
         assert_eq!(facts.dialog_turn_id.as_deref(), Some("turn-1"));
         assert_eq!(facts.workspace_kind, Some(ToolWorkspaceKind::Local));
@@ -925,7 +925,7 @@ mod context_facts_tests {
 
         let context = ToolUseContext {
             tool_call_id: Some("call-runtime".to_string()),
-            agent_type: Some("Agentic".to_string()),
+            agent_type: Some("Standard".to_string()),
             session_id: Some("session-runtime".to_string()),
             dialog_turn_id: Some("turn-runtime".to_string()),
             workspace: Some(WorkspaceBinding::new(None, PathBuf::from("/repo/runtime"))),

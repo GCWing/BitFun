@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 const SKILL_LISTING_TITLE: &str = "# Skill Listing";
 const SKILL_LISTING_GUIDANCE: &str = r#"A skill is a set of instructions provided through a `SKILL.md` source.
 If the user names a skill (with `[$SkillName]` or plain text) OR the task clearly matches a skill's description shown below, you must use that skill for that turn. Multiple mentions mean use them all. Do not carry skills across turns unless re-mentioned.
-An explicit `[$scope::source::directory]` reference selects an exact installed skill. Pass the complete stable key to the Skill tool unchanged, even when another source has the same skill name. If that key is missing or disabled, report the error instead of substituting a same-named skill.
 Below is the list of skills that can be used with the Skill tool. Each entry includes a name and description"#;
 const AGENT_LISTING_TITLE: &str = "# Agent Listing";
 const AGENT_LISTING_GUIDANCE: &str = "Available subagent types for the Task tool:";

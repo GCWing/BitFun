@@ -1568,19 +1568,19 @@ export const forbiddenContentRules = [
     path: 'src/crates/assembly/core/src/agentic/agents/mod.rs',
     patterns: [
       {
-        regex: /\bpub const SHARED_CODING_MODE_PROMPT_TEMPLATE\b/,
+        regex: /\bpub const STANDARD_HARNESS_PROMPT_TEMPLATE\b/,
         message:
-          'core agent mode module must not own shared coding-mode prompt facts; use openbitfun-agent-runtime agents',
+          'core agent mode module must not own Standard Harness prompt facts; use openbitfun-agent-runtime agents',
       },
       {
-        regex: /\bpub const SHARED_CODING_MODE_CONFIG_PROFILE_ID\b/,
+        regex: /\bpub const STANDARD_HARNESS_CONFIG_ID\b/,
         message:
-          'core agent mode module must not own shared coding-mode config profile facts; use openbitfun-agent-runtime agents',
+          'core agent mode module must not own Standard Harness config profile facts; use openbitfun-agent-runtime agents',
       },
       {
-        regex: /\bpub const SHARED_CODING_MODE_IDS\b/,
+        regex: /\bpub const STANDARD_HARNESS_CONFIG_MEMBERS\b/,
         message:
-          'core agent mode module must not own shared coding-mode membership facts; use openbitfun-agent-runtime agents',
+          'core agent mode module must not own Standard Harness membership facts; use openbitfun-agent-runtime agents',
       },
       {
         regex: /\bpub fn resolve_mode_config_profile_id\b/,
@@ -1598,9 +1598,9 @@ export const forbiddenContentRules = [
           'core agent mode module must not own mode config profile labels; use openbitfun-agent-runtime agents',
       },
       {
-        regex: /\bpub fn shared_coding_mode_user_context_policy\b/,
+        regex: /\bpub fn standard_harness_user_context_policy\b/,
         message:
-          'core agent mode module must not own shared coding-mode context policy; use openbitfun-agent-runtime agents',
+          'core agent mode module must not own Standard Harness context policy; use openbitfun-agent-runtime agents',
       },
     ],
   },
@@ -4229,6 +4229,8 @@ export const forbiddenContentUnderRules = [
       regex: /\b(?:use\s+openbitfun_static_hook_support\b|extern\s+crate\s+openbitfun_static_hook_support\b|openbitfun_static_hook_support::)/,
       allowPaths: [
         'src/crates/adapters/static-hook-support/tests/parser.rs',
+        'src/crates/adapters/dsh-adapter/src/hook_source.rs',
+        'src/crates/adapters/pi-adapter/src/hook_source.rs',
         'src/crates/adapters/opencode-adapter/src/hook_source.rs',
         'src/crates/adapters/opencode-adapter/src/command_source.rs',
         'src/crates/adapters/opencode-adapter/src/agent_source.rs',
@@ -4440,9 +4442,22 @@ export const forbiddenContentUnderRules = [
     patterns: [
       {
         regex: /\brustls::crypto::(?:ring|aws_lc_rs)\b/,
-        allowPaths: ['src/crates/services/services-core/src/tls_provider.rs'],
+        allowPaths: [
+          'src/crates/services/services-core/src/tls_provider.rs',
+          // Independently built Relay binds ring to one client; the separate
+          // rule below still forbids process-wide installation in that owner.
+          'src/crates/services/relay-service/src/identity.rs',
+        ],
         message: 'delegate built-in Rustls provider selection to services-core::tls_provider',
       },
     ],
+  },
+  {
+    path: 'src/crates/services/relay-service/src/identity.rs',
+    reason: 'standalone Relay identity TLS must remain client-scoped',
+    patterns: [{
+      regex: /\binstall_default\b/,
+      message: 'Relay must not install or replace the process-wide TLS provider',
+    }],
   },
 ];

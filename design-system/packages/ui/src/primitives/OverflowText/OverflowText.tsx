@@ -86,15 +86,22 @@ export const OverflowText = forwardRef<HTMLElement, OverflowTextProps>(
       if (!element || !content) return;
 
       const distance = Math.max(0, content.scrollWidth - element.clientWidth);
-      const isOverflowing = element.clientWidth > 0 && (distance > 0
-        || (element.clientHeight > 0 && element.scrollHeight > element.clientHeight));
+      // A compact single-line label can have glyph ink extend slightly beyond
+      // its line box without any text being clipped. Only multiline clamps use
+      // vertical overflow as a truncation signal; single-line slots are clipped
+      // exclusively on the inline axis.
+      const hasVerticalClampOverflow = lines !== undefined
+        && element.clientHeight > 0
+        && element.scrollHeight > element.clientHeight;
+      const isOverflowing = element.clientWidth > 0
+        && (distance > 0 || hasVerticalClampOverflow);
       const current = measurementRef.current;
       if (current.distance === distance && current.isOverflowing === isOverflowing) return;
 
       const next = { distance, isOverflowing };
       measurementRef.current = next;
       setMeasurement(next);
-    }, []);
+    }, [lines]);
 
     const prepareTooltip = useCallback(() => {
       const element = elementRef.current;

@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useModernFlowChatStore } from '@/flow_chat/store/modernFlowChatStore';
 import type { Session } from '@/flow_chat/types/flow-chat';
 import { activateSurface, LOCAL_SURFACE_ID } from '@/infrastructure/peer-device/deviceSurface';
 import { selectActiveSceneId, useSceneStore } from '../stores/sceneStore';
 import { resolveSessionSceneTarget } from './sessionSceneTarget';
+import { workspaceManager, type WorkspaceEventListener } from '@/infrastructure/services/business/workspaceManager';
+import type { WorkspaceInfo } from '@/shared/types';
 import { startSessionSceneLifecycle } from './sessionSceneLifecycle';
 
 function session(sessionId: string, overrides: Partial<Session> = {}): Session {
@@ -46,6 +48,7 @@ describe('Session scene resource lifetime with real stores', () => {
   afterEach(() => {
     stop?.();
     stop = undefined;
+    vi.restoreAllMocks();
     activateSurface(LOCAL_SURFACE_ID);
     select([], null);
     useModernFlowChatStore.getState().clear();
@@ -139,6 +142,50 @@ describe('Session scene resource lifetime with real stores', () => {
     expect(flowChatStore.getActiveSession()?.sessionId).toBe('b');
     expect(useSceneStore.getState().navHistory).not.toContain(firstTabId);
   });
+
+  it.each(['legacy', 'bound', 'worktree', 'remote'] as const)(
+    'retires a closed %s workspace tab without reactivating its cached session', kind => {
+      stop?.();
+      const workspace = {
+        id: 'closing', rootPath: '/projects/a',
+        ...(kind === 'remote' ? { connectionId: 'ssh-a', sshHost: 'host-a' } : {}),
+      } as WorkspaceInfo;
+      const first = session('a', {
+        workspacePath: kind === 'worktree' ? '/worktrees/a' : workspace.rootPath,
+        ...(kind === 'bound' ? { workspaceId: workspace.id } : {}),
+        ...(kind === 'worktree' ? { projectWorkspacePath: workspace.rootPath } : {}),
+        ...(kind === 'remote' ? { remoteConnectionId: 'ssh-a', remoteSshHost: 'host-a' } : {}),
+      });
+      const workspaceState = {
+        ...workspaceManager.getState(), currentWorkspace: workspace,
+        activeWorkspaceId: workspace.id, openedWorkspaces: new Map([[workspace.id, workspace]]),
+      };
+      let onWorkspaceEvent: WorkspaceEventListener = () => {};
+      vi.spyOn(workspaceManager, 'getState').mockImplementation(() => workspaceState);
+      vi.spyOn(workspaceManager, 'addEventListener').mockImplementation(listener => {
+        onWorkspaceEvent = listener;
+        return () => {};
+      });
+      select([first], first.sessionId);
+      stop = startSessionSceneLifecycle();
+      useSceneStore.getState().openScene('settings');
+      useSceneStore.getState().openScene('session');
+      const tabId = useSceneStore.getState().activeTabId;
+      const open = vi.spyOn(useSceneStore.getState(), 'openSessionScene');
+
+      workspaceState.openedWorkspaces = new Map();
+      onWorkspaceEvent({ type: 'workspace:closed', workspaceId: workspace.id });
+
+      expect(open).not.toHaveBeenCalled();
+      expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toEqual(['settings']);
+      expect(useSceneStore.getState().activeTabId).toBe('settings');
+      expect(useSceneStore.getState().navHistory).not.toContain(tabId);
+      expect(flowChatStore.getState().sessions.get(first.sessionId)).toBe(first);
+      // The active session may lag the workspace update until hydrate completes.
+      select([{ ...first, title: 'Late update' }], first.sessionId);
+      expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toEqual(['settings']);
+    },
+  );
 
   it('does not reopen a closed tab when its session is updated in the background', () => {
     const first = session('a');

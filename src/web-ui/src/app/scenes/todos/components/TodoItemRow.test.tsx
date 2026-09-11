@@ -29,7 +29,7 @@ const job: CronJob = {
   target: {
     kind: 'workspace',
     workspace: { workspacePath: '/workspace/openbitfun' },
-    launch: { agentType: 'agentic' },
+    launch: { agentType: 'Standard' },
   },
   createdAtMs: 0,
   configUpdatedAtMs: 0,

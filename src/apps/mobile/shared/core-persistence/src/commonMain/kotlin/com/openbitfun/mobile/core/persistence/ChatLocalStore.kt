@@ -174,6 +174,14 @@ public data class PersistedRemoteCursor public constructor(
     public val knownModelCatalogVersion: String = "",
 )
 
+@Serializable
+public data class PersistedRemoteWorkspace public constructor(
+    public val path: String = "",
+    public val name: String = "",
+    public val lastOpened: String = "",
+    public val workspaceKind: String = "",
+)
+
 public interface RemoteSessionListStore {
     public fun load(deviceKey: String): List<PersistedRemoteSession>
     public fun save(deviceKey: String, sessions: List<PersistedRemoteSession>, hasMore: Boolean = false)
@@ -186,6 +194,12 @@ public interface RemoteTranscriptStore {
     public fun replace(deviceKey: String, sessionId: String, messages: List<PersistedRemoteMessage>)
     public fun loadCursor(deviceKey: String, sessionId: String): PersistedRemoteCursor?
     public fun saveCursor(deviceKey: String, sessionId: String, cursor: PersistedRemoteCursor)
+    public fun delete(deviceKey: String, sessionId: String)
+}
+
+public interface RemoteWorkspaceListStore {
+    public fun load(deviceKey: String): List<PersistedRemoteWorkspace>
+    public fun save(deviceKey: String, workspaces: List<PersistedRemoteWorkspace>)
 }
 
 public class SqlDelightRemoteSessionListStore public constructor(
@@ -206,8 +220,36 @@ public class SqlDelightRemoteSessionListStore public constructor(
 
     override fun save(deviceKey: String, sessions: List<PersistedRemoteSession>, hasMore: Boolean) {
         if (deviceKey.isBlank()) return
-        val kept = sessions.take(20)
-        val signature = "$deviceKey|${hasMore}|${kept.joinToString { it.sessionId + ":" + it.updatedAt + ":" + it.messageCount + ":" + it.pendingConfirmed }}"
+        val kept = sessions.take(60)
+        val signature = buildString {
+            append(deviceKey)
+            append('|')
+            append(hasMore)
+            kept.forEach { session ->
+                append('\u0002')
+                append(session.sessionId)
+                append('\u0001')
+                append(session.title)
+                append('\u0001')
+                append(session.agentType)
+                append('\u0001')
+                append(session.status)
+                append('\u0001')
+                append(session.updatedAt)
+                append('\u0001')
+                append(session.createdAt)
+                append('\u0001')
+                append(session.messageCount)
+                append('\u0001')
+                append(session.lastMessageId)
+                append('\u0001')
+                append(session.workspacePath.orEmpty())
+                append('\u0001')
+                append(session.workspaceName.orEmpty())
+                append('\u0001')
+                append(session.pendingConfirmed)
+            }
+        }
         if (signature == lastSignature) return
         queries.transaction {
             queries.deleteRemoteSessionsForDevice(deviceKey)
@@ -279,6 +321,14 @@ public class SqlDelightRemoteTranscriptStore public constructor(
             cursor.knownMessageCount.toLong(), cursor.knownModelCatalogVersion)
     }
 
+    override fun delete(deviceKey: String, sessionId: String) {
+        queries.transaction {
+            queries.deleteRemoteMessages(deviceKey, sessionId)
+            queries.deleteRemoteCursor(deviceKey, sessionId)
+        }
+        resident.remove("$deviceKey::$sessionId")
+    }
+
     private fun saveRow(deviceKey: String, sessionId: String, seq: Int, message: PersistedRemoteMessage) {
         queries.upsertRemoteMessage(deviceKey, sessionId, seq.toLong(), message.messageId, message.role,
             message.text, message.status, message.timestamp, message.thinking, message.payloadJson)
@@ -287,6 +337,42 @@ public class SqlDelightRemoteTranscriptStore public constructor(
     private fun remember(key: String, messages: List<PersistedRemoteMessage>) {
         resident[key] = messages
         while (resident.size > 3) resident.remove(resident.entries.first().key)
+    }
+}
+
+public class SqlDelightRemoteWorkspaceListStore public constructor(
+    driver: SqlDriver,
+) : RemoteWorkspaceListStore {
+    private val queries = MobileDatabase(driver).mobileQueries
+    private var lastSignature = ""
+
+    override fun load(deviceKey: String): List<PersistedRemoteWorkspace> =
+        queries.selectRemoteWorkspaces(deviceKey).executeAsList().map { row ->
+            PersistedRemoteWorkspace(row.path, row.name, row.last_opened, row.workspace_kind)
+        }
+
+    override fun save(deviceKey: String, workspaces: List<PersistedRemoteWorkspace>) {
+        if (deviceKey.isBlank()) return
+        val kept = workspaces.distinctBy { it.path }.take(60)
+        val signature = "$deviceKey|${kept.joinToString("\u0002") { workspace ->
+            listOf(workspace.path, workspace.name, workspace.lastOpened, workspace.workspaceKind)
+                .joinToString("\u0001")
+        }}"
+        if (signature == lastSignature) return
+        queries.transaction {
+            queries.deleteRemoteWorkspacesForDevice(deviceKey)
+            kept.forEachIndexed { index, workspace ->
+                queries.upsertRemoteWorkspace(
+                    deviceKey,
+                    workspace.path,
+                    workspace.name,
+                    workspace.lastOpened,
+                    workspace.workspaceKind,
+                    index.toLong(),
+                )
+            }
+        }
+        lastSignature = signature
     }
 }
 
@@ -302,6 +388,12 @@ private object EmptyRemoteTranscriptStore : RemoteTranscriptStore {
     override fun replace(deviceKey: String, sessionId: String, messages: List<PersistedRemoteMessage>) = Unit
     override fun loadCursor(deviceKey: String, sessionId: String): PersistedRemoteCursor? = null
     override fun saveCursor(deviceKey: String, sessionId: String, cursor: PersistedRemoteCursor) = Unit
+    override fun delete(deviceKey: String, sessionId: String) = Unit
+}
+
+private object EmptyRemoteWorkspaceListStore : RemoteWorkspaceListStore {
+    override fun load(deviceKey: String): List<PersistedRemoteWorkspace> = emptyList()
+    override fun save(deviceKey: String, workspaces: List<PersistedRemoteWorkspace>) = Unit
 }
 
 public data class MobilePersistenceStores public constructor(
@@ -309,10 +401,12 @@ public data class MobilePersistenceStores public constructor(
     public val chats: ChatLocalStore,
     public val remoteSessions: RemoteSessionListStore = EmptyRemoteSessionListStore,
     public val remoteTranscripts: RemoteTranscriptStore = EmptyRemoteTranscriptStore,
+    public val remoteWorkspaces: RemoteWorkspaceListStore = EmptyRemoteWorkspaceListStore,
 )
 
 public fun mobilePersistenceStores(driver: SqlDriver): MobilePersistenceStores = MobilePersistenceStores(
     drafts = SqlDelightDraftStore(driver), chats = SqlDelightChatLocalStore(driver),
     remoteSessions = SqlDelightRemoteSessionListStore(driver),
     remoteTranscripts = SqlDelightRemoteTranscriptStore(driver),
+    remoteWorkspaces = SqlDelightRemoteWorkspaceListStore(driver),
 )

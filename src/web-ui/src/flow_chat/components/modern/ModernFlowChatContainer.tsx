@@ -81,6 +81,10 @@ import {
 import { scheduleAfterStartupPaint } from '@/shared/utils/startupTaskScheduling';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { notificationService } from '@/shared/notification-system';
+import { confirmDanger } from '@/infrastructure/confirm-dialog';
+import { getActiveSurfaceScope, isSurfaceChangedError } from '@/infrastructure/peer-device/deviceSurface';
+import { deleteSessionTreeBranch } from '../../services/deleteSessionTreeBranch';
+import { resolveSessionDriverId } from '../../session-drivers/resolve';
 import {
   clearHistorySessionOpenTransition,
   getHistorySessionOpenTransitionSnapshot,
@@ -2378,6 +2382,34 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     }
   }, [t]);
 
+  const handleDeleteSessionTreeSession = useCallback(async (selection: SessionTreeSelection) => {
+    if (selection.isRoot) return false;
+    if (activeSession && resolveSessionDriverId(activeSession.sessionId, activeSession) === 'dispatch') {
+      notificationService.error(t('flowChatHeader.agentTreeDeleteUnsupported'), { duration: 5000 });
+      return false;
+    }
+    const scope = getActiveSurfaceScope();
+    const workspacePath = selection.workspacePath || activeSession?.workspacePath;
+    const remoteConnectionId = selection.remoteConnectionId || activeSession?.remoteConnectionId;
+    const remoteSshHost = selection.remoteSshHost || activeSession?.remoteSshHost;
+    try {
+      const confirmed = await confirmDanger(
+        t('flowChatHeader.agentTreeDelete'),
+        t('flowChatHeader.agentTreeDeleteConfirm', { name: selection.displayTitle }),
+        { confirmText: t('flowChatHeader.agentTreeDelete') },
+      );
+      if (!confirmed) return false;
+      if (!workspacePath) throw new Error('Agent session workspace path is missing');
+      await deleteSessionTreeBranch({ sessionId: selection.sessionId, workspacePath, remoteConnectionId, remoteSshHost }, scope);
+      return true;
+    } catch (error) {
+      if (!isSurfaceChangedError(error)) {
+        notificationService.error(t('flowChatHeader.agentTreeDeleteFailed'), { duration: 5000 });
+      }
+      return false;
+    }
+  }, [activeSession, t]);
+
   const handleOpenBackgroundCommandOutput = useCallback((command: FlowChatHeaderCommandSummary) => {
     createBackgroundCommandOutputTab({
       execSessionKey: command.execSessionKey,
@@ -2505,7 +2537,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         try {
           await FlowChatManager.getInstance().createChatSession(
             flowChatSessionConfigForCurrentWorkspace(activeWorkspace),
-            'agentic',
           );
         } catch (error) {
           log.error('Failed to create session from shortcut', { error });
@@ -2573,6 +2604,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
           onOpenSessionTreeSession={handleOpenSessionTreeSession}
           hasActiveSessionTreeDescendants={hasActiveSessionTreeDescendants}
           onCancelSessionTreeSession={handleCancelSessionTreeSession}
+          onDeleteSessionTreeSession={handleDeleteSessionTreeSession}
           onOpenBackgroundCommandOutput={handleOpenBackgroundCommandOutput}
           onRequestBackgroundCommandInput={handleRequestBackgroundCommandInput}
           onStopBackgroundCommand={handleStopBackgroundCommand}

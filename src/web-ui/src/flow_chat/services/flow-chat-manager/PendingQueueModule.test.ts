@@ -49,7 +49,7 @@ describe('PendingQueueModule', () => {
       sessionId,
       content: 'second',
       displayMessage: 'Second display',
-      agentType: 'agentic',
+      agentType: 'Standard',
       imageContexts: [{ id: 'image-1' }],
       imageDisplayData: [{ id: 'image-1', name: 'clip.png' }],
       composerDraft: {

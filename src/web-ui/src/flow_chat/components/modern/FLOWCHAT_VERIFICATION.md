@@ -36,7 +36,9 @@ each missing what the other had.
 | `useFlowChatSearch.test.ts` | exact matching-block decoration, occurrence counting, and search navigation state |
 | `flowChatSearchDom.test.ts` | concrete text ranges and independent highlight ownership across rows and panes |
 | `flowChatSearchPresentation.test.ts` | visible source highlighting and single-line marker geometry, wrapping, scrolling, and clipping |
-| `FlowChatHeader.test.tsx` | shared SearchField composition, result controls, and input identity while expanding |
+| `FlowChatHeader.test.tsx` | shared SearchField composition, result controls, input identity while expanding, and the default active-only Agent tree toggle |
+| `SessionTreePopover.test.tsx` | Agent selection/cancellation/deletion menus, type-only metadata, active branch filtering with ancestor retention, restoring all agents, and the active empty state |
+| `../../services/deleteSessionTreeBranch.test.ts` | Unloaded descendant deletion in child-first order, remote location forwarding, failure retention, and device surface guards |
 
 ## Manual
 

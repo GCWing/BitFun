@@ -1,27 +1,11 @@
-import { argon2idAsync } from '@noble/hashes/argon2.js';
-
-interface LoginChallenge {
-  kdf_salt: string;
-  argon2_params: string;
-}
-
-interface KdfParams {
-  m: number;
-  t: number;
-  p: number;
-}
-
 interface ErrorBody {
   error?: string;
   retry_after_secs?: number;
 }
 
 const form = document.querySelector<HTMLFormElement>('[data-page-login-form]');
-const usernameInput = document.querySelector<HTMLInputElement>('[data-page-login-username]');
-const passwordInput = document.querySelector<HTMLInputElement>('[data-page-login-password]');
 const submitButton = document.querySelector<HTMLButtonElement>('[data-page-login-submit]');
 const errorElement = document.querySelector<HTMLElement>('[data-page-login-error]');
-const toggleButton = document.querySelector<HTMLButtonElement>('[data-page-login-toggle-password]');
 const loginState = form?.dataset.pageLoginState;
 
 function relayPathPrefix(): string {
@@ -67,39 +51,6 @@ function showError(value: string): void {
   errorElement.hidden = value.length === 0;
 }
 
-function decodeBase64(value: string): Uint8Array {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return bytes;
-}
-
-function encodeBase64(value: Uint8Array): string {
-  let binary = '';
-  for (let offset = 0; offset < value.length; offset += 0x8000) {
-    binary += String.fromCharCode(...value.subarray(offset, offset + 0x8000));
-  }
-  return btoa(binary);
-}
-
-function parseKdfParams(raw: string): KdfParams {
-  const value = JSON.parse(raw) as Partial<KdfParams>;
-  if (!Number.isInteger(value.m)
-    || !Number.isInteger(value.t)
-    || !Number.isInteger(value.p)
-    || value.m! < 8 * 1024
-    || value.m! > 256 * 1024
-    || value.t! < 1
-    || value.t! > 10
-    || value.p! < 1
-    || value.p! > 16) {
-    throw new Error(message('登录参数无效。', 'The sign-in parameters are invalid.'));
-  }
-  return value as KdfParams;
-}
-
 async function readError(response: Response): Promise<string> {
   const fallback = message('登录失败，请重试。', 'Sign-in failed. Try again.');
   try {
@@ -109,9 +60,6 @@ async function readError(response: Response): Promise<string> {
         `尝试次数过多，请在 ${body.retry_after_secs} 秒后重试。`,
         `Too many attempts. Try again in ${body.retry_after_secs} seconds.`,
       );
-    }
-    if (body.error === 'invalid username or password') {
-      return message('用户名或密码不正确。', 'Incorrect username or password.');
     }
     if (body.error === 'account does not have access to this Page') {
       return message('该账号没有此页面的访问权限。', 'This account cannot access the Page.');
@@ -135,77 +83,64 @@ async function postJson<T>(path: string, body: Record<string, unknown>): Promise
   return response.json() as Promise<T>;
 }
 
-toggleButton?.addEventListener('click', () => {
-  if (!passwordInput) return;
-  const reveal = passwordInput.type === 'password';
-  passwordInput.type = reveal ? 'text' : 'password';
-  toggleButton.textContent = reveal
-    ? message('隐藏', 'Hide')
-    : message('显示', 'Show');
-  toggleButton.setAttribute('aria-pressed', String(reveal));
-});
+interface AuthStart {
+  transactionId: string;
+  transactionSecret: string;
+  authorizationUrl: string;
+  expiresAt: number;
+  pollIntervalSeconds: number;
+}
 
 form?.addEventListener('submit', async (event) => {
   event.preventDefault();
-  if (!usernameInput || !passwordInput || !submitButton) return;
-
-  const username = usernameInput.value.trim();
-  const password = passwordInput.value;
-  if (!username || username.length > 128 || !password || password.length > 1024) {
-    showError(message('请输入有效的用户名和密码。', 'Enter a valid username and password.'));
+  if (!submitButton || submitButton.disabled) return;
+  // Open synchronously during the click so browser popup protection permits it.
+  const popup = window.open('about:blank', '_blank');
+  if (!popup) {
+    showError(message('请允许登录弹窗后重试。', 'Allow the sign-in popup and try again.'));
     return;
   }
-
+  popup.opener = null;
   showError('');
   submitButton.disabled = true;
-  submitButton.textContent = message('正在验证…', 'Signing in…');
-
-  let passwordBytes: Uint8Array | undefined;
-  let passwordHash: Uint8Array | undefined;
+  submitButton.textContent = message('等待 GitHub 授权…', 'Waiting for GitHub…');
   try {
-    const challenge = await postJson<LoginChallenge>(
-      relayApiPath('/api/auth/login/challenge'),
-      { username },
-    );
-    const salt = decodeBase64(challenge.kdf_salt);
-    if (salt.length !== 16) {
-      throw new Error(message('登录参数无效。', 'The sign-in parameters are invalid.'));
+    const start = await postJson<AuthStart>(relayApiPath('/api/auth/github/start'), {});
+    const authorization = new URL(start.authorizationUrl);
+    if (authorization.protocol !== 'https:' || authorization.hostname !== 'github.com') {
+      throw new Error(message('登录地址无效。', 'The sign-in URL is invalid.'));
     }
-    const params = parseKdfParams(challenge.argon2_params);
-    passwordBytes = new TextEncoder().encode(password);
-    passwordInput.value = '';
-    passwordHash = await argon2idAsync(passwordBytes, salt, {
-      m: params.m,
-      t: params.t,
-      p: params.p,
-      dkLen: 32,
-      version: 0x13,
-      asyncTick: 16,
-    });
-    const loginBody: Record<string, unknown> = {
-      username,
-      password_hash: encodeBase64(passwordHash),
-    };
+    popup.location.replace(authorization.href);
+    let accessToken: string | undefined;
+    while (Date.now() < start.expiresAt * 1000) {
+      await new Promise((resolve) => setTimeout(resolve, Math.max(1, start.pollIntervalSeconds) * 1000));
+      const result = await postJson<{ status: string; tokens?: { accessToken: string } }>(
+        relayApiPath('/api/auth/github/poll'),
+        { transactionId: start.transactionId, transactionSecret: start.transactionSecret },
+      );
+      if (result.tokens?.accessToken) {
+        accessToken = result.tokens.accessToken;
+        break;
+      }
+      if (result.status !== 'pending') {
+        throw new Error(message('授权未完成，请重新登录。', 'Authorization did not complete. Sign in again.'));
+      }
+    }
+    if (!accessToken) throw new Error(message('登录已过期，请重试。', 'Sign-in expired. Try again.'));
+    const loginBody: Record<string, unknown> = { access_token: accessToken };
     if (loginState) {
       loginBody.state = loginState;
     } else {
       loginBody.return_to = currentPageReturnPath();
       loginBody.path_prefix = relayPathPrefix();
     }
-    const result = await postJson<{ redirect_to: string }>(
-      relayApiPath('/api/page-auth/login'),
-      loginBody,
-    );
+    const result = await postJson<{ redirect_to: string }>(relayApiPath('/api/page-auth/login'), loginBody);
     window.location.replace(externalRedirectTarget(result.redirect_to));
   } catch (error) {
-    showError(error instanceof Error
-      ? error.message
-      : message('登录失败，请重试。', 'Sign-in failed. Try again.'));
-    passwordInput.focus();
+    showError(error instanceof Error ? error.message : message('登录失败，请重试。', 'Sign-in failed. Try again.'));
   } finally {
-    passwordBytes?.fill(0);
-    passwordHash?.fill(0);
+    popup.close();
     submitButton.disabled = false;
-    submitButton.textContent = message('登录并访问', 'Sign in and continue');
+    submitButton.textContent = message('使用 GitHub 登录', 'Sign in with GitHub');
   }
 });

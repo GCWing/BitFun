@@ -53,6 +53,26 @@ describe('appearance overlay host', () => {
     expect(systemTokens.layer.overlayHost.$value).toBeLessThan(systemTokens.layer.contextMenu.$value);
   });
 
+  it.each([
+    'src/app/components/NavPanel/NavPanel.scss',
+    'src/app/components/NavPanel/sections/sessions/SessionsSection.scss',
+    'src/app/components/NavPanel/sections/workspaces/WorkspaceListSection.scss',
+    'src/app/components/panels/content-canvas/tab-bar/TabOverflowMenu.scss',
+    'src/flow_chat/components/modern/FlowChatHeader.scss',
+    'src/flow_chat/components/modern/SessionTreePopover.scss',
+    'src/infrastructure/peer-device/DeviceSurfaceSwitcher.scss',
+  ])('keeps %s below portaled tooltips', (path) => {
+    const styles = readSource(path);
+    // Legacy 9999/10000 menu layers bypassed the shared scale and covered
+    // Tooltip/OverflowText siblings even after the portal escaped clipping.
+    for (const [, value] of styles.matchAll(/z-index:\s*(\d+)\s*;/g)) {
+      expect(Number(value), `${path}: z-index ${value}`).toBeLessThan(
+        systemTokens.layer.tooltip.$value,
+      );
+    }
+    expect(systemTokens.layer.popover.$value + 1).toBeLessThan(systemTokens.layer.tooltip.$value);
+  });
+
   // A containing block on the host would re-anchor every `position: fixed`
   // overlay to the host box instead of the viewport, moving all of them.
   it('never becomes a containing block for fixed-position overlays', () => {

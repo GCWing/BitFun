@@ -167,7 +167,7 @@ mod tests {
     async fn validation_accepts_only_swarm_planners() {
         assert!(
             AgentListTool::new()
-                .validate_input(&serde_json::json!({}), Some(&context("Ultra")))
+                .validate_input(&serde_json::json!({}), Some(&context("Ultimate")))
                 .await
                 .result
         );

@@ -18,6 +18,43 @@ export function Example() {
 
 The package owns component anatomy, behavior, accessibility, and stable variants. It does not own theme selection persistence, product state, routes, locale resources, or platform APIs.
 
+## Voice calls
+
+`VoiceCallPanel` owns the complete compact call surface: navigation, particle
+logo, scrolling transcripts and mute/settings/end controls. Pass localized
+`title`, `labels`, transcript strings, optional `status`, and callbacks from
+the host. Returning to chat, closing the window and ending a call are separate
+callbacks so the package never decides session or window lifetime.
+
+Typography follows the shared `type.heading.panel` role for the title (18px,
+semibold) and `type.body.lg` for transcripts and status text (15px, regular,
+1.6 line height). Both use the canonical interface font stacks and follow user
+font-size preferences. Compact-height layouts keep the same typography roles.
+User bubbles apply `type.modifier.leading.tight` for 18px leading, with 12px
+padding on all sides and a 12px corner radius. They fit their content and wrap
+within the conversation width; a single line is 42px high at the default size.
+
+`VoiceParticleLogo` is also exported independently. Its `readAudio` callback
+reads `{ user, assistant, assistantSpeaking }` once per animation frame. The
+two spectra are FFT byte bins from analysers configured with `fftSize = 256`;
+pass `null` for muted or unavailable audio. `assistantSpeaking` describes the
+audible playback clock, including queued audio that outlives a provider's
+completion event. Omit the callback for the calm resting motion.
+
+The supplied Voice-Particles-Demo contour, sampling, force coefficients,
+envelopes, density and brightness profiles are preserved in a fixed simulation
+space; resizing changes only its projection. The host supplies real capture and
+playback, and keeps permission, network, transcription and audio cleanup outside
+the component. The canvas pauses offscreen, when inactive or hidden, and renders
+a still logo for reduced motion. Both components are registered in Design Lab;
+its presentation specimens do not capture or simulate speech.
+
+The panel uses the semantic on-light/on-dark endpoints: 80% dark background,
+30% light user bubble, full light text and 20% light circular controls. Render
+it on a transparent host shell to avoid applying the background opacity twice.
+The host allocates its dimensions; the product uses the existing 480 × 680
+compact-window contract. Build and source tests do not prove visual fidelity.
+
 ## Buttons
 
 Choose variants by action role: use `primary` for the main save, submit, create,
@@ -34,6 +71,12 @@ tertiary surface. All variants retain the existing xs/sm/md/lg dimensions;
 text buttons keep those hit targets while omitting the visible pill background
 and radius. Use native hover, pressed, focus, disabled, and loading behavior in
 addition to Design Lab's state specimens.
+
+Hover and press feedback keeps controls at their resting size on desktop and
+mobile. Use semantic surface, border, content, shadow, and opacity states;
+do not add press scaling in components or host-wide semantic selectors.
+Explicit content zoom, loading indicators, and enter/exit motion remain owned
+by the component that needs them.
 
 ## Native scrollbars
 
@@ -162,6 +205,12 @@ Hosts without Web Animations render the current text immediately.
 The **RollingText** Design Lab entry includes manual standalone and TabGroup
 examples for repeated replacement and long labels.
 
+`TabGroup.renderItem(item, node, index)` can wrap the supplied standard item in
+a tooltip, context-menu owner, or drag target. Keep `node` intact so TabGroup
+continues to own selection, keyboard navigation, label overflow, and end-action
+anatomy. Product wrappers own document states and layout, without replacing the
+tab's control styles or creating another tablist.
+
 ## Mobile controls
 
 Touch-first controls use the isolated mobile entry so compact and foldable
@@ -259,7 +308,7 @@ Use `canonicalIconNames` for galleries and pickers. `iconNames` also keeps the
 legacy `download`, `circle` and `turn` entries for compatibility; prefer
 `arrow-down`, `unselected` and `<NumberBadge value={18} />` respectively.
 `turn` is only the old empty background, not a complete numbered marker.
-`NumberBadge` owns a 24px slot, a 20px surface and 11px medium text; longer
+`NumberBadge` owns a 24px filled surface and 11px regular text; longer
 values grow horizontally. Callers supply formatted values and contextual
 accessible labels. `ToolbarBadge` delegates to the same anatomy.
 
@@ -397,3 +446,56 @@ Tool-specific data shaping, localization, host actions, stores, and heavy
 renderers remain in the consuming product and enter through semantic props,
 callbacks, and slots. Bespoke product workflows remain product-owned rather
 than being forced into a standard package view.
+
+Field labels follow their orientation: horizontal labels use the 13px semibold
+label role, while vertical labels use the 11px regular meta role. Field helpers
+use secondary content with 16px leading at the default 11px font size;
+FormSection descriptions use primary content with 16px leading at 13px. Both
+leading roles scale with user typography. FieldGroup uses the form group tint,
+retaining its existing row padding, dividers, and radius. The Patterns form
+specimen shows both orientations and long values over a tinted container.
+
+Menus keep contiguous 30px rows with no additional list or heading-to-item gap;
+separators own their 8px vertical margins. Their keyboard focus indicator is
+inset so scrolling does not clip it or require extra permanent padding.
+ActionItem hover and pressed surfaces use the semantic neutral hover fill;
+pressed text remains semibold. Menu and navigation captions consume the final
+caption color directly, avoiding a second opacity multiplier. The nested-menu
+Pattern includes a scrolling toggle for keyboard and submenu verification.
+
+Compact tabs use `size="sm"` (30px, 14px icons, 4px icon gap); standard tabs retain 40px and 16px icons. Tabs share the outline-button surface contract and keep selection separate from pointer press. `SegmentedControl size="md"` uses a borderless 36px bar with 30px segments, 3px inset, 4px gaps and 12px segment padding. The default `sm` bar keeps its 28px outer height; separate pills retain their existing heights. Mobile controls own their touch geometry independently.
+
+Dialog titles use 24px bold type with their own 29px line box and normal tracking. `DialogHeader` and `DialogFooter` omit separators by default; pass `separator` for a deliberate divider. A direct `DialogBody` sibling of `DialogFooter appearance="floating"` owns the trailing scroll inset automatically. The floating footer provides the 68px centered action area and a masked blur/gradient using the current theme surface; reduced transparency and forced colors use an opaque fallback. Keep scrollable form content inside `DialogBody` instead of adding a second viewport with independent footer spacing.
+
+Extra-large (`xl`) dialogs have an 800px maximum width and continue shrinking within the viewport gutter. Provider editing uses the floating footer; small workspace creation retains its attached footer and existing button/input sizes. The Lab workspace pattern uses local sample paths and callbacks only.
+
+Keep `Dialog` and `Sheet` mounted and set `open={false}` to close them. They retain the last committed children during the exit animation, with interaction disabled, so clearing an owner selection does not collapse the surface. Reopening uses the latest children and cancels the pending exit. Owners that conditionally mount an editor can remove it in `onExitComplete`, which runs once after the surface unmounts.
+
+PageHeader `md` uses the settings title with a primary 15px description; `display` uses the welcome heading and medium 17px introduction with a 12px gap. ActionCard uses 12px padding, section-heading typography (15px semibold), and a primary 13px single-line action description. Its inset outline does not inflate the 62px medium minimum height; longer content keeps the independent sibling actions and OverflowText behavior.
+
+KeyHint uses 10px text on a 10px line and 2px block padding. StatusPill uses a 14px line with 2px block padding; opt into `emphasis` for short mode labels such as Ask, while ordinary status descriptions retain readable content colors. LauncherButton owns a 72px minimum width, 40px height, 10px side padding, 4px gap, 12px icon and 11px monospace text. Product shells may retain a deliberate compact greeting that expands into this geometry.
+
+Composer and ChatComposer share the 16px surface radius, 8px padding, 12px content gap, composer border, context tint, and composer shadow. Compact ChatComposer uses a 24px action track plus 8px padding on each side and two 1px borders (42px border-box height); expanded height follows editor content. The generic context shell has no duplicate outer border or surface inset. Queue and editor state remain owned by their existing slots and product adapters.
+
+ActivityItem `surface` uses a 40px minimum row with a centered outline, 12px
+radius, 9px block padding, 12px leading inset and 9px trailing inset. The 22px
+sibling actions fit inside that row; optional detail grows beneath it. Inline
+activity retains its compact geometry. Identity text can shrink alongside a
+long description while metadata and sibling actions retain their own slots.
+Lab Patterns includes long paths, large change counts, expandable detail and
+disabled actions. The current Web UI has no direct ActivityItem consumer;
+FlowChat ambient tool cards keep their separate presentation contract.
+
+Ambient FlowChat summaries, product thinking/explore headers and runtime status
+share a 14px icon column followed by a 4px gap. The icon column starts at the
+transcript body edge; heading text starts 18px after that edge. Loading, tool
+and disclosure glyphs occupy that same column. Expanded thinking prose remains
+aligned with the body edge; bordered tool detail retains its own content inset.
+The 12px/4px Figma inline trace is a smaller typography scene; the existing
+product 14px glyph size is retained when applying its gap to these summaries.
+
+FlowChat vertical composition uses an 8px item/section gap and 4px inline gap.
+Collapsed ambient tool runs use their 22px minimum line boxes without extra
+spacing between adjacent rows; expanded/prominent cards retain the section gap.
+The enclosing composition owns those gaps, and card bodies own their internal
+padding. The Lab tool sequence demonstrates both arrangements with real cards.

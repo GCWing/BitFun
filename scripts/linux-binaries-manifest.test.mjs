@@ -10,7 +10,7 @@ const repoRoot = path.resolve(import.meta.dirname, '..');
 test('generates GitHub URLs for both Linux CLI and Relay architectures', () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-linux-manifest-'));
   const assets = path.join(temp, 'assets');
-  const out = path.join(temp, 'linux-binaries.json');
+  const out = path.join(temp, 'linux-binaries-v1.json');
   fs.mkdirSync(assets);
 
   for (const target of [
@@ -61,7 +61,7 @@ test('generates GitHub URLs for both Linux CLI and Relay architectures', () => {
 test('publishes sigUrl when a signature is present, omits it otherwise', () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-linux-manifest-sig-'));
   const assets = path.join(temp, 'assets');
-  const out = path.join(temp, 'linux-binaries.json');
+  const out = path.join(temp, 'linux-binaries-v1.json');
   fs.mkdirSync(assets);
 
   for (const target of ['x86_64-unknown-linux-gnu', 'aarch64-unknown-linux-gnu']) {
@@ -114,7 +114,7 @@ test('publishes sigUrl when a signature is present, omits it otherwise', () => {
 test('rejects versions whose build metadata GitHub would rewrite in asset names', () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-linux-manifest-meta-'));
   const assets = path.join(temp, 'assets');
-  const out = path.join(temp, 'linux-binaries.json');
+  const out = path.join(temp, 'linux-binaries-v1.json');
   fs.mkdirSync(assets);
 
   const version = '1.2.3-nightly.20260724+abc1234';
@@ -156,14 +156,14 @@ test('openbitfun sync mirrors both products and their checksums', () => {
     'utf8'
   );
 
-  assert.match(syncScript, /linux-binaries\.json/);
+  assert.match(syncScript, /linux-binaries-v1\.json/);
   assert.match(syncScript, /for product in \("cli", "relay"\)/);
   assert.match(
     syncScript,
     /for key in \("url", "sha256Url", "sha256SigUrl", "sigUrl"\)/
   );
   assert.match(syncScript, /OPENBITFUN_BASE_URL/);
-  assert.match(syncScript, /WEBSITE_RELEASE_DIR.*linux-binaries\.json/);
+  assert.match(syncScript, /WEBSITE_RELEASE_DIR.*linux-binaries-v1\.json/);
   assert.match(syncScript, /mirror_dispatch_macos_cli_archives/);
   assert.match(syncScript, /x86_64-apple-darwin aarch64-apple-darwin/);
   assert.match(syncScript, /WEBSITE_RELEASE_DIR.*relay-image\.json/);
@@ -202,7 +202,7 @@ test('release sync pins Relay and Linux metadata to the updater release during l
   });
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(fs.readFileSync(urls, 'utf8').trim().split('\n'), [
-    `${releaseBase}/relay-image.json`, `${releaseBase}/linux-binaries.json`,
+    `${releaseBase}/relay-image.json`, `${releaseBase}/linux-binaries-v1.json`,
   ]);
 });
 
@@ -342,7 +342,7 @@ test('openbitfun sync mirrors complete signed macOS CLI sets for Dispatch', () =
 test('website download manifest uses installer while updater manifest keeps setup', () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'openbitfun-website-downloads-'));
   const versionDir = path.join(temp, 'release', '1.2.3');
-  const updaterPath = path.join(versionDir, 'latest.json');
+  const updaterPath = path.join(versionDir, 'latest-v1.json');
   fs.mkdirSync(versionDir, { recursive: true });
 
   const updater = {

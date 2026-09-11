@@ -45,7 +45,7 @@ internal fun ChatMessageBubble(
     onCancelTool: (String, String) -> Unit,
     onAnswerTool: (String, String) -> Unit,
     onAnswerToolStructured: (String, List<QuestionAnswer>) -> Unit,
-    onRetry: (String) -> Unit,
+    onRetry: (ConversationRow) -> Unit,
     onOpenLink: (String, String) -> Unit,
     /** The file the preview surface is showing, so its card can say so. */
     previewingRemotePath: String,
@@ -96,7 +96,7 @@ internal fun ChatMessageBubble(
             row.showRetry -> ChatMessageRetryAction(
                 fromUser = fromUser,
                 enabled = enabled,
-                onRetry = { onRetry(row.text) },
+                onRetry = { onRetry(row) },
                 modifier = Modifier,
             )
 

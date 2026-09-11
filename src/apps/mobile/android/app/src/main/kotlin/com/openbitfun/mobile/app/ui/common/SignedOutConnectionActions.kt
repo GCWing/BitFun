@@ -32,6 +32,7 @@ internal fun SignedOutConnectionActions(
     onOpenAccount: () -> Unit,
     modifier: Modifier = Modifier,
     showScan: Boolean = true,
+    primaryScan: Boolean = false,
     enabled: Boolean = true,
     buttonHeight: Dp = 48.dp,
     spacing: Dp = 10.dp,
@@ -48,7 +49,8 @@ internal fun SignedOutConnectionActions(
                     .fillMaxWidth()
                     .height(buttonHeight)
                     .clip(shape)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)
+                    .background(if (primaryScan) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
+                    .border(1.dp, if (primaryScan) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, shape)
                     .clickable(enabled = enabled, role = Role.Button, onClick = onScan)
                     .semantics(mergeDescendants = true) {
                         contentDescription = scanLabel
@@ -59,7 +61,7 @@ internal fun SignedOutConnectionActions(
                     scanLabel,
                     fontSize = fontSize.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = if (primaryScan) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                 )
             }
         }
@@ -68,7 +70,8 @@ internal fun SignedOutConnectionActions(
                 .fillMaxWidth()
                 .height(buttonHeight)
                 .clip(shape)
-                .background(MaterialTheme.colorScheme.primary)
+                .background(if (primaryScan) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary)
+                .border(1.dp, if (primaryScan) MaterialTheme.colorScheme.outlineVariant else MaterialTheme.colorScheme.primary, shape)
                 .clickable(enabled = enabled, role = Role.Button, onClick = onOpenAccount)
                 .semantics(mergeDescendants = true) {
                     contentDescription = accountLabel
@@ -79,7 +82,7 @@ internal fun SignedOutConnectionActions(
                 accountLabel,
                 fontSize = fontSize.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimary,
+                color = if (primaryScan) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimary,
             )
         }
     }

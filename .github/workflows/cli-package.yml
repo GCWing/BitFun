@@ -84,7 +84,7 @@ jobs:
     # Linux x86_64/aarch64 are intentionally absent. They are built and published
     # by .github/workflows/linux-binaries.yml, which is the only producer that
     # also covers nightly and which must hold the CLI and Relay archives together
-    # to emit linux-binaries.json. Adding them back here would upload identical
+    # to emit linux-binaries-v1.json. Adding them back here would upload identical
     # asset names from two workflows racing on the same `release: published`.
     strategy:
       fail-fast: false

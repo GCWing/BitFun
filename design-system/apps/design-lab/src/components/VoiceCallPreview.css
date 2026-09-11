@@ -1,0 +1,16 @@
+.lab-voice-call-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  inline-size: min(480px, 100%);
+  block-size: 680px;
+}
+
+.lab-voice-call-preview--compact { block-size: 440px; }
+
+.lab-voice-particle-preview {
+  inline-size: min(300px, 100%);
+  block-size: 300px;
+  border-radius: var(--openbitfun-radius-xl);
+  background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 80%, transparent);
+}

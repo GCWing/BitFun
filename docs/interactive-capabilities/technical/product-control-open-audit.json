@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
-  "catalogDigest": "d7a7419ddd673eb733ae8bd33dbb3dcd3b4d1ce0acfc953067a3403fe26d6699",
-  "count": 212,
+  "catalogDigest": "896281a3cd5cac2b50ec607988e04624224444911ddb2d58ba59a5d7d06493c5",
+  "count": 210,
   "reasonCounts": {
     "externalAuth": 4,
     "secretEntry": 5,
-    "unstructuredInteraction": 185,
+    "unstructuredInteraction": 183,
     "visualSelection": 18
   },
   "entries": [
@@ -1138,13 +1138,13 @@
         "actionId": "surface.miniapps.open"
       },
       "evidence": [
-        "command:miniapp_market_auth_start",
-        "command:miniapp_market_auth_poll",
+        "command:account_github_start",
+        "command:account_github_poll",
         "command:miniapp_market_set_favorite",
         "command:miniapp_market_set_rating",
         "command:miniapp_market_installed_origins",
-        "command:miniapp_market_logout",
-        "command:miniapp_market_me"
+        "command:account_logout",
+        "command:account_github_info"
       ]
     },
     {
@@ -1847,18 +1847,17 @@
     {
       "capabilityId": "feature.remote-connect",
       "itemId": "connection-methods",
-      "titleZh": "选择局域网、Ngrok、官方 Relay、自建 Relay 或自定义服务器",
-      "titleEn": "Choose LAN, Ngrok, the hosted relay, a self-hosted relay, or a custom server",
+      "titleZh": "选择局域网或官方 Relay",
+      "titleEn": "Choose LAN or the official Relay",
       "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“选择局域网、Ngrok、官方 Relay、自建 Relay 或自定义服务器”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-      "reasonEn": "“Choose LAN, Ngrok, the hosted relay, a self-hosted relay, or a custom server” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
+      "reasonZh": "“选择局域网或官方 Relay”需要结合当前网络与设备状态，确认目标主机后才能连接；Agent 打开连接入口，由用户完成选择。",
+      "reasonEn": "“Choose LAN or the official Relay” depends on the current network and device state and requires the user to confirm the target host; the Agent opens the connection entry for that choice.",
       "presentationTarget": {
         "kind": "event",
         "eventName": "openbitfun:open-remote-connect"
       },
       "evidence": [
-        "command:remote_connect_get_methods",
-        "command:remote_connect_configure_custom_server"
+        "command:remote_connect_get_methods"
       ]
     },
     {
@@ -1895,7 +1894,8 @@
       "evidence": [
         "command:remote_connect_get_lan_ip",
         "command:remote_connect_get_lan_network_info",
-        "command:remote_connect_get_form_state"
+        "command:remote_connect_get_form_state",
+        "command:remote_connect_set_form_state"
       ]
     },
     {
@@ -1921,47 +1921,22 @@
     },
     {
       "capabilityId": "feature.remote-connect",
-      "itemId": "relay-wizard",
-      "titleZh": "通过向导预检、安装 Docker、部署、注册并验证自建 Relay",
-      "titleEn": "Preflight, install Docker, deploy, register, and verify a self-hosted relay through the wizard",
-      "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“通过向导预检、安装 Docker、部署、注册并验证自建 Relay”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-      "reasonEn": "“Preflight, install Docker, deploy, register, and verify a self-hosted relay through the wizard” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
-      "presentationTarget": {
-        "kind": "event",
-        "eventName": "openbitfun:open-remote-connect"
-      },
-      "evidence": [
-        "command:relay_deploy_preflight",
-        "command:relay_deploy_install_docker",
-        "command:relay_deploy_start",
-        "command:relay_deploy_register",
-        "command:relay_deploy_verify",
-        "command:relay_deploy_cancel",
-        "command:relay_deploy_poll"
-      ]
-    },
-    {
-      "capabilityId": "feature.remote-connect",
       "itemId": "account",
-      "titleZh": "登录、退出并查看账户状态和凭据提示",
-      "titleEn": "Sign in, sign out, and inspect account status and credential hints",
+      "titleZh": "使用 GitHub 登录、退出并查看身份状态",
+      "titleEn": "Sign in with GitHub, sign out, and inspect identity status",
       "reasonCode": "externalAuth",
-      "reasonZh": "OpenBitFun 账户登录必须由用户在外部认证页面确认；Agent 可以打开入口并读取非秘密状态，但不能冒充账户持有人。",
-      "reasonEn": "OpenBitFun account sign-in requires confirmation on an external authentication page; the Agent may open the entry and read non-secret status but cannot impersonate the account holder.",
+      "reasonZh": "GitHub 账户登录必须由用户在外部认证页面确认；Agent 可以打开入口并读取非秘密状态，但不能冒充账户持有人。",
+      "reasonEn": "GitHub account sign-in requires confirmation on an external authentication page; the Agent may open the entry and read non-secret status but cannot impersonate the account holder.",
       "presentationTarget": {
         "kind": "event",
         "eventName": "openbitfun:open-remote-connect"
       },
       "evidence": [
-        "command:account_login",
-        "command:account_finalize_login",
+        "command:account_github_start",
+        "command:account_github_poll",
+        "command:account_github_info",
         "command:account_logout",
-        "command:account_status",
-        "command:account_get_credential_hint",
-        "command:account_cancel_pending_login",
-        "command:account_delegate_to_paired",
-        "command:account_token_expired"
+        "command:account_status"
       ]
     },
     {
@@ -1983,48 +1958,6 @@
         "command:account_delete_device",
         "command:account_device_rpc",
         "command:account_execute_on_device"
-      ]
-    },
-    {
-      "capabilityId": "feature.remote-connect",
-      "itemId": "session-sync",
-      "titleZh": "同步、导出、导入、删除或发送会话到另一台设备",
-      "titleEn": "Sync, export, import, delete, or send sessions to another device",
-      "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“同步、导出、导入、删除或发送会话到另一台设备”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-      "reasonEn": "“Sync, export, import, delete, or send sessions to another device” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
-      "presentationTarget": {
-        "kind": "event",
-        "eventName": "openbitfun:open-remote-connect"
-      },
-      "evidence": [
-        "command:account_sync_session",
-        "command:account_export_local_session",
-        "command:account_import_remote_sessions",
-        "command:account_delete_synced_session",
-        "command:account_send_session_to_device",
-        "command:account_export_all_sessions",
-        "command:account_fetch_session_turns",
-        "command:account_fetch_synced_sessions"
-      ]
-    },
-    {
-      "capabilityId": "feature.remote-connect",
-      "itemId": "settings-sync",
-      "titleZh": "在设备间自动或手动同步 OpenBitFun 设置",
-      "titleEn": "Synchronize OpenBitFun settings across devices automatically or on demand",
-      "reasonCode": "unstructuredInteraction",
-      "reasonZh": "“在设备间自动或手动同步 OpenBitFun 设置”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-      "reasonEn": "“Synchronize OpenBitFun settings across devices automatically or on demand” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user.",
-      "presentationTarget": {
-        "kind": "event",
-        "eventName": "openbitfun:open-remote-connect"
-      },
-      "evidence": [
-        "command:account_sync_settings",
-        "command:account_fetch_settings",
-        "command:account_auto_sync",
-        "command:remote_connect_set_form_state"
       ]
     },
     {
@@ -2889,6 +2822,23 @@
         "command:reset_memory",
         "source:src/web-ui/src/locales/zh-CN/settings/memory.json#actions.resetSettings",
         "command:reset_config"
+      ]
+    },
+    {
+      "capabilityId": "setting.workspace.session",
+      "itemId": "default-agent-harness",
+      "titleZh": "让普通新会话跟随 ChatInput 上次选择，或固定使用指定 Harness",
+      "titleEn": "Make regular new sessions follow the last ChatInput selection or use a fixed Harness",
+      "reasonCode": "unstructuredInteraction",
+      "reasonZh": "“让普通新会话跟随 ChatInput 上次选择，或固定使用指定 Harness”由会话设置页中的关联控件共同管理，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把选择保留在用户可见界面。",
+      "reasonEn": "“Make regular new sessions follow the last ChatInput selection or use a fixed Harness” is managed by related controls on the session settings page and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the selection visible to the user.",
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "workspace.session"
+      },
+      "evidence": [
+        "source:src/web-ui/src/infrastructure/config/components/DefaultHarnessConfig.tsx#DefaultHarnessConfig",
+        "source:src/web-ui/src/locales/zh-CN/settings/runtime.json#defaultHarness.title"
       ]
     },
     {

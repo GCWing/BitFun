@@ -1,5 +1,9 @@
 package com.openbitfun.mobile.app.ui.remote
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,15 +59,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.openbitfun.mobile.app.infrastructure.camera.InlineQrScanner
+import com.openbitfun.mobile.app.ui.common.ConnectionSheetHeader
+import com.openbitfun.mobile.app.ui.common.ConnectionSheetFooter
+import com.openbitfun.mobile.app.ui.common.connectionSheetTextStyle
 import com.openbitfun.mobile.app.R
 import com.openbitfun.mobile.app.ui.common.SignedOutConnectionActions
 import com.openbitfun.mobile.app.ui.theme.openBitFunColors
-import com.openbitfun.mobile.core.feature.pairing.PairingIntent
-import com.openbitfun.mobile.core.feature.pairing.PairingUiState
-import com.openbitfun.mobile.core.feature.pairing.inspectPairingLink
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
-import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 
 internal const val CONNECT_TEST_TAG: String = "connect"
 internal const val CONNECT_MANUAL_TEST_TAG: String = "connect-manual"
@@ -76,15 +78,11 @@ internal const val CONNECT_SUBMIT_TEST_TAG: String = "connect-submit"
  * Scanning is the way in and typing is the fallback, as on HarmonyOS: the link
  * is long, opaque and easy to mistype, so the intro step offers the camera and
  * keeps the fields out of sight until someone asks for them. HarmonyOS draws its
- * own camera preview. Android delegates capture to Play Services, but keeps the
- * matching scan step underneath it so cancellation returns to the same manual
- * fallback and back-navigation structure.
+ * own camera preview; Android uses a lifecycle-bound inline camera adapter.
  */
 @Composable
 internal fun ConnectView(
-    state: PairingUiState,
-    onSubmit: (PairingIntent.Submit) -> Unit,
-    onDismiss: () -> Unit,
+    onSubmit: (String) -> Unit,
     onBack: () -> Unit,
     onOpenAccount: () -> Unit,
     startScanning: Boolean = false,
@@ -94,83 +92,39 @@ internal fun ConnectView(
     var manual by rememberSaveable { mutableStateOf(false) }
     var scanning by rememberSaveable { mutableStateOf(startScanning) }
     var url by rememberSaveable { mutableStateOf("") }
-    var userId by rememberSaveable { mutableStateOf("") }
-    // Never rememberSaveable: a password must not reach saved instance state.
-    var password by remember { mutableStateOf("") }
-    var scanFailed by rememberSaveable { mutableStateOf(false) }
-
-    // Ports `ConnectionErrorResult.shouldShowRemoteUrlInput`: a link that is
-    // itself at fault puts the field back on screen, because the scan button
-    // that got the user here cannot fix a link that has expired. Keyed on the
-    // state rather than run on every recomposition, so tapping back out of the
-    // form while the failure is still showing stays out.
-    LaunchedEffect(state) {
-        if (state is PairingUiState.Failed && state.failure.reopensLinkInput) manual = true
-    }
-
-    val hints = remember(url) { inspectPairingLink(url) }
-    val connecting = state is PairingUiState.Connecting
-    val context = LocalContext.current
-    val scanner = remember(context) {
-        GmsBarcodeScanning.getClient(
-            context,
-            GmsBarcodeScannerOptions.Builder()
-                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
-                .enableAutoZoom()
-                .build(),
-        )
-    }
-    val scan = {
-        scanFailed = false
-        scanner.startScan()
-            .addOnSuccessListener { barcode ->
-                val scanned = barcode.rawValue.orEmpty().trim()
-                if (scanned.isNotEmpty()) {
-                    url = scanned
-                    // A room that wants an account cannot be entered from the
-                    // code alone, so the scan hands over to the form instead of
-                    // failing a connect the user did not know needed a password.
-                    if (inspectPairingLink(scanned).requiresAccount) {
-                        manual = true
-                    } else {
-                        onSubmit(PairingIntent.Submit(scanned, userId, ""))
-                    }
-                }
-            }
-            .addOnFailureListener { scanFailed = true }
-            .addOnCanceledListener { scanFailed = true }
-        Unit
-    }
+    var scanError by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(startScanning) {
-        if (startScanning) {
-            scanning = true
-            scan()
-            onScanStarted()
-        }
+        if (startScanning) { scanning = true; onScanStarted() }
+    }
+
+    BackHandler(enabled = manual || scanning) {
+        if (manual) manual = false else if (startScanning) onBack() else scanning = false
     }
 
     Box(modifier = modifier.fillMaxSize().testTag(CONNECT_TEST_TAG)) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 8.dp, bottom = 34.dp),
+                .then(if (!scanning) Modifier.verticalScroll(rememberScrollState()) else Modifier)
+                .then(if (!scanning) Modifier.padding(top = 8.dp, bottom = 28.dp) else Modifier),
         ) {
             if (scanning) {
                 ScanPairing(
-                    scanFailed = scanFailed,
-                    connecting = connecting,
-                    onBack = { scanning = false },
+                    scanError = scanError,
+                    paused = manual,
+                    onDetected = { url = it; onSubmit(it) },
+                    onScanError = { scanError = it },
+                    connecting = false,
+                    onBack = onBack,
                     onManual = { manual = true },
                 )
             } else {
                 IntroPairing(
-                    state = state,
-                    connecting = connecting,
+                    connecting = false,
                     onScan = {
                         scanning = true
-                        scan()
+                        scanError = null
                     },
-                    onDismiss = onDismiss,
                     onBack = onBack,
                     onOpenAccount = onOpenAccount,
                 )
@@ -178,19 +132,11 @@ internal fun ConnectView(
         }
         if (manual) {
             ManualPairing(
-                state = state,
                 url = url,
-                userId = userId,
-                password = password,
-                requiresAccount = hints.requiresAccount,
-                suggestedUserId = hints.suggestedUserId,
-                connecting = connecting,
+                connecting = false,
                 onUrlChange = { url = it },
-                onUserIdChange = { userId = it },
-                onPasswordChange = { password = it },
                 onBack = { manual = false },
-                onDismiss = onDismiss,
-                onSubmit = { onSubmit(PairingIntent.Submit(url, userId, password)) },
+                onSubmit = { onSubmit(url) },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -199,15 +145,13 @@ internal fun ConnectView(
 
 @Composable
 private fun ColumnScope.IntroPairing(
-    state: PairingUiState,
     connecting: Boolean,
     onScan: () -> Unit,
-    onDismiss: () -> Unit,
     onBack: () -> Unit,
     onOpenAccount: () -> Unit,
 ) {
     Box {
-        Hero()
+        Hero(height = 250.dp)
         Surface(
             onClick = onBack,
             shape = androidx.compose.foundation.shape.CircleShape,
@@ -229,117 +173,82 @@ private fun ColumnScope.IntroPairing(
     }
     Column(
         modifier = Modifier
-            .weight(1f)
             .fillMaxWidth()
-            .offset(y = (-10).dp),
+            .offset(y = (-24).dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(15.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         ConnectDesktopGlyph()
         Text(
-            stringResource(R.string.connect_choose_connection),
-            fontSize = 24.sp,
-            lineHeight = 30.sp,
-            fontWeight = FontWeight.Bold,
+            stringResource(R.string.sidebar_connect_desktop),
+            style = MaterialTheme.typography.displayLarge,
             textAlign = TextAlign.Center,
         )
-        if (state is PairingUiState.Failed) {
-            PairingFailureCard(state, onDismiss)
-        }
+        SignedOutConnectionActions(
+            scanLabel = stringResource(R.string.sidebar_scan_to_connect),
+            accountLabel = stringResource(R.string.sidebar_sign_in),
+            onScan = onScan,
+            onOpenAccount = onOpenAccount,
+            modifier = Modifier.fillMaxWidth(0.82f),
+            enabled = !connecting,
+            buttonHeight = 58.dp,
+            spacing = 18.dp,
+            fontSize = 16,
+            primaryScan = true,
+        )
     }
-
-    SignedOutConnectionActions(
-        scanLabel = stringResource(R.string.sidebar_scan_to_connect),
-        accountLabel = stringResource(R.string.sidebar_sign_in),
-        onScan = onScan,
-        onOpenAccount = onOpenAccount,
-        modifier = Modifier
-            .align(Alignment.CenterHorizontally)
-            .padding(bottom = 14.dp)
-            .fillMaxWidth(0.82f),
-        enabled = !connecting,
-        buttonHeight = 58.dp,
-        spacing = 12.dp,
-        fontSize = 20,
-    )
 }
 
 @Composable
 private fun ColumnScope.ScanPairing(
-    scanFailed: Boolean,
-    connecting: Boolean,
-    onBack: () -> Unit,
-    onManual: () -> Unit,
+    scanError: Int?, paused: Boolean,
+    onDetected: (String) -> Unit, onScanError: (Int?) -> Unit,
+    connecting: Boolean, onBack: () -> Unit, onManual: () -> Unit,
 ) {
-    Box {
-        Hero(height = 252.dp)
-        Surface(
-            onClick = onBack,
-            shape = androidx.compose.foundation.shape.CircleShape,
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.align(Alignment.TopStart).padding(start = 28.dp, top = 18.dp).size(48.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    painterResource(R.drawable.ic_symbol_chevron_left),
-                    contentDescription = stringResource(R.string.common_back),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(21.dp),
-                )
+    ConnectionSheetHeader(onBack)
+    Box(Modifier.weight(1f).fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 18.dp),
+        contentAlignment = Alignment.Center) {
+        Column(Modifier.widthIn(max = 520.dp).fillMaxWidth().verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(stringResource(R.string.connect_scan_title), style = MaterialTheme.typography.displayMedium.connectionSheetTextStyle(),
+                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+            Text(stringResource(R.string.connect_scan_body), style = MaterialTheme.typography.bodyMedium.connectionSheetTextStyle(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 24.dp))
+            CameraFrame(paused, onDetected, onScanError)
+            Row(Modifier.padding(top = 18.dp).fillMaxWidth().height(30.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(15.dp))
+                .padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(8.dp).background(MaterialTheme.colorScheme.outline,
+                    androidx.compose.foundation.shape.CircleShape))
+                Text(stringResource(R.string.connect_scan_hint), style = MaterialTheme.typography.bodySmall.connectionSheetTextStyle(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            }
+            if (scanError != null) {
+                Text(stringResource(scanError), style = MaterialTheme.typography.bodySmall.connectionSheetTextStyle(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 14.dp).fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 14.dp, vertical = 12.dp))
             }
         }
     }
-    Column(
-        modifier = Modifier.weight(1f).fillMaxWidth().offset(y = (-50).dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(22.dp),
-    ) {
-        CameraFrame()
-        Text(
-            stringResource(R.string.connect_scan_title),
-            fontSize = 24.sp,
-            lineHeight = 30.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        if (scanFailed) {
-            Centered(stringResource(R.string.connect_scan_failed), fontSize = 13.sp, lineHeight = 18.sp)
-        }
-    }
-    OutlinedButton(
-        onClick = onManual,
-        enabled = !connecting,
-        modifier = Modifier
-            .align(Alignment.CenterHorizontally)
-            .fillMaxWidth(0.78f)
-            .height(58.dp)
-            .testTag(CONNECT_MANUAL_TEST_TAG),
-        shape = RoundedCornerShape(35.dp),
-    ) {
-        Text(stringResource(R.string.connect_switch_manual), fontSize = 20.sp, fontWeight = FontWeight.Bold)
-    }
+    ConnectionSheetFooter(stringResource(R.string.connect_switch_manual), enabled = !connecting,
+        modifier = Modifier.testTag(CONNECT_MANUAL_TEST_TAG), onClick = onManual)
 }
 
 @Composable
 private fun ManualPairing(
-    state: PairingUiState,
     url: String,
-    userId: String,
-    password: String,
-    requiresAccount: Boolean,
-    suggestedUserId: String,
     connecting: Boolean,
     onUrlChange: (String) -> Unit,
-    onUserIdChange: (String) -> Unit,
-    onPasswordChange: (String) -> Unit,
     onBack: () -> Unit,
-    onDismiss: () -> Unit,
     onSubmit: () -> Unit,
     modifier: Modifier,
 ) {
-    val canSubmit = url.isNotBlank() && !connecting &&
-        (!requiresAccount || ((userId.ifBlank { suggestedUserId }).isNotBlank() && password.isNotBlank()))
+    val canSubmit = url.isNotBlank() && !connecting
     val consumeTouches = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
@@ -387,36 +296,6 @@ private fun ManualPairing(
                 enabled = !connecting,
                 testTag = CONNECT_PAIRING_CODE_TEST_TAG,
             )
-            if (requiresAccount) {
-                PairingPillField(
-                    value = userId,
-                    onValueChange = onUserIdChange,
-                    placeholder = suggestedUserId.ifBlank { stringResource(R.string.pairing_user_label) },
-                    height = 56.dp,
-                    fontSize = 18.sp,
-                    enabled = !connecting,
-                )
-                PairingPillField(
-                    value = password,
-                    onValueChange = onPasswordChange,
-                    placeholder = stringResource(R.string.pairing_password_label),
-                    height = 56.dp,
-                    fontSize = 18.sp,
-                    keyboardType = KeyboardType.Password,
-                    visualTransformation = PasswordVisualTransformation(),
-                    enabled = !connecting,
-                )
-                Text(
-                    stringResource(R.string.pairing_password_hint),
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            if (state is PairingUiState.Failed) {
-                PairingFailureCard(state, onDismiss)
-            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -519,50 +398,32 @@ private fun Hero(height: Dp = 282.dp) {
 }
 
 @Composable
-private fun CameraFrame() {
-    val accent = MaterialTheme.colorScheme.primary
-    Box(
-        modifier = Modifier
-            .size(282.dp)
-            .clip(RoundedCornerShape(40.dp))
-            .background(openBitFunColors.shadowMedium),
-    ) {
-        ScanCorner(accent, Alignment.TopStart, true, true)
-        ScanCorner(accent, Alignment.TopEnd, false, true)
-        ScanCorner(accent, Alignment.BottomStart, true, false)
-        ScanCorner(accent, Alignment.BottomEnd, false, false)
-    }
-}
-
-@Composable
-private fun BoxScope.ScanCorner(color: Color, alignment: Alignment, left: Boolean, top: Boolean) {
-    Box(
-        Modifier
-            .align(alignment)
-            .padding(
-                start = if (left) 32.dp else 0.dp,
-                end = if (left) 0.dp else 32.dp,
-                top = if (top) 32.dp else 0.dp,
-                bottom = if (top) 0.dp else 32.dp,
-            )
-            .size(64.dp),
-    ) {
-        Box(
-            Modifier
-                .align(if (top) Alignment.TopCenter else Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(4.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(color),
-        )
-        Box(
-            Modifier
-                .align(if (left) Alignment.CenterStart else Alignment.CenterEnd)
-                .width(4.dp)
-                .height(64.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(color),
-        )
+private fun CameraFrame(paused: Boolean, onDetected: (String) -> Unit, onScanError: (Int?) -> Unit) {
+    val colors = openBitFunColors
+    Box(Modifier.size(248.dp).clip(RoundedCornerShape(28.dp))
+        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(28.dp))) {
+        InlineQrScanner(Modifier.fillMaxSize(), paused, onDetected, { onScanError(null) },
+            { onScanError(R.string.connect_camera_permission_denied) },
+            { onScanError(R.string.connect_camera_unavailable) })
+        Canvas(Modifier.fillMaxSize()) {
+            drawRect(colors.shadowMedium)
+            val inset = 20.dp.toPx()
+            val size = 56.dp.toPx()
+            val stroke = 4.dp.toPx()
+            val length = 36.dp.toPx()
+            for (right in listOf(false, true)) for (bottom in listOf(false, true)) {
+                val x = if (right) this.size.width - inset - size else inset
+                val y = if (bottom) this.size.height - inset - size else inset
+                drawRoundRect(colors.scanAccent,
+                    androidx.compose.ui.geometry.Offset(x + if (right) size - length else 0f,
+                        y + if (bottom) size - stroke else 0f),
+                    androidx.compose.ui.geometry.Size(length, stroke), androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
+                drawRoundRect(colors.scanAccent,
+                    androidx.compose.ui.geometry.Offset(x + if (right) size - stroke else 0f,
+                        y + if (bottom) size - length else 0f),
+                    androidx.compose.ui.geometry.Size(stroke, length), androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
+            }
+        }
     }
 }
 
@@ -607,28 +468,4 @@ private fun Centered(text: String, fontSize: androidx.compose.ui.unit.TextUnit =
         textAlign = TextAlign.Center,
         modifier = Modifier.fillMaxWidth(0.84f),
     )
-}
-
-@Composable
-private fun PairingFailureCard(state: PairingUiState.Failed, onDismiss: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                state.failure.message(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-            // The desktop's own wording, shown under our heading rather than
-            // instead of it: it is written by the peer and is not localized.
-            state.failure.remoteMessage?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall)
-            }
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.pairing_dismiss))
-            }
-        }
-    }
 }

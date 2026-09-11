@@ -1,4 +1,18 @@
 {
+  "defaultHarness": {
+    "title": "Default Agent Harness",
+    "description": "Choose how regular new sessions select a Harness. Assistant, ACP, and explicitly requested modes are unaffected.",
+    "strategy": "Default behavior",
+    "followLast": "Follow last selection",
+    "fixed": "Use a fixed default",
+    "followLastDescription": "New sessions use the Harness most recently selected in ChatInput. Currently remembered: {{name}}.",
+    "followLastEmptyDescription": "No Harness selection is remembered yet. New sessions use {{name}} until you choose one in ChatInput.",
+    "fixedDescription": "New sessions always use the selected Harness; existing sessions are unchanged.",
+    "fixedMode": "Default Harness",
+    "fixedModeDescription": "Used only for regular new sessions without an explicitly requested mode.",
+    "compatibilityMode": "{{id}} (compatibility setting)",
+    "loadFailed": "Default Harness settings could not be read. This setting is locked to avoid overwriting the existing configuration."
+  },
   "features": {
     "pet": {
       "title": "Desktop pet",

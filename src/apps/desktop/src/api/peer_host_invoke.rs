@@ -322,8 +322,40 @@ pub async fn dispatch(command: &str, args: Value) -> HostInvokeBridgeResult {
         }
     };
 
+    use openbitfun_core_types::agent_identity_wire::{
+        translate_agent_identity_command, translate_agent_identity_response, AgentIdentityDialect,
+    };
+    let args =
+        match translate_agent_identity_command(command, args, AgentIdentityDialect::Canonical) {
+            Ok(args) => args,
+            Err(error) => {
+                return HostInvokeBridgeResult {
+                    ok: false,
+                    value: None,
+                    error: Some(error),
+                }
+            }
+        };
+    let response_scope =
+        serde_json::json!({"path": args.get("request").unwrap_or(&args).get("path")});
     match bridge_via_webview(&app, command, args).await {
-        Ok(result) => result,
+        Ok(mut result) => {
+            if let Some(value) = result.value.take() {
+                match translate_agent_identity_response(
+                    command,
+                    value,
+                    &response_scope,
+                    AgentIdentityDialect::Legacy,
+                ) {
+                    Ok(value) => result.value = Some(value),
+                    Err(error) => {
+                        result.ok = false;
+                        result.error = Some(error);
+                    }
+                }
+            }
+            result
+        }
         Err(error) => HostInvokeBridgeResult {
             ok: false,
             value: None,

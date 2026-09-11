@@ -1,3 +1,4 @@
+import { useEditorDocument } from '../services/EditorDocument';
 import React, {
   useCallback,
   useEffect,
@@ -74,6 +75,7 @@ interface PdfPageCanvasProps {
 }
 
 export interface PdfViewerProps {
+  isActiveTab?: boolean;
   filePath: string;
   fileName?: string;
   className?: string;
@@ -301,10 +303,12 @@ const PdfPageCanvas: React.FC<PdfPageCanvasProps> = ({
   );
 };
 
-export const PdfViewer: React.FC<PdfViewerProps> = ({
+export const PdfViewer: React.FC<PdfViewerProps> = ({ isActiveTab = true,
   filePath,
   className = '',
 }) => {
+  const documentSession = useEditorDocument();
+  const [retryKey, setRetryKey] = useState(0);
   const { t, formatNumber } = useI18n('tools');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const pageElementsRef = useRef(new Map<number, HTMLDivElement>());
@@ -357,7 +361,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
     setLoading(true);
 
     try {
-      const { workspaceAPI } = await import('@/infrastructure/api');
+      const workspaceAPI = documentSession?.files ?? (await import('@/infrastructure/api')).workspaceAPI;
       const encoded = await workspaceAPI.readFileContent(filePath, 'base64');
       if (loadEpochRef.current !== loadEpoch) {
         return;
@@ -398,7 +402,11 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       setError(t('editor.pdfViewer.loadFailedWithMessage', { message: errorMessage(loadError) }));
       setLoading(false);
     }
-  }, [filePath, t]);
+  }, [documentSession, filePath, t]);
+
+  useEffect(() => {
+    if (isActiveTab && error && documentSession?.isCurrent()) setRetryKey(key => key + 1);
+  }, [documentSession, error, isActiveTab]);
 
   useEffect(() => {
     void loadDocument();
@@ -408,7 +416,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({
       loadingTaskRef.current = null;
       void loadingTask?.destroy().catch(() => undefined);
     };
-  }, [loadDocument]);
+  }, [loadDocument, retryKey]);
 
   const handlePageElementChange = useCallback((number: number, element: HTMLDivElement | null) => {
     if (element) {

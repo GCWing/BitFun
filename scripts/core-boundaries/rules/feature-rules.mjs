@@ -1,6 +1,7 @@
 // Boundary rules for feature assembly and optional dependency ownership.
 
 export const servicesReqwestOwnerFeatures = [
+  'account-identity',
   'announcement',
   'browser-control',
   'mcp',
@@ -274,13 +275,14 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'openbitfun-agent-workflows', ownerFeatures: ['deep-research'] },
       {
         depName: 'openbitfun-core-types',
-        ownerFeatures: ['deep-research', 'remote-connect', 'speech'],
+        ownerFeatures: ['deep-research', 'remote-connect', 'remote-ssh-concrete', 'speech'],
       },
-      { depName: 'openbitfun-product-domains', ownerFeatures: ['canvas-runtime', 'function-agents', 'hook-import', 'miniapp-market', 'miniapp-runtime', 'miniapp-storage', 'plugin-source'] },
+      { depName: 'openbitfun-product-domains', ownerFeatures: ['account-identity', 'canvas-runtime', 'function-agents', 'hook-import', 'miniapp-market', 'miniapp-runtime', 'miniapp-storage', 'plugin-source', 'remote-connect'] },
       { depName: 'openbitfun-runtime-ports', ownerFeatures: ['deep-research', 'git', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'script-tool-runtime', 'web-tools'] },
       {
         depName: 'openbitfun-services-core',
         ownerFeatures: [
+          'account-identity',
           'announcement',
           'browser-control',
           'git',
@@ -301,10 +303,10 @@ export const optionalDependencyFeatureOwnerRules = [
         ],
       },
       { depName: 'bzip2', ownerFeatures: ['speech'] },
-      { depName: 'chrono', ownerFeatures: ['git', 'miniapp-market', 'remote-connect', 'remote-ssh-concrete', 'review-platform', 'speech', 'web-tools'] },
-      { depName: 'dirs', ownerFeatures: ['browser-control', 'miniapp-runtime', 'remote-connect', 'remote-ssh-concrete'] },
+      { depName: 'chrono', ownerFeatures: ['account-identity', 'git', 'miniapp-market', 'remote-connect', 'remote-ssh-concrete', 'review-platform', 'speech', 'web-tools'] },
+      { depName: 'dirs', ownerFeatures: ['account-identity', 'browser-control', 'miniapp-runtime', 'remote-connect', 'remote-ssh-concrete'] },
       { depName: 'dunce', ownerFeatures: ['plugin-source', 'workspace-search'] },
-      { depName: 'fs2', ownerFeatures: ['plugin-source'] },
+      { depName: 'fs2', ownerFeatures: ['plugin-source', 'remote-persistence', 'remote-connect'] },
       { depName: 'futures', ownerFeatures: ['mcp', 'remote-connect', 'review-platform'] },
       { depName: 'futures-util', ownerFeatures: ['speech', 'web-tools'] },
       { depName: 'git2', ownerFeatures: ['git'] },
@@ -337,7 +339,7 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'ssh_config', ownerFeatures: ['remote-ssh-concrete', 'ssh_config'] },
       { depName: 'terminal-core', ownerFeatures: ['remote-ssh', 'remote-ssh-concrete'] },
       { depName: 'tar', ownerFeatures: ['speech'] },
-      { depName: 'thiserror', ownerFeatures: ['browser-control', 'git', 'hook-import', 'miniapp-market', 'plugin-source', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'speech', 'web-tools', 'workspace-search'] },
+      { depName: 'thiserror', ownerFeatures: ['account-identity', 'browser-control', 'git', 'hook-import', 'miniapp-market', 'plugin-source', 'remote-connect', 'remote-ssh', 'remote-ssh-concrete', 'review-platform', 'speech', 'web-tools', 'workspace-search'] },
       { depName: 'tokio-tungstenite', ownerFeatures: ['remote-connect', 'speech-realtime'] },
       { depName: 'tokio-util', ownerFeatures: ['remote-ssh', 'speech'] },
       { depName: 'urlencoding', ownerFeatures: ['canvas-runtime', 'miniapp-market', 'remote-connect', 'review-platform'] },
@@ -506,6 +508,8 @@ export const capabilityContractDependencyRules = [
           capabilityForwarder('git', 'git-port'),
           capabilityForwarder('remote-connect', 'agent-api'),
           capabilityForwarder('remote-connect', 'remote-workspace-ports'),
+          // Session output delivery reads through the injected filesystem, including SSH.
+          capabilityForwarder('remote-connect', 'workspace-ports'),
           capabilityForwarder('remote-ssh', 'remote-exec-port'),
           capabilityForwarder('remote-ssh', 'remote-workspace-ports'),
           capabilityForwarder('remote-ssh', 'workspace-ports'),
@@ -974,6 +978,7 @@ export const coreClosedFeatureProfileRules = [
       'script-tool-runtime',
       'dep:openbitfun-opencode-adapter',
       'dep:openbitfun-dsh-adapter',
+      'dep:openbitfun-pi-adapter',
       'dep:openbitfun-claude-code-adapter',
       'dep:openbitfun-codex-adapter',
       'dep:openbitfun-external-sources',

@@ -46,6 +46,7 @@ export const SettingsViewPage: React.FC<SettingsViewPageProps> = ({
     >
       <div className="openbitfun-settings-view-page__tabs">
         <TabGroup
+          size="sm"
           className="openbitfun-settings-view-page__tab-list"
           items={tabItems}
           onValueChange={handleChange}

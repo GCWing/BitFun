@@ -79,13 +79,17 @@ describe('AgentCompanionDesktopPet styles', () => {
     const actionItemStyles = readPublicActionItemStyles();
     const overlay = extractBlock(stylesheet, '&__overlay');
     const menuItem = extractBlock(stylesheet, '&__menu-item');
+    const hover = extractBlock(actionItemStyles,
+      '.root:not([data-disabled="true"]):hover,\n  .root:not([data-disabled="true"]):has(.trigger[data-openbitfun-preview-state="hover"])');
+    const pressed = extractBlock(actionItemStyles,
+      '.root:not([data-disabled="true"]):has(.trigger:active),\n  .root:not([data-disabled="true"]):has(.trigger[data-openbitfun-preview-state="active"])');
 
     expect(source).toContain('import { OverflowText, Menu, MenuItem, ScrollArea } from \'@openbitfun/ui\'');
     expect(source).not.toContain('triggerClassName');
     expect(overlay).not.toMatch(/\b(?:color|background|border|box-shadow|backdrop-filter)\s*:/);
     expect(menuItem).toBe('');
     expect(actionItemStyles).toContain('color: var(--openbitfun-color-action-neutral-content);');
-    expect(actionItemStyles).toContain('background: var(--openbitfun-color-action-neutral-surface);');
-    expect(actionItemStyles).toContain('background: var(--openbitfun-color-action-neutral-surface-pressed);');
+    expect(hover).toContain('background: var(--openbitfun-color-action-neutral-surface-hover);');
+    expect(pressed).toContain('background: var(--openbitfun-color-action-neutral-surface-hover);');
   });
 });

@@ -405,7 +405,7 @@ impl AgentSubmissionPort for FakeOwner {
             self.release_agent_resolution.notified().await;
         }
         if self.owns_session(session_id) {
-            Ok(Some("agentic".to_string()))
+            Ok(Some("Standard".to_string()))
         } else {
             Err(PortError::new(PortErrorKind::NotFound, "session not found"))
         }
@@ -652,7 +652,7 @@ impl AgentSessionRestorePort for FakeOwner {
             session: AgentSessionSummary {
                 session_id: request.session_id,
                 session_name: "Persisted".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 model_id: Some("sdk:openai:previous".to_string()),
                 reasoning_preset: None,
                 last_user_dialog_agent_type: None,
@@ -817,7 +817,7 @@ fn permission_request_fixture(request_id: &str, order: u32, session_id: &str) ->
         project_path: Some("D:/workspace/project".to_string()),
         project_id: "project-fixture".to_string(),
         session_id: session_id.to_string(),
-        agent_id: "agentic".to_string(),
+        agent_id: "Standard".to_string(),
         action: "edit".to_string(),
         resources: vec!["src/lib.rs".to_string()],
         save_resources: Vec::new(),

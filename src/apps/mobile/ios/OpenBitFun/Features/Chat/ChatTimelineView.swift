@@ -1,3 +1,4 @@
+import Foundation
 import OpenBitFunMobileCore
 import SwiftUI
 import UIKit
@@ -37,12 +38,30 @@ struct ChatTimelineView: View {
             }
             .simultaneousGesture(
                 DragGesture(minimumDistance: 8).onChanged { value in
-                    if value.translation.height < -8 { userScrolledUp = true }
+                    if value.translation.height > 8 { userScrolledUp = true }
                 }
             )
+            .scrollDismissesKeyboard(.interactively)
+            .onChange(of: model.selectedSessionID) { _ in
+                userScrolledUp = false
+                Task { @MainActor in
+                    await Task.yield()
+                    proxy.scrollTo("timeline-bottom", anchor: .bottom)
+                }
+            }
+            .onChange(of: model.isSending) { sending in
+                guard sending else { return }
+                userScrolledUp = false
+                Task { @MainActor in
+                    await Task.yield()
+                    proxy.scrollTo("timeline-bottom", anchor: .bottom)
+                }
+            }
             .onChange(of: model.timelineRows) { _ in
                 guard !userScrolledUp else { return }
-                withAnimation(.easeOut(duration: 0.18)) {
+                Task { @MainActor in
+                    await Task.yield()
+                    guard !userScrolledUp else { return }
                     proxy.scrollTo("timeline-bottom", anchor: .bottom)
                 }
             }
@@ -70,6 +89,60 @@ struct ChatTimelineView: View {
             }
         }
         .background(OpenBitFunTheme.page)
+    }
+}
+
+struct ConversationLoadingState: View {
+    var body: some View {
+        GeometryReader { proxy in
+            let contentWidth = max(0, min(proxy.size.width - 44, 760))
+            VStack(spacing: 18) {
+                assistantSkeleton(width: contentWidth * 0.72, height: 78)
+                userSkeleton(width: contentWidth * 0.46, height: 42)
+                assistantSkeleton(width: contentWidth * 0.84, height: 112)
+            }
+            .frame(width: contentWidth)
+            .padding(.top, 28)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .background(OpenBitFunTheme.page)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(MobileLocalization.text("正在加载")))
+    }
+
+    private func assistantSkeleton(width: CGFloat, height: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 9) {
+                skeletonLine(fraction: 0.74)
+                skeletonLine(fraction: 0.92)
+                skeletonLine(fraction: 0.58)
+            }
+            .padding(14)
+            .frame(width: width, height: height, alignment: .leading)
+            .background(OpenBitFunTheme.soft)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func userSkeleton(width: CGFloat, height: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            RoundedRectangle(cornerRadius: 10)
+                .fill(OpenBitFunTheme.soft)
+                .frame(width: width, height: height)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func skeletonLine(fraction: CGFloat) -> some View {
+        GeometryReader { proxy in
+            RoundedRectangle(cornerRadius: 5)
+                .fill(OpenBitFunTheme.line)
+                .frame(width: proxy.size.width * fraction, height: 10)
+        }
+        .frame(height: 10)
     }
 }
 
@@ -118,7 +191,7 @@ private struct ConversationRowView: View {
                     .foregroundStyle(OpenBitFunTheme.muted)
             }
             if row.showRetry {
-                Button { model.retryMessage(row.text) } label: {
+                Button { model.retryMessage(row.text, images: row.images) } label: {
                     Label(model.localized("重新发送"), systemImage: "arrow.clockwise")
                         .font(MobileDesignTypography.labelSmall.font)
                         .foregroundStyle(OpenBitFunTheme.statusDanger)
@@ -147,7 +220,7 @@ private struct ConversationRowView: View {
             if let error = row.error, !error.isEmpty {
                 assistantFailure(error)
             } else if row.showRetry {
-                Button { model.retryMessage(row.text) } label: {
+                Button { model.retryMessage(row.text, images: row.images) } label: {
                     Label(model.localized("重试"), systemImage: "arrow.clockwise")
                         .font(MobileDesignTypography.labelSmall.font)
                         .foregroundStyle(OpenBitFunTheme.statusDanger)
@@ -169,7 +242,7 @@ private struct ConversationRowView: View {
                 .lineSpacing(MobileDesignTypography.bodySmall.lineSpacing)
                 .textSelection(.enabled)
             if row.showRetry {
-                Button(model.localized("重试")) { model.retryMessage(row.text) }
+                Button(model.localized("重试")) { model.retryMessage(row.text, images: row.images) }
                     .font(MobileDesignTypography.bodySmall.font.weight(.medium))
                     .foregroundStyle(MobileDesignColors.fileLink)
                     .buttonStyle(.plain)
@@ -340,24 +413,57 @@ struct MarkdownMessageView: View {
     let text: String
     @ObservedObject var model: MobileAppModel
 
-    private var blocks: [MarkdownBlock] { MarkdownParser.shared.parse(text: text) }
-    private var references: [MessageFileReference] {
-        MessageFileReferenceProjector.shared.project(source: text)
-    }
-
     var body: some View {
+        let projection = MarkdownProjectionCache.shared.projection(for: text)
         VStack(alignment: .leading, spacing: 9) {
-            ForEach(blocks, id: \.id) { MarkdownBlockView(block: $0) }
-            ForEach(references, id: \.id) { FileReferenceCard(reference: $0, model: model) }
+            ForEach(projection.blocks, id: \.id) { MarkdownBlockView(block: $0) }
+            ForEach(projection.references, id: \.id) { FileReferenceCard(reference: $0, model: model) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .environment(\.openURL, OpenURLAction { url in
-            if url.scheme?.lowercased() == "computer" {
+            if url.scheme == nil || ["computer", "file", "openbitfun"].contains(url.scheme?.lowercased() ?? "") {
                 model.openRemoteFile(reference: url.absoluteString, label: url.lastPathComponent)
                 return .handled
             }
             return .systemAction
         })
+    }
+}
+
+@MainActor
+private final class MarkdownProjectionCache {
+    struct Projection {
+        let blocks: [MarkdownBlock]
+        let references: [MessageFileReference]
+    }
+
+    private final class Entry: NSObject {
+        let projection: Projection
+
+        init(_ projection: Projection) {
+            self.projection = projection
+        }
+    }
+
+    static let shared = MarkdownProjectionCache()
+    private let entries = NSCache<NSString, Entry>()
+
+    private init() {
+        entries.countLimit = 48
+        entries.totalCostLimit = 4 * 1_024 * 1_024
+    }
+
+    func projection(for text: String) -> Projection {
+        let key = text as NSString
+        if let cached = entries.object(forKey: key) {
+            return cached.projection
+        }
+        let projection = Projection(
+            blocks: MarkdownParser.shared.parse(text: text),
+            references: MessageFileReferenceProjector.shared.project(source: text)
+        )
+        entries.setObject(Entry(projection), forKey: key, cost: text.utf8.count)
+        return projection
     }
 }
 
@@ -764,10 +870,7 @@ private struct ToolStatusList: View {
             pending.removeAll()
         }
         for tool in tools {
-            let collapsible = tool.actions.isEmpty
-                && ["COMPLETED", "CANCELLED"].contains(tool.phase)
-                && ["DOCUMENT", "FOLDER", "SEARCH"].contains(tool.kind)
-            if collapsible { pending.append(tool) } else { flush(); result.append(.tool(tool)) }
+            if tool.foldIntoSummary { pending.append(tool) } else { flush(); result.append(.tool(tool)) }
         }
         flush()
         return result
@@ -786,7 +889,7 @@ private struct CollapsedToolsRow: View {
                     Image(systemName: "doc.on.doc").font(.system(size: 12, weight: .medium))
                         .frame(width: 20, height: 20).background(OpenBitFunTheme.soft)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
-                    Text(model.localizedFormat("已完成 %lld 项读取与搜索", Int64(tools.count)))
+                    Text(model.localizedFormat("已完成 %lld 项操作", Int64(tools.count)))
                         .font(MobileDesignTypography.bodySmall.font)
                     Spacer()
                     Image(systemName: expanded ? "chevron.up" : "chevron.down")
@@ -795,7 +898,11 @@ private struct CollapsedToolsRow: View {
                 .foregroundStyle(OpenBitFunTheme.muted).frame(minHeight: 32)
             }
             .buttonStyle(.plain)
-            if expanded { ForEach(tools) { ToolStatusRow(tool: $0, model: model) } }
+            if expanded {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(tools) { ToolStatusRow(tool: $0, model: model) }
+                }
+            }
         }
     }
 }

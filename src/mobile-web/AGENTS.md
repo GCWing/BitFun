@@ -6,6 +6,12 @@ Mobile web is the browser-based remote control client for OpenBitFun desktop ses
 
 - Keep mobile-web logic inside `src/mobile-web`; do not import from `src/web-ui`.
 - Treat pairing, reconnect, disconnect, session list, and chat state as one connected product flow.
+- The compact sidebar uses the host's opened-workspace catalog, including assistant
+  identity names. `list_recent_workspaces.opened_workspaces` is an additive capability
+  offer: an array (including an empty one) is authoritative; absence selects the
+  explicitly labeled legacy recent-history fallback. Never rebuild sidebar rows
+  from current-workspace state or cached session paths. Keep history for the picker
+  and retain session data when a workspace closes or a refresh fails.
 - Keep connection state semantics consistent across persistent indicators, banners, dialogs, and disabled states.
 - User-facing strings should use the mobile-web i18n message system when one is already present for the surface being changed.
 - Locale ids and aliases come from `src/shared/i18n/contract/locales.json`
@@ -44,6 +50,8 @@ Run the focused mobile-web checks after changes:
 ```bash
 pnpm --dir src/mobile-web run test:ui-components
 pnpm --dir src/mobile-web run test:account-login # account login without an online desktop
+pnpm --dir src/mobile-web run test:account-browser # real Chrome tabs, persistence, migration, races; simulated Relay
+pnpm --dir src/mobile-web run test:images # image preparation and upload limits
 pnpm --dir src/mobile-web run test:workspace-identity # SSH host scope and legacy cache records
 pnpm --dir src/mobile-web run type-check
 pnpm run build:mobile-web
@@ -54,3 +62,8 @@ The build skips work when `src/mobile-web/dist` is newer than every input. Use
 only when a rebuild is required despite unchanged inputs.
 
 For pairing, reconnect, disconnect, or chat behavior changes, also describe manual verification in the PR, including the browser/device used and the observed state transitions.
+
+The browser suite uses an installed Chrome/Chromium (or
+`PUPPETEER_EXECUTABLE_PATH`) with disposable profiles. It never uses the user's
+browser profile or live GitHub credentials. See [README.md](README.md) for the
+account scope and the live-host verification flow.

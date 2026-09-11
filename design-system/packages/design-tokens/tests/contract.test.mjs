@@ -68,11 +68,11 @@ test("TabGroup geometry preserves the capsule selected and outline contract", as
 test("SegmentedControl geometry preserves compact, filled, and filter compositions", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
-  assert.equal(tokens["control.segmentedControl.gap"], "2px");
+  assert.equal(tokens["control.segmentedControl.gap"], "4px");
   assert.equal(tokens["control.segmentedControl.padding"], "2px");
   assert.equal(tokens["control.segmentedControl.paddingMd"], "3px");
-  assert.equal(tokens["control.segmentedControl.segmentHeight"], "22px");
-  assert.equal(tokens["control.segmentedControl.segmentHeightMd"], "28px");
+  assert.equal(tokens["control.segmentedControl.segmentHeight"], "24px");
+  assert.equal(tokens["control.segmentedControl.segmentHeightMd"], "30px");
   assert.equal(tokens["control.segmentedControl.pillSegmentHeight"], "24px");
   assert.equal(tokens["control.segmentedControl.segmentPaddingInline"], "8px");
   assert.equal(tokens["control.segmentedControl.segmentGap"], "4px");
@@ -100,13 +100,13 @@ test("Activity geometry preserves inline and surfaced status compositions", asyn
   const systemDocument = await readSource("system.tokens.json");
 
   assert.equal(tokens["control.activityItem.inlineIconSize"], "12px");
-  assert.equal(tokens["control.activityItem.surfaceHeight"], "30px");
+  assert.equal(tokens["control.activityItem.surfaceHeight"], "40px");
   assert.equal(tokens["control.activityItem.surfaceIconSize"], "14px");
   assert.equal(tokens["control.activityItem.dividerBlockSize"], "16px");
   assert.equal(tokens["control.changeCount.paddingBlock"], "2px");
   assert.equal(tokens["control.iconButton.xsSize"], "22px");
   assert.equal(tokens["control.iconButton.xsIconSize"], "14px");
-  assert.equal(systemDocument.control.activityItem.surfaceRadius.$value, "{radius.base}");
+  assert.equal(systemDocument.control.activityItem.surfaceRadius.$value, "{radius.lg}");
   assert.equal(systemDocument.control.changeCount.radius.$value, "{radius.xs}");
 });
 
@@ -114,7 +114,7 @@ test("StatusPill geometry preserves compact semantic status anatomy", async () =
   const systemDocument = await readSource("system.tokens.json");
 
   assert.equal(tokens["control.statusPill.gap"], "2px");
-  assert.equal(tokens["control.statusPill.paddingBlock"], "3px");
+  assert.equal(tokens["control.statusPill.paddingBlock"], "2px");
   assert.equal(tokens["control.statusPill.paddingInline"], "6px");
   assert.equal(tokens["control.statusPill.iconSize"], "14px");
   assert.equal(systemDocument.control.statusPill.radius.$value, "{radius.pill}");
@@ -145,11 +145,11 @@ test("ActionCard geometry preserves compact and descriptive entry compositions",
 test("LauncherButton geometry preserves the shell-edge action contract", async () => {
   const systemDocument = await readSource("system.tokens.json");
 
-  assert.equal(tokens["control.launcherButton.minInlineSize"], "104px");
+  assert.equal(tokens["control.launcherButton.minInlineSize"], "72px");
   assert.equal(tokens["control.launcherButton.blockSize"], "40px");
-  assert.equal(tokens["control.launcherButton.paddingInline"], "14px");
-  assert.equal(tokens["control.launcherButton.gap"], "8px");
-  assert.equal(tokens["control.launcherButton.iconSize"], "16px");
+  assert.equal(tokens["control.launcherButton.paddingInline"], "10px");
+  assert.equal(tokens["control.launcherButton.gap"], "4px");
+  assert.equal(tokens["control.launcherButton.iconSize"], "12px");
   assert.equal(
     systemDocument.control.launcherButton.radius.$value,
     "{radius.lg}",
@@ -175,12 +175,12 @@ test("AskUser geometry preserves the answered question reference contract", () =
 });
 
 test("ChatComposer geometry preserves the scaled compact capsule contract", () => {
-  assert.equal(tokens["control.chatComposer.compactGap"], "9px");
-  assert.equal(tokens["control.chatComposer.compactHeight"], "45px");
-  assert.equal(tokens["control.chatComposer.compactPaddingBlock"], "9px");
-  assert.equal(tokens["control.chatComposer.compactPaddingInline"], "9px");
-  assert.equal(tokens["control.chatComposer.compactTrackHeight"], "25px");
-  assert.equal(tokens["control.chatComposer.controlHeight"], "25px");
+  assert.equal(tokens["control.chatComposer.compactGap"], "12px");
+  assert.equal(tokens["control.chatComposer.compactHeight"], "42px");
+  assert.equal(tokens["control.chatComposer.compactPaddingBlock"], "8px");
+  assert.equal(tokens["control.chatComposer.compactPaddingInline"], "8px");
+  assert.equal(tokens["control.chatComposer.compactTrackHeight"], "24px");
+  assert.equal(tokens["control.chatComposer.controlHeight"], "24px");
 });
 
 test("FlowChat rhythm keeps compact rows line-like and Turn boundaries distinct", async () => {
@@ -227,7 +227,7 @@ test("NavigationPanel tokens preserve the grouped sidebar composition contract",
   const systemDocument = await readSource("system.tokens.json");
 
   assert.equal(tokens["layout.navigationPanel.inlineSize"], "216px");
-  assert.equal(tokens["layout.navigationPanel.headingHeight"], "22px");
+  assert.equal(tokens["layout.navigationPanel.headingHeight"], "24px");
   assert.equal(tokens["layout.navigationPanel.itemHeight"], "30px");
   assert.equal(tokens["layout.navigationPanel.itemIconSize"], "14px");
   assert.equal(tokens["layout.navigationPanel.footerHeight"], "40px");
@@ -434,6 +434,20 @@ test("shared system scales preserve the migrated Web UI foundation contract", ()
   assert.equal(tokens["motion.easing.standard"], "cubic-bezier(0.23, 1, 0.32, 1)");
   assert.equal(tokens["layer.modal"], 200);
   assert.equal(tokens["layer.contextMenu"], 500);
+});
+
+test("tooltips outrank popovers and nested menus without covering priority chrome", () => {
+  for (const mode of tokenModes) {
+    const modeTokens = Object.fromEntries(
+      tokenCatalog.filter(token => token.category === "layer")
+        .map(token => [token.name, Number(token.values[mode])]),
+    );
+    assert.ok(modeTokens["layer.modal"] < modeTokens["layer.popover"]);
+    assert.ok(modeTokens["layer.popover"] + 1 < modeTokens["layer.tooltip"]);
+    for (const layer of ["toast", "notification", "contextMenu"]) {
+      assert.ok(modeTokens["layer.tooltip"] < modeTokens[`layer.${layer}`]);
+    }
+  }
 });
 
 test("semantic typography roles resolve to the canonical foundation", async () => {

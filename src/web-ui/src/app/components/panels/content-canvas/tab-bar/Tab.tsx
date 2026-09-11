@@ -3,11 +3,11 @@
  * Supports preview/active/pinned tab states.
  */
 
-import React, { useCallback } from 'react';
-import { Split } from 'lucide-react';
+import React, { useCallback, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { commandExecutor } from '@/shared/context-menu-system/commands/CommandExecutor';
+import { canRevealInExplorer } from '@/shared/context-menu-system/commands/builtin/file/RevealInExplorerCommand';
 import { useContextMenuStore } from '@/shared/context-menu-system/store/ContextMenuStore';
 import { ContextType, type TabContext } from '@/shared/context-menu-system/types/context.types';
 import type { MenuItem } from '@/shared/context-menu-system/types/menu.types';
@@ -17,9 +17,13 @@ import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 import { isHtmlFilePath } from '@/shared/utils/htmlFilePreview';
 import { openFileInBestTarget } from '@/shared/utils/tabUtils';
 import type { CanvasTab, EditorGroupId, TabState } from '../types';
+import { CanvasStoreModeContext } from '../stores';
+import { writeSessionTabDrag } from '@/app/workbench/canvasTabTransfer';
 import './Tab.scss';
-import { Icon, OverflowText, Tooltip } from '@openbitfun/ui';
+import { Tooltip } from '@openbitfun/ui';
 export interface TabProps {
+  /** Standard TabGroup item; this wrapper owns document interactions only. */
+  children: React.ReactNode;
   /** Tab data */
   tab: CanvasTab;
   /** Editor group ID */
@@ -63,6 +67,7 @@ const getStateClassName = (state: TabState): string => {
 };
 
 export const Tab: React.FC<TabProps> = ({
+  children,
   tab,
   groupId,
   isActive,
@@ -78,6 +83,7 @@ export const Tab: React.FC<TabProps> = ({
   onCloseAll,
 }) => {
   const { t } = useTranslation(['components', 'common']);
+  const mode = useContext(CanvasStoreModeContext);
   const showMenu = useContextMenuStore(state => state.showMenu);
   const tabData = tab.content.data as { filePath?: string; workspacePath?: string } | undefined;
   const filePath = typeof tabData?.filePath === 'string' ? tabData.filePath : undefined;
@@ -97,26 +103,16 @@ export const Tab: React.FC<TabProps> = ({
   // Handle single click - respond immediately
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    onClick();
-  }, [onClick]);
+    // TabGroup activates new selections. Clicking the selected tab still needs
+    // to focus its editor group, including an inactive split group.
+    if (isActive) onClick();
+  }, [isActive, onClick]);
 
   // Handle double click - rely on native onDoubleClick
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     onDoubleClick();
   }, [onDoubleClick]);
-
-  // Handle close click
-  const handleCloseClick = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    await onClose();
-  }, [onClose]);
-
-  // Handle pin click
-  const handlePinClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    onPin();
-  }, [onPin]);
 
   // Handle drag start
   const handleDragStart = useCallback((e: React.DragEvent) => {
@@ -125,8 +121,9 @@ export const Tab: React.FC<TabProps> = ({
       sourceGroupId: groupId,
     }));
     e.dataTransfer.effectAllowed = 'move';
+    if (onPopOut && mode === 'agent') writeSessionTabDrag(e.dataTransfer, tab.id, groupId);
     onDragStart(e);
-  }, [tab.id, groupId, onDragStart]);
+  }, [tab.id, groupId, onDragStart, onPopOut, mode]);
 
   const runCommand = useCallback((commandId: string, context: TabContext) => {
     void commandExecutor.execute(commandId, context);
@@ -224,7 +221,7 @@ export const Tab: React.FC<TabProps> = ({
           id: 'tab-reveal-file',
           label: t('common:file.reveal'),
           icon: 'FolderOpen',
-          disabled: !canUseLocalFileActions,
+          disabled: !canRevealInExplorer(context),
           onClick: () => runCommand('file.reveal-in-explorer', context),
         },
       );
@@ -321,7 +318,7 @@ export const Tab: React.FC<TabProps> = ({
 
   return (
     <Tooltip content={tooltipText} placement="bottom">
-      <div data-openbitfun-component="canvas-tab" data-openbitfun-part="root" data-openbitfun-group={groupId}
+      <div data-openbitfun-product-component="canvas-tab" data-openbitfun-product-part="root" data-openbitfun-group={groupId}
         data-overflow-trigger
         data-openbitfun-state={[
           isActive && 'active',
@@ -344,40 +341,17 @@ export const Tab: React.FC<TabProps> = ({
         onContextMenu={handleContextMenu}
         onMouseDown={handleMiddleMouseDown}
         onAuxClick={handleAuxClick}
+        onKeyDown={(event) => {
+          if (event.key !== 'Delete' || isPinned) return;
+          event.preventDefault();
+          event.stopPropagation();
+          void onClose();
+        }}
         draggable
         onDragStart={handleDragStart}
         onDragEnd={onDragEnd}
       >
-        {/* Task-detail type icon */}
-        {isTaskDetail && (
-          <Split size={12} data-openbitfun-component="canvas-tab" data-openbitfun-part="typeIcon" className="canvas-tab__type-icon" aria-hidden />
-        )}
-
-        {/* Title */}
-        <OverflowText behavior="marquee" title="" data-openbitfun-component="canvas-tab" data-openbitfun-part="title" className="canvas-tab__title">
-          {titleDisplay}
-        </OverflowText>
-
-        {/* Dirty state indicator */}
-        {tab.isDirty && (
-          <span data-openbitfun-component="canvas-tab" data-openbitfun-part="dirtyIndicator" className="canvas-tab__dirty-indicator" title={t('tabs.unsaved')}>
-            ●
-          </span>
-        )}
-
-        {/* Close / pinned action */}
-        <Tooltip content={isPinned ? t('tabs.unpin') : t('tabs.close')}>
-          <button
-            data-openbitfun-component="canvas-tab"
-            data-openbitfun-part="action"
-            className={`canvas-tab__action-btn canvas-tab__close-btn ${isPinned ? 'canvas-tab__close-btn--pin' : ''}`}
-            onClick={isPinned ? handlePinClick : handleCloseClick}
-            tabIndex={-1}
-          >
-            {isPinned ? <Icon name="pin" size="xs" /> : <Icon name="xmark" size="xs" />}
-          </button>
-        </Tooltip>
-
+        {children}
       </div>
     </Tooltip>
   );

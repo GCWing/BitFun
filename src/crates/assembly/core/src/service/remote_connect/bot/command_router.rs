@@ -14,6 +14,9 @@
 //!     `complete_im_bot_pairing`, `current_bot_language`,
 //!     `execute_forwarded_turn`, `apply_interactive_request`.
 
+use crate::service_agent_runtime::{
+    remote_opened_workspace_catalog, remote_workspace_display_name,
+};
 use log::{error, info};
 use serde_json::Value;
 use std::sync::{Arc, OnceLock};
@@ -24,7 +27,7 @@ use super::menu::{MenuItem, MenuView};
 pub use openbitfun_services_integrations::remote_connect::bot::{
     parse_command, BotAction, BotActionStyle, BotChatState, BotCommand, BotDisplayMode,
     BotInteractionHandler, BotInteractiveRequest, BotMessageSender, BotQuestion, BotQuestionOption,
-    BotWorkspaceChoice, BotWorkspaceRef, PendingAction, RemoteDeviceTarget,
+    BotWorkspaceChoice, BotWorkspaceRef, PendingAction, RemoteBotTarget, RemoteDeviceTarget,
 };
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -77,6 +80,7 @@ pub struct HandleResult {
 }
 
 pub struct ForwardRequest {
+    pub remote_target: Option<RemoteBotTarget>,
     pub session_id: String,
     pub content: String,
     pub agent_type: String,
@@ -85,6 +89,7 @@ pub struct ForwardRequest {
 }
 
 pub struct ForwardedTurnResult {
+    pub completed_remote_tools: Vec<String>,
     pub display_text: String,
     pub full_text: String,
 }
@@ -149,7 +154,7 @@ fn ready_to_chat_body(state: &BotChatState, s: &'static BotStrings) -> Option<St
         }
     } else {
         // Assistant mode: prefer the cached assistant display name (set by
-        // pairing / switch / resume flows from `WorkspaceInfo.name`). The
+        // pairing / switch / resume flows from workspace identity facts). The
         // workspace path's directory name is meaningless here — the actual
         // assistant folder is usually `workspace` or `workspace-<uuid>`,
         // both of which look like noise to the user.
@@ -168,28 +173,32 @@ fn ready_to_chat_body(state: &BotChatState, s: &'static BotStrings) -> Option<St
     }
 }
 
-/// One-shot lookup that fills in `current_assistant_name` from the workspace
-/// service when the chat state has an `current_assistant` path but no cached
-/// display name (e.g. the state was persisted before the field was added).
-/// Best-effort: silently no-ops if the workspace service is unavailable or
-/// the path is not a known assistant workspace.
-async fn refresh_assistant_name_if_missing(state: &mut BotChatState) {
+/// Refresh the selected assistant label from current identity facts, including
+/// states that already cached an obsolete directory name. Peer control must
+/// never resolve a peer path against this host's workspace service.
+async fn refresh_assistant_name(state: &mut BotChatState) {
     use crate::service::workspace::get_global_workspace_service;
-    if state.current_assistant_name.is_some() {
+    if state.active_remote_device.is_some() || state.current_assistant.is_none() {
         return;
     }
-    let Some(path) = state.current_assistant.clone() else {
+    let Some(service) = get_global_workspace_service() else {
         return;
     };
-    let Some(svc) = get_global_workspace_service() else {
+    refresh_assistant_name_from_workspaces(state, &service.get_assistant_workspaces().await);
+}
+
+fn refresh_assistant_name_from_workspaces(
+    state: &mut BotChatState,
+    workspaces: &[crate::service::workspace::WorkspaceInfo],
+) {
+    let Some(path) = state.current_assistant.as_deref() else {
         return;
     };
-    let workspaces = svc.get_assistant_workspaces().await;
-    if let Some(ws) = workspaces
-        .into_iter()
-        .find(|w| w.root_path.to_string_lossy() == path)
+    if let Some(workspace) = workspaces
+        .iter()
+        .find(|workspace| workspace.root_path.to_string_lossy() == path)
     {
-        state.current_assistant_name = Some(ws.name);
+        state.current_assistant_name = Some(remote_workspace_display_name(workspace).to_string());
     }
 }
 
@@ -525,7 +534,7 @@ pub async fn bootstrap_im_chat_after_pairing(state: &mut BotChatState) -> String
     }
 
     state.current_assistant = Some(ws_info.root_path.to_string_lossy().to_string());
-    state.current_assistant_name = Some(ws_info.name.clone());
+    state.current_assistant_name = Some(remote_workspace_display_name(&ws_info).to_string());
     state.current_session_id = None;
 
     let create_res = create_session(state, "Claw").await;
@@ -566,9 +575,111 @@ pub async fn complete_im_bot_pairing(state: &mut BotChatState) -> HandleResult {
 
 /// Public adapter helper: install an interactive request received from the
 /// session executor onto the chat state and refresh its TTL.
-pub fn apply_interactive_request(state: &mut BotChatState, req: &BotInteractiveRequest) {
+fn interaction_tool(action: &PendingAction) -> Option<&str> {
+    match action {
+        PendingAction::AskUserQuestion { tool_id, .. }
+        | PendingAction::ConfirmRemoteTool { tool_id, .. } => Some(tool_id),
+        _ => None,
+    }
+}
+
+fn same_interaction(
+    a: &PendingAction,
+    a_target: Option<&RemoteBotTarget>,
+    b: &PendingAction,
+    b_target: Option<&RemoteBotTarget>,
+) -> bool {
+    interaction_tool(a) == interaction_tool(b)
+        && a_target.map(|t| (&t.device_id, &t.session_id))
+            == b_target.map(|t| (&t.device_id, &t.session_id))
+}
+
+pub fn apply_interactive_request(state: &mut BotChatState, req: &BotInteractiveRequest) -> bool {
+    if state.pending_expired() {
+        state.clear_pending();
+    }
+    if let Some(current) = state
+        .pending_action
+        .as_ref()
+        .filter(|action| interaction_tool(action).is_some())
+    {
+        if same_interaction(
+            current,
+            state.pending_remote_target.as_ref(),
+            &req.pending_action,
+            req.remote_target.as_ref(),
+        ) {
+            // Keep a remotely blocked interaction answerable while preserving
+            // its partially collected answers and original button token.
+            state.set_pending(current.clone());
+            return false;
+        }
+        if !state.pending_interactions.iter().any(|queued| {
+            same_interaction(
+                &queued.pending_action,
+                queued.remote_target.as_ref(),
+                &req.pending_action,
+                req.remote_target.as_ref(),
+            )
+        }) {
+            state.pending_interactions.push_back(req.clone());
+        }
+        return false;
+    }
     state.set_pending(req.pending_action.clone());
+    state.pending_remote_target = req.remote_target.clone();
     state.last_menu_commands = req.menu.items.iter().map(|i| i.command.clone()).collect();
+    true
+}
+
+/// Return the next still-pending prompt for the adapter to install and display.
+pub(super) fn retire_completed_remote_tools(
+    state: &mut BotChatState,
+    target: &RemoteBotTarget,
+    tool_ids: &[String],
+) -> Option<BotInteractiveRequest> {
+    let completed = |action: &PendingAction, origin: Option<&RemoteBotTarget>| {
+        origin.is_some_and(|origin| {
+            origin.relay_url == target.relay_url
+                && origin.device_id == target.device_id
+                && origin.session_id == target.session_id
+        }) && interaction_tool(action).is_some_and(|id| tool_ids.iter().any(|tool| tool == id))
+    };
+    state
+        .pending_interactions
+        .retain(|request| !completed(&request.pending_action, request.remote_target.as_ref()));
+    if state
+        .pending_action
+        .as_ref()
+        .is_some_and(|action| completed(action, state.pending_remote_target.as_ref()))
+    {
+        let mut queued = std::mem::take(&mut state.pending_interactions);
+        state.clear_pending();
+        state.last_menu_commands.clear();
+        let next = queued.pop_front();
+        state.pending_interactions = queued;
+        next
+    } else {
+        None
+    }
+}
+
+fn finish_bot_interaction(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {
+    let mut queued = std::mem::take(&mut state.pending_interactions);
+    state.clear_pending();
+    if let Some(next) = queued.pop_front() {
+        apply_interactive_request(state, &next);
+        state.pending_interactions = queued;
+        let mut view = next.menu;
+        view.body = Some(format!(
+            "{}\n\n{}",
+            s.answers_submitted,
+            view.body.unwrap_or_default()
+        ));
+        result_from_menu(state, view)
+    } else {
+        result_from_menu(state, MenuView::plain(s.answers_submitted))
+    }
 }
 
 // ── Dispatch ───────────────────────────────────────────────────────
@@ -625,11 +736,8 @@ async fn dispatch(
         return result_from_menu(state, welcome_view(s));
     }
 
-    // Lazily resolve `current_assistant_name` for chat states that were
-    // persisted before this field existed. Without this, already-paired
-    // users would keep seeing the workspace folder name (e.g. "workspace")
-    // until they manually re-switch assistants.
-    refresh_assistant_name_if_missing(state).await;
+    // Refresh both legacy missing labels and cached names after identity edits.
+    refresh_assistant_name(state).await;
 
     // Handle /cancel as task cancellation when an active session exists.
     if let BotCommand::CancelTask(turn_id) = &cmd {
@@ -678,7 +786,7 @@ async fn dispatch(
         BotCommand::SetVerbose(on) => set_verbose(state, on, s).await,
         BotCommand::SwitchContext => start_switch(state, s).await,
         BotCommand::NewSession => new_session_for_mode(state, s).await,
-        BotCommand::NewCodeSession => guarded_new(state, "agentic", s).await,
+        BotCommand::NewCodeSession => guarded_new(state, "Standard", s).await,
         BotCommand::NewCoworkSession => guarded_new(state, "Cowork", s).await,
         BotCommand::NewClawSession => guarded_new(state, "Claw", s).await,
         BotCommand::ResumeSession => start_resume(state, 0, s).await,
@@ -724,11 +832,11 @@ fn delegated_session(
     }
     let mut master_key = [0u8; 32];
     master_key.copy_from_slice(&key_vec);
-    Some(crate::service::remote_connect::AccountSession {
+    Some(crate::service::remote_connect::AccountSession::new(
         token,
-        user_id: String::new(),
+        String::new(),
         master_key,
-    })
+    ))
 }
 
 async fn list_devices(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {
@@ -888,8 +996,151 @@ async fn set_verbose(state: &mut BotChatState, on: bool, s: &'static BotStrings)
 
 // ── Switch context (workspace or assistant) ────────────────────────
 
+fn remote_workspace_choices(response: &str) -> Result<Vec<BotWorkspaceChoice>, String> {
+    let value: Value = serde_json::from_str(response).map_err(|error| error.to_string())?;
+    if value.get("resp").and_then(Value::as_str) == Some("error") {
+        return Err(value
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or("Remote workspace service unavailable")
+            .to_string());
+    }
+    if value.get("resp").and_then(Value::as_str) != Some("recent_workspaces") {
+        return Err("Unexpected remote workspace catalog response".to_string());
+    }
+    // Field presence negotiates the authoritative catalog. In particular an
+    // empty opened list must not resurrect entries from recent history.
+    let rows = match value.get("opened_workspaces") {
+        Some(Value::Array(rows)) => rows,
+        None | Some(Value::Null) => value
+            .get("workspaces")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "Invalid legacy workspace catalog response".to_string())?,
+        _ => return Err("Invalid opened workspace catalog response".to_string()),
+    };
+    Ok(rows
+        .iter()
+        .filter_map(|workspace| {
+            // The bot keeps its existing Pro/Assistant picker separation.
+            if workspace.get("workspace_kind").and_then(Value::as_str) == Some("assistant") {
+                return None;
+            }
+            let text = |key| {
+                workspace
+                    .get(key)
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+            };
+            let path = text("path")?;
+            Some(BotWorkspaceChoice::new(
+                path,
+                text("name").unwrap_or(path),
+                text("remote_connection_id").map(str::to_string),
+                text("remote_ssh_host").map(str::to_string),
+            ))
+        })
+        .collect())
+}
+
+async fn load_remote_workspace_choices(
+    state: &BotChatState,
+) -> Result<Vec<BotWorkspaceChoice>, String> {
+    let response = exec_remote_rpc(state, r#"{"cmd":"list_recent_workspaces"}"#).await?;
+    remote_workspace_choices(&response)
+}
+
+fn show_workspace_choices(
+    state: &mut BotChatState,
+    options: Vec<BotWorkspaceChoice>,
+    s: &'static BotStrings,
+) -> HandleResult {
+    state.clear_pending();
+    if options.is_empty() {
+        return result_from_menu(
+            state,
+            MenuView::plain(s.switch_no_workspaces)
+                .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+        );
+    }
+    let view = workspace_selection_view(state, &options, s);
+    state.set_pending(PendingAction::SelectWorkspace { options });
+    result_from_menu(state, view)
+}
+
+fn local_pro_workspace_choices(
+    workspaces: Vec<openbitfun_runtime_ports::RemoteRecentWorkspaceFacts>,
+) -> Vec<BotWorkspaceChoice> {
+    workspaces
+        .into_iter()
+        .filter(|workspace| {
+            workspace.kind != openbitfun_runtime_ports::RemoteWorkspaceKind::Assistant
+        })
+        .map(|workspace| {
+            BotWorkspaceChoice::new(
+                workspace.path,
+                workspace.name,
+                workspace.remote_connection_id,
+                workspace.remote_ssh_host,
+            )
+        })
+        .collect()
+}
+
+fn current_workspace_choice<'a>(
+    options: &'a [BotWorkspaceChoice],
+    selected: &BotWorkspaceChoice,
+) -> Option<&'a BotWorkspaceChoice> {
+    options.iter().find(|option| {
+        option.path == selected.path
+            && option.remote_connection_id == selected.remote_connection_id
+            && option.remote_ssh_host == selected.remote_ssh_host
+    })
+}
+
+fn workspace_list_changed_result(
+    state: &mut BotChatState,
+    result: HandleResult,
+    s: &'static BotStrings,
+) -> HandleResult {
+    let mut view = result.menu;
+    view.title = format!("{}\n{}", s.workspace_list_changed, view.title);
+    result_from_menu(state, view)
+}
+
+async fn start_local_switch(
+    state: &mut BotChatState,
+    service: &crate::service::workspace::WorkspaceService,
+    s: &'static BotStrings,
+) -> HandleResult {
+    let workspaces = remote_opened_workspace_catalog(service).await;
+    state.clear_pending();
+    if state.display_mode == BotDisplayMode::Pro {
+        show_workspace_choices(state, local_pro_workspace_choices(workspaces), s)
+    } else {
+        let options: Vec<_> = workspaces
+            .into_iter()
+            .filter(|workspace| {
+                workspace.kind == openbitfun_runtime_ports::RemoteWorkspaceKind::Assistant
+            })
+            .map(|workspace| (workspace.path, workspace.name))
+            .collect();
+        if options.is_empty() {
+            return result_from_menu(
+                state,
+                MenuView::plain(s.switch_no_assistants)
+                    .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+            );
+        }
+        let view = assistant_selection_view(state, &options, s);
+        state.set_pending(PendingAction::SelectAssistant { options });
+        result_from_menu(state, view)
+    }
+}
+
 async fn start_switch(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {
-    // Remote-device control: list/switch workspaces on the peer, not the local desktop.
+    state.clear_pending();
+    // Remote device catalogs never fall back to this host's workspaces.
     if state.active_remote_device.is_some() {
         if state.display_mode != BotDisplayMode::Pro {
             return result_from_menu(
@@ -898,156 +1149,23 @@ async fn start_switch(state: &mut BotChatState, s: &'static BotStrings) -> Handl
                     .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
             );
         }
-        let cmd = serde_json::json!({ "cmd": "list_recent_workspaces" });
-        let cmd_json = serde_json::to_string(&cmd).unwrap_or_default();
-        match exec_remote_rpc(state, &cmd_json).await {
-            Ok(resp) => {
-                let val: serde_json::Value = match serde_json::from_str(&resp) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        return result_from_menu(
-                            state,
-                            MenuView::plain(format!("{}{e}", s.workspace_open_failed_prefix))
-                                .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
-                        );
-                    }
-                };
-                if val.get("resp").and_then(|value| value.as_str()) == Some("error") {
-                    let message = val
-                        .get("message")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or(s.workspace_service_unavailable);
-                    return result_from_menu(
-                        state,
-                        MenuView::plain(message.to_string())
-                            .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
-                    );
-                }
-                let workspaces = val
-                    .get("workspaces")
-                    .and_then(|value| value.as_array())
-                    .cloned()
-                    .unwrap_or_default();
-                if workspaces.is_empty() {
-                    return result_from_menu(
-                        state,
-                        MenuView::plain(s.switch_no_workspaces)
-                            .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
-                    );
-                }
-                let options: Vec<BotWorkspaceChoice> = workspaces
-                    .iter()
-                    .filter_map(|workspace| {
-                        let path = workspace
-                            .get("path")
-                            .and_then(|value| value.as_str())
-                            .map(str::trim)
-                            .filter(|value| !value.is_empty())?;
-                        let name = workspace
-                            .get("name")
-                            .and_then(|value| value.as_str())
-                            .map(str::trim)
-                            .filter(|value| !value.is_empty())
-                            .unwrap_or(path);
-                        Some(BotWorkspaceChoice::new(
-                            path.to_string(),
-                            name.to_string(),
-                            workspace
-                                .get("remote_connection_id")
-                                .and_then(|value| value.as_str())
-                                .map(str::trim)
-                                .filter(|value| !value.is_empty())
-                                .map(str::to_string),
-                            workspace
-                                .get("remote_ssh_host")
-                                .and_then(|value| value.as_str())
-                                .map(str::trim)
-                                .filter(|value| !value.is_empty())
-                                .map(str::to_string),
-                        ))
-                    })
-                    .collect();
-                if options.is_empty() {
-                    return result_from_menu(
-                        state,
-                        MenuView::plain(s.switch_no_workspaces)
-                            .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
-                    );
-                }
-                let view = workspace_selection_view(state, &options, s);
-                state.set_pending(PendingAction::SelectWorkspace { options });
-                return result_from_menu(state, view);
-            }
-            Err(error) => {
-                return result_from_menu(
-                    state,
-                    MenuView::plain(format!("{}{error}", s.workspace_open_failed_prefix))
-                        .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
-                );
-            }
-        }
-    }
-
-    use crate::service::workspace::get_global_workspace_service;
-
-    let ws_service = match get_global_workspace_service() {
-        Some(s) => s,
-        None => {
-            return result_from_menu(
+        return match load_remote_workspace_choices(state).await {
+            Ok(options) => show_workspace_choices(state, options, s),
+            Err(error) => result_from_menu(
                 state,
-                MenuView::plain(s.workspace_service_unavailable)
+                MenuView::plain(format!("{}{error}", s.workspace_open_failed_prefix))
                     .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
-            );
-        }
+            ),
+        };
+    }
+    let Some(service) = crate::service::workspace::get_global_workspace_service() else {
+        return result_from_menu(
+            state,
+            MenuView::plain(s.workspace_service_unavailable)
+                .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+        );
     };
-
-    if state.display_mode == BotDisplayMode::Pro {
-        let workspaces = ws_service.get_recent_workspaces().await;
-        if workspaces.is_empty() {
-            return result_from_menu(
-                state,
-                MenuView::plain(s.switch_no_workspaces)
-                    .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
-            );
-        }
-        let options: Vec<BotWorkspaceChoice> = workspaces
-            .iter()
-            .map(|ws| {
-                let ssh_host = ws
-                    .metadata
-                    .get("sshHost")
-                    .and_then(|value| value.as_str())
-                    .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .map(str::to_string);
-                BotWorkspaceChoice::new(
-                    ws.root_path.to_string_lossy().to_string(),
-                    ws.name.clone(),
-                    ws.remote_ssh_connection_id().map(str::to_string),
-                    ssh_host,
-                )
-            })
-            .collect();
-        let view = workspace_selection_view(state, &options, s);
-        state.set_pending(PendingAction::SelectWorkspace { options });
-        result_from_menu(state, view)
-    } else {
-        let assistants = ws_service.get_assistant_workspaces().await;
-        if assistants.is_empty() {
-            return result_from_menu(
-                state,
-                MenuView::plain(s.switch_no_assistants)
-                    .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
-            );
-        }
-        let options: Vec<(String, String)> = assistants
-            .iter()
-            .map(|ws| (ws.root_path.to_string_lossy().to_string(), ws.name.clone()))
-            .collect();
-        let view = assistant_selection_view(state, &options, s);
-        state.set_pending(PendingAction::SelectAssistant { options });
-        result_from_menu(state, view)
-    }
+    start_local_switch(state, &service, s).await
 }
 
 fn workspace_selection_view(
@@ -1151,6 +1269,20 @@ async fn select_workspace(
     s: &'static BotStrings,
 ) -> HandleResult {
     if state.active_remote_device.is_some() {
+        let options = match load_remote_workspace_choices(state).await {
+            Ok(options) => options,
+            Err(error) => {
+                return result_from_menu(
+                    state,
+                    MenuView::plain(format!("{}{error}", s.workspace_open_failed_prefix))
+                        .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+                )
+            }
+        };
+        let Some(choice) = current_workspace_choice(&options, choice) else {
+            let result = show_workspace_choices(state, options, s);
+            return workspace_list_changed_result(state, result, s);
+        };
         let cmd = serde_json::json!({
             "cmd": "set_workspace",
             "path": choice.path,
@@ -1230,9 +1362,23 @@ async fn select_workspace(
             return result_from_menu(state, MenuView::plain(s.workspace_service_unavailable));
         }
     };
+    select_local_workspace(state, &ws_service, choice, s).await
+}
+
+async fn select_local_workspace(
+    state: &mut BotChatState,
+    ws_service: &crate::service::workspace::WorkspaceService,
+    choice: &BotWorkspaceChoice,
+    s: &'static BotStrings,
+) -> HandleResult {
+    let options = local_pro_workspace_choices(remote_opened_workspace_catalog(ws_service).await);
+    let Some(choice) = current_workspace_choice(&options, choice) else {
+        let result = show_workspace_choices(state, options, s);
+        return workspace_list_changed_result(state, result, s);
+    };
     let path_buf = std::path::PathBuf::from(&choice.path);
     match open_bot_workspace(
-        ws_service.as_ref(),
+        ws_service,
         path_buf,
         choice.remote_connection_id.as_deref(),
         choice.remote_ssh_host.as_deref(),
@@ -1287,7 +1433,6 @@ async fn select_workspace(
 async fn select_assistant(
     state: &mut BotChatState,
     path: &str,
-    name: &str,
     s: &'static BotStrings,
 ) -> HandleResult {
     use crate::service::workspace::get_global_workspace_service;
@@ -1298,16 +1443,26 @@ async fn select_assistant(
             return result_from_menu(state, MenuView::plain(s.workspace_service_unavailable));
         }
     };
+    select_local_assistant(state, &ws_service, path, s).await
+}
+
+async fn select_local_assistant(
+    state: &mut BotChatState,
+    ws_service: &crate::service::workspace::WorkspaceService,
+    path: &str,
+    s: &'static BotStrings,
+) -> HandleResult {
+    let workspaces = remote_opened_workspace_catalog(ws_service).await;
+    let Some(workspace) = workspaces.iter().find(|workspace| {
+        workspace.kind == openbitfun_runtime_ports::RemoteWorkspaceKind::Assistant
+            && workspace.path == path
+    }) else {
+        let result = start_local_switch(state, ws_service, s).await;
+        return workspace_list_changed_result(state, result, s);
+    };
+    let name = &workspace.name;
     let path_buf = std::path::PathBuf::from(path);
-    match open_bot_workspace(
-        ws_service.as_ref(),
-        path_buf,
-        None,
-        None,
-        "bot assistant switch",
-    )
-    .await
-    {
+    match open_bot_workspace(ws_service, path_buf, None, None, "bot assistant switch").await {
         Ok(_info) => {
             state.current_assistant = Some(path.to_string());
             state.current_assistant_name = Some(name.to_string());
@@ -1855,7 +2010,7 @@ fn truncate_text(text: &str, max_chars: usize) -> String {
 
 async fn new_session_for_mode(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {
     let agent_type = if state.display_mode == BotDisplayMode::Pro {
-        "agentic"
+        "Standard"
     } else {
         "Claw"
     };
@@ -1867,12 +2022,12 @@ async fn guarded_new(
     agent_type: &str,
     s: &'static BotStrings,
 ) -> HandleResult {
-    let needs_pro = matches!(agent_type, "agentic" | "Cowork");
+    let needs_pro = matches!(agent_type, "Standard" | "Cowork");
     let needs_assistant = matches!(agent_type, "Claw");
 
     if needs_pro && state.display_mode != BotDisplayMode::Pro {
         let target_cmd = match agent_type {
-            "agentic" => "/new_code_session",
+            "Standard" => "/new_code_session",
             "Cowork" => "/new_cowork_session",
             _ => "/new_code_session",
         };
@@ -2005,13 +2160,13 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
                 if let Some(primary_ws) = ws_service.get_primary_assistant_workspace().await {
                     Some((
                         primary_ws.root_path.to_string_lossy().to_string(),
-                        primary_ws.name.clone(),
+                        remote_workspace_display_name(&primary_ws).to_string(),
                     ))
                 } else {
                     match ws_service.create_assistant_workspace(None).await {
                         Ok(ws_info) => Some((
                             ws_info.root_path.to_string_lossy().to_string(),
-                            ws_info.name.clone(),
+                            remote_workspace_display_name(&ws_info).to_string(),
                         )),
                         Err(e) => {
                             return result_from_menu(
@@ -2103,7 +2258,14 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
                 s.session_created_prefix,
                 session_name,
                 s.session_workspace_label,
-                short_path_name(&workspace_ref.path),
+                if is_claw {
+                    state
+                        .current_assistant_name
+                        .clone()
+                        .unwrap_or_else(|| short_path_name(&workspace_ref.path))
+                } else {
+                    short_path_name(&workspace_ref.path)
+                },
                 s.session_start_hint,
             );
             let view = MenuView::plain("").with_body(body);
@@ -2135,6 +2297,29 @@ async fn handle_cancel_task(
             return result_from_menu(state, MenuView::plain(s.task_no_active));
         }
     };
+    if state.active_remote_device.is_some() {
+        let command = serde_json::json!({"cmd":"cancel_task","session_id":session_id,"turn_id":requested_turn_id});
+        return match exec_remote_rpc(state, &command.to_string()).await {
+            Ok(reply)
+                if serde_json::from_str::<Value>(&reply)
+                    .ok()
+                    .is_some_and(|v| v["resp"] == "task_cancelled") =>
+            {
+                state.clear_pending();
+                result_from_menu(state, MenuView::plain(s.task_cancel_requested))
+            }
+            result => result_from_menu(
+                state,
+                MenuView::plain(format!(
+                    "{}{}",
+                    s.task_cancel_failed_prefix,
+                    result
+                        .err()
+                        .unwrap_or_else(|| "Remote cancellation was not accepted".into())
+                )),
+            ),
+        };
+    }
     let dispatcher = get_or_init_global_dispatcher();
     match dispatcher.cancel_task(&session_id, requested_turn_id).await {
         Ok(_) => {
@@ -2173,6 +2358,40 @@ async fn route_pending(
     s: &'static BotStrings,
 ) -> HandleResult {
     match pending {
+        PendingAction::ConfirmRemoteTool {
+            tool_id,
+            action_token,
+            description: _,
+        } => {
+            let command = match raw_input.trim() {
+                input if input == "1" || input == format!("approve-tool:{action_token}") => {
+                    serde_json::json!({"cmd":"confirm_tool","tool_id":tool_id})
+                }
+                input if input == "2" || input == format!("reject-tool:{action_token}") => {
+                    serde_json::json!({"cmd":"reject_tool","tool_id":tool_id,"reason":"Rejected by bot user"})
+                }
+                _ => return Box::pin(pending_invalid(state, s)).await,
+            };
+            let Some(target) = state.pending_remote_target.clone() else {
+                state.clear_pending();
+                return result_from_menu(state, MenuView::plain(s.devices_account_required));
+            };
+            match target.rpc(command).await {
+                Ok(reply) if reply["resp"] == "interaction_accepted" => {
+                    finish_bot_interaction(state, s)
+                }
+                result => result_from_menu(
+                    state,
+                    MenuView::plain(format!(
+                        "{}{}",
+                        s.answers_submit_failed_prefix,
+                        result
+                            .err()
+                            .unwrap_or_else(|| "Invalid remote interaction response".into())
+                    )),
+                ),
+            }
+        }
         PendingAction::SelectWorkspace { options } => {
             let parsed: Option<usize> = raw_input.parse().ok();
             match parsed {
@@ -2200,8 +2419,8 @@ async fn route_pending(
                 }
                 Some(n) if n >= 1 && n <= options.len() => {
                     state.clear_pending();
-                    let (path, name) = options[n - 1].clone();
-                    select_assistant(state, &path, &name, s).await
+                    let (path, _) = &options[n - 1];
+                    select_assistant(state, path, s).await
                 }
                 _ => {
                     state.set_pending(PendingAction::SelectAssistant { options });
@@ -2368,6 +2587,11 @@ async fn pending_invalid(state: &mut BotChatState, s: &'static BotStrings) -> Ha
         }
     };
     let mut view = match &pending {
+        PendingAction::ConfirmRemoteTool {
+            action_token,
+            description,
+            ..
+        } => remote_tool_view(action_token, description, s),
         PendingAction::SelectWorkspace { options } => workspace_selection_view(state, options, s),
         PendingAction::SelectAssistant { options } => assistant_selection_view(state, options, s),
         PendingAction::SelectSession {
@@ -2609,8 +2833,42 @@ async fn handle_question_reply(
         return result_from_menu(state, view);
     }
 
-    state.clear_pending();
-    submit_question_answers(&tool_id, &answers, s).await
+    if let Some(target) = state.pending_remote_target.clone() {
+        let payload: serde_json::Map<String, Value> = answers
+            .iter()
+            .enumerate()
+            .map(|(i, v)| (i.to_string(), v.clone()))
+            .collect();
+        match target
+            .rpc(serde_json::json!({"cmd":"answer_question","tool_id":tool_id,"answers":payload}))
+            .await
+        {
+            Ok(reply)
+                if reply["resp"] == "answer_accepted"
+                    || reply["resp"] == "interaction_accepted" =>
+            {
+                return finish_bot_interaction(state, s);
+            }
+            result => {
+                return result_from_menu(
+                    state,
+                    MenuView::plain(format!(
+                        "{}{}",
+                        s.answers_submit_failed_prefix,
+                        result
+                            .err()
+                            .unwrap_or_else(|| "Invalid remote answer response".into())
+                    )),
+                )
+            }
+        }
+    }
+    let result = submit_question_answers(&tool_id, &answers, s).await;
+    if result.reply == s.answers_submitted {
+        finish_bot_interaction(state, s)
+    } else {
+        result
+    }
 }
 
 async fn submit_question_answers(
@@ -2644,10 +2902,10 @@ async fn submit_question_answers(
 // ── Free-form chat handling ───────────────────────────────────────
 
 /// Look up the agent type a session was created with (e.g. "Claw", "Cowork",
-/// "agentic").  Returns `None` if the coordinator is unavailable or the
+/// "Standard").  Returns `None` if the coordinator is unavailable or the
 /// session is not currently hot in memory; in that case `send_message` will
 /// lazily restore the session from disk and `resolve_agent_type` falls back
-/// to the safe default ("agentic"), so chat keeps working.
+/// to the safe default ("Standard"), so chat keeps working.
 async fn resolve_session_agent_type(session_id: &str) -> Option<String> {
     use crate::agentic::coordination::get_global_coordinator;
     use crate::service_agent_runtime::CoreServiceAgentRuntime;
@@ -2667,6 +2925,21 @@ async fn handle_chat(
     image_contexts: Vec<crate::agentic::image_analysis::ImageContextData>,
     s: &'static BotStrings,
 ) -> HandleResult {
+    if message.starts_with("approve-tool:") || message.starts_with("reject-tool:") {
+        let matches_pending = state
+            .pending_action
+            .as_ref()
+            .is_some_and(|pending| match pending {
+                PendingAction::ConfirmRemoteTool { action_token, .. } => {
+                    message == format!("approve-tool:{action_token}")
+                        || message == format!("reject-tool:{action_token}")
+                }
+                _ => false,
+            });
+        if !matches_pending {
+            return result_from_menu(state, MenuView::plain(s.pending_invalid_input));
+        }
+    }
     // If there is a pending action, route the message to it (text answer for
     // questions, "ignore" for menu-style pendings).
     if let Some(pending) = state.pending_action.clone() {
@@ -2680,34 +2953,29 @@ async fn handle_chat(
             Some(id) => id,
             None => return result_from_menu(state, need_session_view(state, s)),
         };
-        let cmd = serde_json::json!({
-            "cmd": "send_message",
-            "session_id": session_id,
-            "content": message,
-            "agent_type": null,
-            "images": null,
-            "image_contexts": null,
-        });
-        let cmd_json = serde_json::to_string(&cmd).unwrap_or_default();
-        match exec_remote_rpc(state, &cmd_json).await {
-            Ok(_resp) => {
-                // The response contains {resp: "message_sent", session_id, turn_id}.
-                // For now, show a brief confirmation. A future improvement could
-                // poll for the agent's reply and stream it back.
-                let dev = state.active_remote_device.as_ref().unwrap();
-                let body = format!(
-                    "{}: {}\n{}",
-                    s.devices_remote_prefix, dev.device_name, s.devices_msg_sent
-                );
-                let view = MenuView::plain("").with_body(body);
-                result_from_menu(state, view)
-            }
-            Err(e) => result_from_menu(
-                state,
-                MenuView::plain(format!("{}{e}", s.devices_send_failed_prefix))
-                    .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
-            ),
-        }
+        let Some(account) = delegated_session(state) else {
+            return result_from_menu(state, devices_unavailable_view(s));
+        };
+        let Some(relay_url) = state.relay_url.clone() else {
+            return result_from_menu(state, devices_unavailable_view(s));
+        };
+        let device = state.active_remote_device.as_ref().unwrap();
+        let remote_target = RemoteBotTarget {
+            relay_url,
+            account,
+            session_id: session_id.clone(),
+            device_id: device.device_id.clone(),
+            device_name: device.device_name.clone(),
+        };
+        let forward = ForwardRequest {
+            remote_target: Some(remote_target),
+            session_id,
+            content: message.to_string(),
+            agent_type: String::new(),
+            turn_id: format!("turn_{}", uuid::Uuid::new_v4()),
+            image_contexts,
+        };
+        result_from_menu_with_forward(state, MenuView::default(), Some(forward))
     } else {
         // ── Local branch (original logic) ──
 
@@ -2728,18 +2996,18 @@ async fn handle_chat(
         let turn_id = format!("turn_{}", uuid::Uuid::new_v4());
 
         // Pick the agent type from the actual session — NOT a hardcoded
-        // "agentic" — otherwise every chat message goes through the Code
+        // "Standard" — otherwise every chat message goes through the Code
         // (`agentic`) agent regardless of what kind of session was created.
         // Concretely: the IM pairing bootstrap creates a `Claw` session for
         // assistant mode, but the old hardcoded value caused all subsequent
         // messages to be re-routed to the Code agent and the assistant flow
         // was effectively bypassed.  We mirror the agent type the session was
-        // actually created with, falling back to "agentic" only if the session
+        // actually created with, falling back to "Standard" only if the session
         // is missing in memory (e.g. needs lazy restore — `send_message` will
         // also normalize via `resolve_agent_type`).
         let agent_type = resolve_session_agent_type(&session_id)
             .await
-            .unwrap_or_else(|| "agentic".to_string());
+            .unwrap_or_else(|| "Standard".to_string());
 
         // Intentionally do NOT send a "Processing..." / "Queued" interstitial
         // message with a Cancel-task menu. The session manager queues new user
@@ -2753,6 +3021,7 @@ async fn handle_chat(
         let view = MenuView::default();
 
         let forward = ForwardRequest {
+            remote_target: None,
             session_id,
             content: message.to_string(),
             agent_type,
@@ -2766,12 +3035,25 @@ async fn handle_chat(
 
 // ── Forwarded turn execution (largely unchanged) ──────────────────
 
-pub async fn execute_forwarded_turn(
+pub(crate) async fn execute_forwarded_turn(
     forward: ForwardRequest,
     interaction_handler: Option<BotInteractionHandler>,
     message_sender: Option<BotMessageSender>,
     verbose_mode: bool,
+    runtime_fence: &super::BotRuntimeFence,
+    identity_epoch: u64,
 ) -> ForwardedTurnResult {
+    if !runtime_fence.is_lifecycle_current() || runtime_fence.identity_epoch() != identity_epoch {
+        return ForwardedTurnResult {
+            completed_remote_tools: Vec::new(),
+            display_text: String::new(),
+            full_text: String::new(),
+        };
+    }
+    if forward.remote_target.is_some() {
+        return execute_remote_forward(forward, interaction_handler, runtime_fence, identity_epoch)
+            .await;
+    }
     use crate::service::remote_connect::remote_server::{
         get_or_init_global_dispatcher, TrackerEvent,
     };
@@ -2799,6 +3081,7 @@ pub async fn execute_forwarded_turn(
     {
         let msg = format!("{}{e}", s.send_failed_prefix);
         return ForwardedTurnResult {
+            completed_remote_tools: Vec::new(),
             display_text: msg.clone(),
             full_text: msg,
         };
@@ -2866,6 +3149,7 @@ pub async fn execute_forwarded_turn(
                                     let actions: Vec<BotAction> =
                                         view.items.iter().cloned().map(BotAction::from).collect();
                                     let request = BotInteractiveRequest {
+                                        remote_target: None,
                                         reply: view.render_text_block(),
                                         actions,
                                         menu: view,
@@ -2903,6 +3187,7 @@ pub async fn execute_forwarded_turn(
                         if turn_id == target_turn_id {
                             let msg = format!("{}{}", s.error_prefix, error);
                             return ForwardedTurnResult {
+                                completed_remote_tools: Vec::new(),
                                 display_text: msg.clone(),
                                 full_text: msg,
                             };
@@ -2911,6 +3196,7 @@ pub async fn execute_forwarded_turn(
                     TrackerEvent::TurnCancelled { turn_id } => {
                         if turn_id == target_turn_id {
                             return ForwardedTurnResult {
+                                completed_remote_tools: Vec::new(),
                                 display_text: s.task_cancelled.to_string(),
                                 full_text: s.task_cancelled.to_string(),
                             };
@@ -2926,12 +3212,31 @@ pub async fn execute_forwarded_turn(
             }
         }
 
-        let full_text = tracker.accumulated_text();
-        let full_text = if full_text.is_empty() {
-            response
-        } else {
-            full_text
-        };
+        // Read the submitted turn by identity. Another controller may already
+        // have started the next turn and replaced the tracker's text buffer.
+        let poll_host =
+            crate::service_agent_runtime::CoreServiceAgentRuntime::remote_poll_host(&dispatcher);
+        let poll = openbitfun_services_integrations::remote_connect::handle_remote_poll_command(
+            &poll_host,
+            &openbitfun_services_integrations::remote_connect::RemoteCommand::PollSession {
+                session_id: forward.session_id.clone(),
+                since_version: 0,
+                known_msg_count: 0,
+                known_model_catalog_version: None,
+            },
+        )
+        .await;
+        let full_text = serde_json::to_value(poll)
+            .ok()
+            .and_then(|poll| {
+                openbitfun_services_integrations::remote_connect::bot::remote_turn::observe_turn(
+                    &poll,
+                    &target_turn_id,
+                )
+            })
+            .map(|turn| turn.text)
+            .filter(|text| !text.is_empty())
+            .unwrap_or(response);
 
         // Do NOT truncate here. Each IM adapter knows its own per-message
         // size limit and chunks accordingly (e.g. WeChat splits via
@@ -2942,6 +3247,7 @@ pub async fn execute_forwarded_turn(
         let display_text = full_text.clone();
 
         ForwardedTurnResult {
+            completed_remote_tools: Vec::new(),
             display_text: if display_text.is_empty() {
                 s.no_response.to_string()
             } else {
@@ -2953,9 +3259,224 @@ pub async fn execute_forwarded_turn(
     .await;
 
     result.unwrap_or_else(|_| ForwardedTurnResult {
+        completed_remote_tools: Vec::new(),
         display_text: s.timeout_one_hour.to_string(),
         full_text: String::new(),
     })
+}
+
+async fn execute_remote_forward(
+    forward: ForwardRequest,
+    interaction_handler: Option<BotInteractionHandler>,
+    fence: &super::BotRuntimeFence,
+    epoch: u64,
+) -> ForwardedTurnResult {
+    use openbitfun_services_integrations::remote_connect::bot::remote_turn::observe_turn;
+    let s = strings_for(current_bot_language().await);
+    let target = forward.remote_target.as_ref().unwrap();
+    let current = || fence.is_lifecycle_current() && fence.identity_epoch() == epoch;
+    let empty = || ForwardedTurnResult {
+        completed_remote_tools: Vec::new(),
+        display_text: String::new(),
+        full_text: String::new(),
+    };
+    if !current() {
+        return empty();
+    }
+    // Submission is never retried blindly: older peers need not deduplicate.
+    let sent = target
+        .rpc(serde_json::json!({
+            "cmd":"send_message", "session_id":target.session_id,
+            "content":forward.content, "turn_id":forward.turn_id,
+            "image_contexts":forward.image_contexts,
+        }))
+        .await;
+    if !current() {
+        return empty();
+    }
+    let turn_id = match sent {
+        Ok(reply)
+            if reply["resp"] == "message_sent" && reply["session_id"] == target.session_id =>
+        {
+            match reply["turn_id"].as_str().filter(|id| !id.is_empty()) {
+                Some(id) => id.to_string(),
+                None => {
+                    return ForwardedTurnResult {
+                        completed_remote_tools: Vec::new(),
+                        display_text: format!("{}Missing remote turn ID", s.send_failed_prefix),
+                        full_text: String::new(),
+                    }
+                }
+            }
+        }
+        result => {
+            return ForwardedTurnResult {
+                completed_remote_tools: Vec::new(),
+                display_text: format!(
+                    "{}{}",
+                    s.send_failed_prefix,
+                    result
+                        .err()
+                        .unwrap_or_else(|| "Invalid remote submission response".into())
+                ),
+                full_text: String::new(),
+            }
+        }
+    };
+    let result = tokio::time::timeout(std::time::Duration::from_secs(3600), async {
+        let mut version = 0;
+        let mut shown = std::collections::HashMap::<String, std::time::Instant>::new();
+        loop {
+            if !current() {
+                return empty();
+            }
+            if shown.values().any(|at| at.elapsed().as_secs() >= 240) {
+                version = 0;
+            }
+            let poll = target.poll(version).await;
+            if !current() {
+                return empty();
+            }
+            match poll {
+                Ok(poll) if poll["resp"] == "session_poll" => {
+                    version = poll["version"].as_u64().unwrap_or(0);
+                    if let Some(turn) = observe_turn(&poll, &turn_id) {
+                        if turn.terminal() {
+                            let display_text = match turn.status.as_str() {
+                                "failed" | "error" => {
+                                    format!("{}{}", s.error_prefix, turn.error.unwrap_or_default())
+                                }
+                                "cancelled" => s.task_cancelled.to_string(),
+                                _ if turn.text.is_empty() => s.no_response.to_string(),
+                                _ => turn.text.clone(),
+                            };
+                            return ForwardedTurnResult {
+                                completed_remote_tools: shown.into_keys().collect(),
+                                display_text,
+                                full_text: turn.text,
+                            };
+                        }
+                        for tool in turn.tools {
+                            // Pending menus expire after five minutes; re-present a
+                            // still-blocked interaction so it remains answerable.
+                            if shown
+                                .get(&tool.id)
+                                .is_some_and(|at| at.elapsed().as_secs() < 240)
+                            {
+                                continue;
+                            }
+                            let (mut view, pending_action) = if tool.status
+                                == "pending_confirmation"
+                            {
+                                let action_token = uuid::Uuid::new_v4().to_string();
+                                let description = format!(
+                                    "{}\n{}",
+                                    tool.name,
+                                    tool.input_preview.unwrap_or_default()
+                                );
+                                (
+                                    remote_tool_view(&action_token, &description, s),
+                                    PendingAction::ConfirmRemoteTool {
+                                        tool_id: tool.id.clone(),
+                                        action_token,
+                                        description,
+                                    },
+                                )
+                            } else if tool.name == "AskUserQuestion" && tool.status == "running" {
+                                let Some(questions) = tool
+                                    .tool_input
+                                    .as_ref()
+                                    .and_then(|p| p.get("questions"))
+                                    .and_then(|v| {
+                                        serde_json::from_value::<Vec<BotQuestion>>(v.clone()).ok()
+                                    })
+                                else {
+                                    continue;
+                                };
+                                (
+                                    build_question_view(s, &questions, 0, false),
+                                    PendingAction::AskUserQuestion {
+                                        tool_id: tool.id.clone(),
+                                        questions,
+                                        current_index: 0,
+                                        answers: vec![],
+                                        awaiting_custom_text: false,
+                                        pending_answer: None,
+                                    },
+                                )
+                            } else {
+                                continue;
+                            };
+                            view.title = format!(
+                                "{} · {} · {}",
+                                target.device_name, target.session_id, view.title
+                            );
+                            if let Some(handler) = &interaction_handler {
+                                handler(BotInteractiveRequest {
+                                    remote_target: Some(target.clone()),
+                                    reply: view.render_text_block(),
+                                    actions: view
+                                        .items
+                                        .iter()
+                                        .cloned()
+                                        .map(BotAction::from)
+                                        .collect(),
+                                    menu: view,
+                                    pending_action,
+                                })
+                                .await;
+                                shown.insert(tool.id, std::time::Instant::now());
+                            }
+                        }
+                    }
+                }
+                Ok(reply) => {
+                    return ForwardedTurnResult {
+                        completed_remote_tools: Vec::new(),
+                        display_text: format!(
+                            "{}{}",
+                            s.error_prefix,
+                            reply["message"]
+                                .as_str()
+                                .unwrap_or("Invalid remote poll response")
+                        ),
+                        full_text: String::new(),
+                    }
+                }
+                Err(error) => {
+                    if crate::service::remote_connect::account::error_indicates_expired_token(
+                        &error,
+                    ) || error.contains("HTTP 403")
+                    {
+                        return ForwardedTurnResult {
+                            completed_remote_tools: Vec::new(),
+                            display_text: format!("{}{error}", s.error_prefix),
+                            full_text: String::new(),
+                        };
+                    }
+                    log::warn!("Bot remote turn poll interrupted: {error}");
+                    // Read-only replay after a disconnect, without another send.
+                    version = 0;
+                }
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+    })
+    .await;
+    result.unwrap_or_else(|_| ForwardedTurnResult {
+        completed_remote_tools: Vec::new(),
+        display_text: s.timeout_one_hour.to_string(),
+        full_text: String::new(),
+    })
+}
+
+fn remote_tool_view(tool_id: &str, description: &str, s: &'static BotStrings) -> MenuView {
+    MenuView::plain(s.tool_approval_title)
+        .with_body(description)
+        .with_items(vec![
+            MenuItem::primary(s.tool_approve, format!("approve-tool:{tool_id}")),
+            MenuItem::default(s.tool_reject, format!("reject-tool:{tool_id}")),
+        ])
 }
 
 fn truncate_at_char_boundary(s: &str, max_len: usize) -> String {
@@ -2974,6 +3495,246 @@ fn truncate_at_char_boundary(s: &str, max_len: usize) -> String {
 #[cfg(test)]
 mod parse_command_tests {
     use super::*;
+
+    #[test]
+    fn remote_picker_prefers_opened_workspaces_and_keeps_bot_mode_separation() {
+        let response = serde_json::json!({
+            "resp": "recent_workspaces",
+            "workspaces": [{"path": "/closed", "name": "Closed project"}],
+            "opened_workspaces": [
+                {"path": "/assistant/workspace", "name": "Mina", "workspace_kind": "assistant"},
+                {"path": "/repo", "name": "Project A", "workspace_kind": "remote",
+                 "remote_connection_id": "conn-a", "remote_ssh_host": "host-a"},
+                {"path": "/repo", "name": "Project B", "workspace_kind": "remote",
+                 "remote_connection_id": "conn-b", "remote_ssh_host": "host-b"}
+            ]
+        });
+        let options = remote_workspace_choices(&response.to_string()).unwrap();
+        assert_eq!(options.len(), 2);
+        assert_eq!(
+            options[0],
+            BotWorkspaceChoice::new(
+                "/repo",
+                "Project A",
+                Some("conn-a".into()),
+                Some("host-a".into())
+            )
+        );
+        assert_eq!(
+            options[1],
+            BotWorkspaceChoice::new(
+                "/repo",
+                "Project B",
+                Some("conn-b".into()),
+                Some("host-b".into())
+            )
+        );
+
+        let selected = BotWorkspaceChoice::new(
+            "/repo",
+            "Old label",
+            Some("conn-b".into()),
+            Some("host-b".into()),
+        );
+        assert_eq!(
+            current_workspace_choice(&options, &selected).unwrap().name,
+            "Project B"
+        );
+        assert!(current_workspace_choice(&options[..1], &selected).is_none());
+    }
+
+    #[test]
+    fn remote_picker_empty_opened_catalog_clears_stale_options_without_dropping_session() {
+        let response = r#"{"resp":"recent_workspaces","workspaces":[{"path":"/closed","name":"Closed"}],"opened_workspaces":[]}"#;
+        let options = remote_workspace_choices(response).unwrap();
+        assert!(options.is_empty());
+        let mut state = BotChatState::new("chat".into());
+        state.current_workspace = Some(BotWorkspaceRef::local("/closed"));
+        state.current_session_id = Some("retained-session".into());
+        state.set_pending(PendingAction::SelectWorkspace {
+            options: vec![BotWorkspaceChoice::new("/closed", "Closed", None, None)],
+        });
+        let strings = strings_for(BotLanguage::EnUS);
+        let result = show_workspace_choices(&mut state, options, strings);
+        assert_eq!(result.menu.title, strings.switch_no_workspaces);
+        assert!(state.pending_action.is_none());
+        assert_eq!(state.current_workspace_path(), Some("/closed"));
+        assert_eq!(
+            state.current_session_id.as_deref(),
+            Some("retained-session")
+        );
+    }
+
+    #[test]
+    fn remote_picker_accepts_legacy_catalog_after_wire_round_trip() {
+        use openbitfun_services_integrations::remote_connect::RemoteResponse;
+        let legacy = serde_json::json!({
+            "resp": "recent_workspaces",
+            "workspaces": [{"path": "/legacy", "name": "Legacy project", "last_opened": ""}]
+        });
+        let decoded: RemoteResponse = serde_json::from_value(legacy.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&decoded).unwrap(), legacy);
+        let options = remote_workspace_choices(&serde_json::to_string(&decoded).unwrap()).unwrap();
+        assert_eq!(
+            options,
+            vec![BotWorkspaceChoice::new(
+                "/legacy",
+                "Legacy project",
+                None,
+                None
+            )]
+        );
+
+        let mut null_catalog = legacy;
+        null_catalog["opened_workspaces"] = Value::Null;
+        assert_eq!(
+            remote_workspace_choices(&null_catalog.to_string()).unwrap(),
+            options
+        );
+    }
+
+    #[test]
+    fn remote_picker_does_not_hide_catalog_failures_as_empty_or_recent_rows() {
+        for response in [
+            r#"{"resp":"recent_workspaces","workspaces":[{"path":"/closed"}],"opened_workspaces":{}}"#,
+            r#"{"resp":"recent_workspaces"}"#,
+            r#"{"resp":"workspace_info","workspaces":[]}"#,
+            "invalid json",
+        ] {
+            assert!(remote_workspace_choices(response).is_err(), "{response}");
+        }
+        assert_eq!(
+            remote_workspace_choices(r#"{"resp":"error","message":"Peer offline"}"#).unwrap_err(),
+            "Peer offline"
+        );
+    }
+
+    #[tokio::test]
+    async fn local_bot_pickers_use_opened_rows_and_refresh_assistant_identity() {
+        use crate::service::workspace::{WorkspaceCreateOptions, WorkspaceKind, WorkspaceService};
+        let root = tempfile::tempdir().unwrap();
+        let paths = Arc::new(
+            crate::infrastructure::PathManager::with_user_root_for_tests(
+                root.path().join("user-root"),
+            ),
+        );
+        let service = WorkspaceService::new_for_test_path_manager(paths).await;
+        let project_root = root.path().join("project");
+        let assistant_root = root.path().join("workspace");
+        std::fs::create_dir_all(&project_root).unwrap();
+        std::fs::create_dir_all(&assistant_root).unwrap();
+        std::fs::write(assistant_root.join("IDENTITY.md"), "---\nname: Mina\n---\n").unwrap();
+        let project = service.open_workspace(project_root).await.unwrap();
+        let assistant = service
+            .open_workspace_with_options(
+                assistant_root.clone(),
+                WorkspaceCreateOptions {
+                    workspace_kind: WorkspaceKind::Assistant,
+                    display_name: Some("workspace".into()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        // Reproduce legacy records whose name still contains the directory
+        // basename even though the identity already has the assistant's name.
+        let mut exported = service.export_workspaces().await.unwrap();
+        exported
+            .workspaces
+            .iter_mut()
+            .find(|row| row.id == assistant.id)
+            .unwrap()
+            .name = "workspace".into();
+        service.import_workspaces(exported, true).await.unwrap();
+        let strings = strings_for(BotLanguage::EnUS);
+        let mut state = BotChatState::new("chat".into());
+        state.current_session_id = Some("keep-session".into());
+        state.display_mode = BotDisplayMode::Pro;
+        start_local_switch(&mut state, &service, strings).await;
+        let Some(PendingAction::SelectWorkspace { options }) = state.pending_action.clone() else {
+            panic!("expected workspace picker")
+        };
+        assert_eq!(options.len(), 1);
+        assert_eq!(options[0].path, project.root_path.to_string_lossy());
+        let stale_project = options[0].clone();
+
+        state.display_mode = BotDisplayMode::Assistant;
+        state.current_assistant = Some(assistant.root_path.to_string_lossy().to_string());
+        state.current_assistant_name = Some("workspace".into());
+        let result = start_local_switch(&mut state, &service, strings).await;
+        assert!(result.menu.body.as_deref().unwrap().contains("Mina"));
+        let Some(PendingAction::SelectAssistant { options }) = state.pending_action.as_ref() else {
+            panic!("expected assistant picker")
+        };
+        assert_eq!(options.len(), 1);
+        assert_eq!(options[0].1, "Mina");
+        refresh_assistant_name_from_workspaces(
+            &mut state,
+            &service.get_assistant_workspaces().await,
+        );
+        assert_eq!(state.current_assistant_name.as_deref(), Some("Mina"));
+
+        std::fs::write(assistant_root.join("IDENTITY.md"), "---\nname: Kira\n---\n").unwrap();
+        service
+            .refresh_workspace_identity(&assistant.id)
+            .await
+            .unwrap();
+        refresh_assistant_name_from_workspaces(
+            &mut state,
+            &service.get_assistant_workspaces().await,
+        );
+        assert_eq!(state.current_assistant_name.as_deref(), Some("Kira"));
+        assert!(ready_to_chat_body(&state, strings)
+            .unwrap()
+            .contains("Kira"));
+
+        service.close_workspace(&project.id).await.unwrap();
+        assert!(service
+            .get_recent_workspaces()
+            .await
+            .iter()
+            .any(|row| row.id == project.id));
+        state.display_mode = BotDisplayMode::Pro;
+        let result = select_local_workspace(&mut state, &service, &stale_project, strings).await;
+        assert!(result.menu.title.contains(strings.workspace_list_changed));
+        assert!(result.menu.title.contains(strings.switch_no_workspaces));
+        assert!(state.pending_action.is_none());
+        assert_eq!(
+            service.get_opened_workspaces().await.len(),
+            1,
+            "stale choice must not reopen the project"
+        );
+
+        service.close_workspace(&assistant.id).await.unwrap();
+        assert_eq!(
+            service.get_assistant_workspaces().await.len(),
+            1,
+            "closed assistants remain tracked"
+        );
+        state.display_mode = BotDisplayMode::Assistant;
+        let result = select_local_assistant(
+            &mut state,
+            &service,
+            &assistant.root_path.to_string_lossy(),
+            strings,
+        )
+        .await;
+        assert!(result.menu.title.contains(strings.workspace_list_changed));
+        assert!(result.menu.title.contains(strings.switch_no_assistants));
+        assert!(state.pending_action.is_none());
+        assert!(service.get_opened_workspaces().await.is_empty());
+        assert_eq!(state.current_session_id.as_deref(), Some("keep-session"));
+
+        let reopened = service.open_workspace(project.root_path).await.unwrap();
+        state.display_mode = BotDisplayMode::Pro;
+        start_local_switch(&mut state, &service, strings).await;
+        service.remove_workspace(&reopened.id).await.unwrap();
+        let result = select_local_workspace(&mut state, &service, &stale_project, strings).await;
+        assert!(result.menu.title.contains(strings.workspace_list_changed));
+        assert!(state.pending_action.is_none());
+        assert!(service.get_opened_workspaces().await.is_empty());
+        assert_eq!(state.current_session_id.as_deref(), Some("keep-session"));
+    }
 
     #[test]
     fn numeric_menu_with_trailing_dot() {
@@ -3356,6 +4117,386 @@ mod menu_tests {
 #[cfg(test)]
 mod handle_chat_tests {
     use super::*;
+
+    #[tokio::test]
+    async fn stale_approval_buttons_do_not_authorize_or_submit_chat_text() {
+        let mut state = BotChatState::new("chat".into());
+        state.set_pending(PendingAction::ConfirmRemoteTool {
+            tool_id: "tool".into(),
+            action_token: "new-request".into(),
+            description: "render".into(),
+        });
+        let result = handle_chat(
+            &mut state,
+            "approve-tool:old-request",
+            vec![],
+            strings_for(BotLanguage::EnUS),
+        )
+        .await;
+        assert!(result.forward_to_session.is_none());
+        assert_eq!(state.pending_invalid_count, 0);
+        assert!(state.pending_action.is_some());
+    }
+
+    #[tokio::test]
+    async fn retired_identity_cannot_submit_a_captured_remote_turn() {
+        let fence = super::super::BotRuntimeFence::standalone();
+        let target = RemoteBotTarget {
+            relay_url: "https://must-not-be-contacted.invalid".into(),
+            device_id: "old-device".into(),
+            device_name: "Old device".into(),
+            session_id: "session".into(),
+            account: crate::service::remote_connect::AccountSession::new(
+                "old-token".into(),
+                String::new(),
+                [3; 32],
+            ),
+        };
+        let forward = ForwardRequest {
+            remote_target: Some(target),
+            session_id: "session".into(),
+            content: "must not submit".into(),
+            agent_type: String::new(),
+            turn_id: "turn".into(),
+            image_contexts: vec![],
+        };
+        let result = execute_forwarded_turn(
+            forward,
+            None,
+            None,
+            false,
+            &fence,
+            fence.identity_epoch() + 1,
+        )
+        .await;
+        assert!(result.display_text.is_empty());
+        assert!(result.full_text.is_empty());
+    }
+
+    #[test]
+    fn interactions_queue_without_overwriting_answers_or_persisting_authority() {
+        let s = strings_for(BotLanguage::EnUS);
+        let make = |device: &str| {
+            let action = PendingAction::ConfirmRemoteTool {
+                tool_id: "same-tool-id".into(),
+                action_token: device.into(),
+                description: "render".into(),
+            };
+            let view = remote_tool_view(device, "render", s);
+            BotInteractiveRequest {
+                remote_target: Some(RemoteBotTarget {
+                    relay_url: "https://relay.invalid".into(),
+                    device_id: device.into(),
+                    device_name: device.into(),
+                    session_id: "session".into(),
+                    account: crate::service::remote_connect::AccountSession::new(
+                        "test-secret-token".into(),
+                        String::new(),
+                        [5; 32],
+                    ),
+                }),
+                reply: view.render_text_block(),
+                actions: vec![],
+                menu: view,
+                pending_action: action,
+            }
+        };
+        let mut state = BotChatState::new("chat".into());
+        let first = make("device-a");
+        let next = make("device-b");
+        assert!(apply_interactive_request(&mut state, &first));
+        assert!(!apply_interactive_request(&mut state, &next));
+        assert!(!apply_interactive_request(&mut state, &next));
+        assert_eq!(state.pending_interactions.len(), 1);
+        assert_eq!(
+            state.pending_remote_target.as_ref().unwrap().device_id,
+            "device-a"
+        );
+        let persisted = serde_json::to_string(&state).unwrap();
+        assert!(!persisted.contains("test-secret-token"));
+        assert!(!persisted.contains("device-a"));
+        finish_bot_interaction(&mut state, s);
+        assert_eq!(
+            state.pending_remote_target.as_ref().unwrap().device_id,
+            "device-b"
+        );
+        assert!(state.pending_interactions.is_empty());
+        state.clear_delegated_identity();
+        assert!(state.pending_remote_target.is_none());
+        assert!(state.pending_action.is_none());
+    }
+
+    #[test]
+    fn completed_remote_tools_retire_only_their_own_prompts_and_promote_the_queue() {
+        let make = |device: &str| {
+            let menu = remote_tool_view(device, "render", strings_for(BotLanguage::EnUS));
+            BotInteractiveRequest {
+                remote_target: Some(RemoteBotTarget {
+                    relay_url: "https://relay.invalid".into(),
+                    device_id: device.into(),
+                    device_name: device.into(),
+                    session_id: "session".into(),
+                    account: crate::service::remote_connect::AccountSession::new(
+                        "test".into(),
+                        String::new(),
+                        [5; 32],
+                    ),
+                }),
+                reply: menu.render_text_block(),
+                actions: vec![],
+                menu,
+                pending_action: PendingAction::ConfirmRemoteTool {
+                    tool_id: "same-tool-id".into(),
+                    action_token: device.into(),
+                    description: "render".into(),
+                },
+            }
+        };
+        let mut state = BotChatState::new("chat".into());
+        let first = make("device-a");
+        let next = make("device-b");
+        let ids = vec!["same-tool-id".to_string()];
+        assert!(apply_interactive_request(&mut state, &first));
+        assert!(!apply_interactive_request(&mut state, &next));
+        assert!(retire_completed_remote_tools(
+            &mut state,
+            next.remote_target.as_ref().unwrap(),
+            &ids
+        )
+        .is_none());
+        assert!(state.pending_interactions.is_empty());
+        assert_eq!(
+            state.pending_remote_target.as_ref().unwrap().device_id,
+            "device-a"
+        );
+        assert!(!apply_interactive_request(&mut state, &next));
+        let promoted =
+            retire_completed_remote_tools(&mut state, first.remote_target.as_ref().unwrap(), &ids)
+                .unwrap();
+        assert!(state.pending_action.is_none());
+        assert!(state.last_menu_commands.is_empty());
+        assert!(apply_interactive_request(&mut state, &promoted));
+        assert!(retire_completed_remote_tools(
+            &mut state,
+            first.remote_target.as_ref().unwrap(),
+            &ids
+        )
+        .is_none());
+        assert_eq!(
+            state.pending_remote_target.as_ref().unwrap().device_id,
+            "device-b"
+        );
+    }
+
+    #[tokio::test]
+    async fn remote_turn_reconnects_delivers_interactions_and_reads_original_device_bytes() {
+        use openbitfun_services_integrations::remote_connect::{
+            account::AccountSession, device_crypto, encryption,
+        };
+        use std::sync::{Arc, Mutex};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let relay_url = format!("http://{}", listener.local_addr().unwrap());
+        let calls = Arc::new(Mutex::new(Vec::<Value>::new()));
+        let observed = calls.clone();
+        let peer_secret = [11u8; 32];
+        let local_secret = [7u8; 32];
+        let public = device_crypto::public_key_base64(&peer_secret);
+        let key = device_crypto::derive_message_key(
+            &peer_secret,
+            &device_crypto::public_key(&local_secret),
+        )
+        .unwrap();
+        let server = tokio::spawn(async move {
+            let mut polls = 0;
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut bytes = Vec::new();
+                let (header_end, length) = loop {
+                    let mut block = [0u8; 4096];
+                    let count = socket.read(&mut block).await.unwrap();
+                    if count == 0 {
+                        return;
+                    }
+                    bytes.extend_from_slice(&block[..count]);
+                    if let Some(end) = bytes.windows(4).position(|v| v == b"\r\n\r\n") {
+                        let header = std::str::from_utf8(&bytes[..end]).unwrap();
+                        let length = header
+                            .lines()
+                            .find_map(|line| {
+                                line.to_ascii_lowercase()
+                                    .strip_prefix("content-length:")
+                                    .map(|v| v.trim().parse::<usize>().unwrap())
+                            })
+                            .unwrap_or(0);
+                        break (end + 4, length);
+                    }
+                    assert!(bytes.len() < 128 * 1024);
+                };
+                while bytes.len() < header_end + length {
+                    let mut block = [0u8; 4096];
+                    let count = socket.read(&mut block).await.unwrap();
+                    assert!(count > 0);
+                    bytes.extend_from_slice(&block[..count]);
+                }
+                let header = std::str::from_utf8(&bytes[..header_end]).unwrap();
+                let reply = if header.starts_with("GET /api/devices/device-a/key ") {
+                    serde_json::json!({"device_id":"device-a","public_key":public})
+                } else {
+                    assert!(header.starts_with("POST /api/devices/device-a/rpc "));
+                    let envelope: Value=serde_json::from_slice(&bytes[header_end..header_end+length]).unwrap();
+                    let plaintext=encryption::decrypt_from_base64(&key,envelope["encrypted_data"].as_str().unwrap(),envelope["nonce"].as_str().unwrap()).unwrap();
+                    let command: Value=serde_json::from_str(&plaintext).unwrap();
+                    observed.lock().unwrap().push(command.clone());
+                    let response=match command["cmd"].as_str().unwrap() {
+                        "send_message" => {
+                            assert_eq!(command["session_id"],"session-a");
+                            assert_eq!(command["image_contexts"][0]["data_url"],"data:image/png;base64,AP8B");
+                            // Legacy hosts may select their own accepted turn ID.
+                            serde_json::json!({"resp":"message_sent","session_id":"session-a","turn_id":"accepted-turn"})
+                        }
+                        "poll_session" => {
+                            assert_eq!(command["session_id"],"session-a");
+                            polls += 1;
+                            if polls == 1 { continue; } // Lost connection after submission.
+                            let tool = if polls == 2 {
+                                serde_json::json!({"id":"question-a","name":"AskUserQuestion","status":"running",
+                                    "tool_input":{"questions":[{"question":"Format?","options":[{"label":"PNG"}]}]}})
+                            } else {
+                                serde_json::json!({"id":"approval-a","name":"Bash","status":"pending_confirmation","input_preview":"render image"})
+                            };
+                            if polls <= 3 {
+                                serde_json::json!({"resp":"session_poll","version":polls,"active_turn":{"turn_id":"accepted-turn","status":"active","text":"","tools":[tool]}})
+                            } else {
+                                serde_json::json!({"resp":"session_poll","version":polls,
+                                    "active_turn":{"turn_id":"next-turn","status":"active","text":"do not send this"},
+                                    "new_messages":[{"id":"accepted-turn_assistant","role":"assistant","status":"done","content":"![image](result.png)"}]})
+                            }
+                        }
+                        "answer_question" => {
+                            assert_eq!(command["tool_id"],"question-a");
+                            assert_eq!(command["answers"]["0"],"PNG");
+                            serde_json::json!({"resp":"answer_accepted"})
+                        }
+                        "confirm_tool" => {
+                            assert_eq!(command["tool_id"],"approval-a");
+                            serde_json::json!({"resp":"interaction_accepted","action":"confirm_tool","target_id":"approval-a"})
+                        }
+                                                "read_file_chunk" => {
+                            assert_eq!(command["session_id"],"session-a");
+                            assert_eq!(command["path"],"result.png");
+                            let offset = command["offset"].as_u64().unwrap();
+                            assert!(command["limit"].as_u64().unwrap() <= 3 * 1024 * 1024);
+                            let (count, encoded) = match offset {
+                                0 => (1, "AA=="),
+                                1 => (2, "/wE="),
+                                other => panic!("Unexpected file offset: {other}"),
+                            };
+                            serde_json::json!({"resp":"file_chunk","name":"result.png","total_size":3,"offset":offset,"chunk_size":count,"mime_type":"image/png","chunk_base64":encoded,"revision":"3:1"})
+                        }
+                        other=>panic!("Unexpected command: {other}"),
+                    };
+                    let (encrypted_data, nonce)=encryption::encrypt_to_base64(&key,&response.to_string()).unwrap();
+                    serde_json::json!({"encrypted_data":encrypted_data,"nonce":nonce})
+                }.to_string();
+                let http=format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",reply.len(),reply);
+                socket.write_all(http.as_bytes()).await.unwrap();
+            }
+        });
+        let mut state = BotChatState::new("chat".into());
+        state.paired = true;
+        state.relay_url = Some(relay_url);
+        state.set_delegated_identity("test-token".into(), local_secret.to_vec());
+        state.active_remote_device = Some(RemoteDeviceTarget {
+            device_id: "device-a".into(),
+            device_name: "Device A".into(),
+        });
+        state.current_session_id = Some("session-a".into());
+        let image = crate::agentic::image_analysis::ImageContextData {
+            id: "image".into(),
+            image_path: None,
+            data_url: Some("data:image/png;base64,AP8B".into()),
+            mime_type: "image/png".into(),
+            metadata: None,
+        };
+        let forward = handle_chat(
+            &mut state,
+            "render",
+            vec![image],
+            strings_for(BotLanguage::EnUS),
+        )
+        .await
+        .forward_to_session
+        .unwrap();
+        let target = forward.remote_target.clone().unwrap();
+        state.select_local_device();
+        state.current_session_id = Some("unrelated-local-session".into());
+        let handler: BotInteractionHandler = Arc::new(move |request| {
+            Box::pin(async move {
+                assert!(request.reply.contains("Device A"));
+                let mut state = BotChatState::new("chat".into());
+                state.current_session_id = Some("other-session".into());
+                apply_interactive_request(&mut state, &request);
+                let input = match &request.pending_action {
+                    PendingAction::ConfirmRemoteTool { action_token, .. } => {
+                        format!("approve-tool:{action_token}")
+                    }
+                    _ => "1".into(),
+                };
+                let result = route_pending(
+                    &mut state,
+                    request.pending_action,
+                    &input,
+                    strings_for(BotLanguage::EnUS),
+                )
+                .await;
+                assert_eq!(
+                    result.reply,
+                    strings_for(BotLanguage::EnUS).answers_submitted
+                );
+                assert!(state.pending_remote_target.is_none());
+            })
+        });
+        let fence = super::super::BotRuntimeFence::standalone();
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(20),
+            execute_forwarded_turn(
+                forward,
+                Some(handler),
+                None,
+                false,
+                &fence,
+                fence.identity_epoch(),
+            ),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.full_text, "![image](result.png)");
+        assert_eq!(result.completed_remote_tools.len(), 2);
+        assert!(result
+            .completed_remote_tools
+            .contains(&"question-a".to_string()));
+        assert!(result
+            .completed_remote_tools
+            .contains(&"approval-a".to_string()));
+        let file =
+            super::super::read_output_file("session-a", Some(&target), "result.png", 1024, &|| {
+                true
+            })
+            .await
+            .unwrap();
+        assert_eq!(file.bytes, vec![0, 255, 1]);
+        assert_eq!(
+            calls
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|v| v["cmd"] == "send_message")
+                .count(),
+            1
+        );
+        server.abort();
+    }
 
     /// `handle_chat` must NOT push a "Processing… [Cancel Task]" interstitial
     /// to the user. The session manager queues new messages automatically;

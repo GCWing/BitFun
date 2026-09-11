@@ -114,6 +114,9 @@ export class MobileDesignGeometry {
   static readonly composerModelSelectorRowRadius: number = 9;
   static readonly composerModelSelectorRowGap: number = 6;
   static readonly sheetTopRadius: number = 28;
+  static readonly loginSheetMaxWidth: number = 560;
+  static readonly loginSheetOuterMargin: number = 8;
+  static readonly loginSheetBodyMinHeight: number = 142;
   static readonly sheetSideRadius: number = 28;
   static readonly sheetHorizontalPadding: number = 20;
   static readonly sheetHeaderHeight: number = 56;

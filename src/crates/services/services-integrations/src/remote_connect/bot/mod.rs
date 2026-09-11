@@ -7,6 +7,7 @@ mod command;
 pub mod feishu;
 mod locale;
 mod menu;
+pub mod remote_turn;
 mod state;
 pub mod telegram;
 pub mod weixin;
@@ -21,7 +22,7 @@ pub use menu::{MenuItem, MenuItemStyle, MenuView};
 pub use state::{
     BotAction, BotActionStyle, BotChatState, BotDisplayMode, BotInteractionHandler,
     BotInteractiveRequest, BotMessageSender, BotQuestion, BotQuestionOption, BotWorkspaceChoice,
-    BotWorkspaceRef, PendingAction, RemoteDeviceTarget,
+    BotWorkspaceRef, PendingAction, RemoteBotTarget, RemoteDeviceTarget,
 };
 pub use telegram::{TelegramBotApi, TelegramConfig};
 pub use weixin::{WeixinConfig, WeixinProviderClient};
@@ -56,6 +57,8 @@ pub struct BotPairingInfo {
 /// Persisted bot connection — saved to disk so reconnect survives restarts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SavedBotConnection {
+    #[serde(default)]
+    pub account_user_id: String,
     pub bot_type: String,
     pub chat_id: String,
     pub config: BotConfig,
@@ -66,7 +69,6 @@ pub struct SavedBotConnection {
 /// Persisted remote-connect form values shown in the desktop dialog.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RemoteConnectFormState {
-    pub custom_server_url: String,
     pub telegram_bot_token: String,
     pub feishu_app_id: String,
     pub feishu_app_secret: String,
@@ -116,6 +118,7 @@ impl BotPersistenceData {
 // ── Shared workspace-file utilities ────────────────────────────────
 
 /// File content read from the local workspace, ready to be sent over any channel.
+#[derive(Clone)]
 pub struct WorkspaceFileContent {
     pub name: String,
     pub bytes: Vec<u8>,
@@ -277,8 +280,8 @@ const DOWNLOADABLE_EXTENSIONS: &[&str] = &[
     "numbers", "key", "png", "jpg", "jpeg", "gif", "bmp", "svg", "webp", "ico", "tiff", "tif",
     "zip", "tar", "gz", "bz2", "7z", "rar", "dmg", "iso", "xz", "mp3", "wav", "ogg", "flac", "aac",
     "m4a", "wma", "mp4", "avi", "mkv", "mov", "webm", "wmv", "flv", "csv", "tsv", "sqlite", "db",
-    "parquet", "epub", "mobi", "apk", "ipa", "exe", "msi", "deb", "rpm", "ttf", "otf", "woff",
-    "woff2",
+    "parquet", "epub", "mobi", "html", "htm", "apk", "ipa", "exe", "msi", "deb", "rpm", "ttf",
+    "otf", "woff", "woff2",
 ];
 
 /// Check whether a bare file path (no protocol prefix) should be treated as
@@ -345,77 +348,92 @@ fn push_if_existing_file(
     }
 }
 
-/// Extract all downloadable file paths from agent response markdown text.
-///
-/// Detects three kinds of references:
-/// 1. `computer://` links in plain text.
-/// 2. `file://` links in plain text.
-/// 3. Markdown hyperlinks `[text](href)` pointing to absolute local files
-///    (excluding code/config source files).
-///
-/// Only paths that exist as regular files on disk are returned.
-/// Duplicate paths are deduplicated.
+/// Extract deliverable references from rendered Markdown, without probing any
+/// filesystem. The caller must resolve every reference through its origin session.
+/// Code examples do not trigger uploads; image/link duplicates are delivered once.
+pub fn extract_output_file_references(text: &str) -> Vec<String> {
+    use pulldown_cmark::{Event, Parser, Tag, TagEnd};
+    let mut references = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut add = |reference: &str, image: bool| {
+        let explicit = [
+            "computer://",
+            "file:",
+            "openbitfun://runtime/",
+            "openbitfun://current-session/",
+        ]
+        .iter()
+        .any(|prefix| reference.starts_with(prefix));
+        if !explicit
+            && (reference.contains("://")
+                || reference.starts_with('#')
+                || reference.starts_with("//")
+                || reference.starts_with("data:")
+                || reference.starts_with("mailto:")
+                || reference.starts_with("javascript:"))
+        {
+            return;
+        }
+        if !explicit && !image && !is_downloadable_by_extension(reference) {
+            return;
+        }
+        let Ok(normalized) = super::file_projection::normalize_file_reference(reference) else {
+            return;
+        };
+        let normalized = if explicit {
+            normalized
+        } else {
+            urlencoding::decode(&normalized)
+                .map(|path| path.into_owned())
+                .unwrap_or(normalized)
+        };
+        if seen.insert(normalized.clone()) {
+            references.push(normalized);
+        }
+    };
+    let mut in_code = false;
+    let mut link_depth: usize = 0;
+    for event in Parser::new(text) {
+        match event {
+            Event::Start(Tag::CodeBlock(_)) => in_code = true,
+            Event::End(TagEnd::CodeBlock) => in_code = false,
+            Event::Start(Tag::Link { dest_url, .. }) if !in_code => {
+                add(&dest_url, false);
+                link_depth += 1;
+            }
+            Event::Start(Tag::Image { dest_url, .. }) if !in_code => {
+                add(&dest_url, true);
+                link_depth += 1;
+            }
+            Event::End(TagEnd::Link | TagEnd::Image) => link_depth = link_depth.saturating_sub(1),
+            Event::Text(text) if !in_code && link_depth == 0 => {
+                for word in text.split_whitespace() {
+                    let reference = word
+                        .trim_start_matches(['(', '[', '<'])
+                        .trim_end_matches(['.', ',', ';', ':', ')', ']', '>', '。', '，']);
+                    if reference.starts_with("computer://")
+                        || reference.starts_with("file://")
+                        || reference.starts_with("openbitfun://")
+                    {
+                        add(reference, false);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    references
+}
+
+/// Compatibility helper for callers that explicitly own a local workspace.
 pub fn extract_downloadable_file_paths(
     text: &str,
     workspace_root: Option<&std::path::Path>,
 ) -> Vec<String> {
-    let mut paths: Vec<String> = Vec::new();
-
-    // Phase 1 — protocol-prefixed links (`computer://` and `file://`).
-    for prefix in ["computer://", "file://"] {
-        let mut search = text;
-        while let Some(idx) = search.find(prefix) {
-            let rest = &search[idx + prefix.len()..];
-            let end = rest
-                .find(|c: char| {
-                    c.is_whitespace() || matches!(c, '<' | '>' | '(' | ')' | '"' | '\'')
-                })
-                .unwrap_or(rest.len());
-            let raw_suffix = rest[..end].trim_end_matches(['.', ',', ';', ':', ')', ']']);
-            if !raw_suffix.is_empty() {
-                let resolve_input = if prefix == "computer://" {
-                    format!("{prefix}{raw_suffix}")
-                } else {
-                    raw_suffix.to_string()
-                };
-                push_if_existing_file(&resolve_input, &mut paths, workspace_root);
-            }
-            search = &rest[end..];
-        }
+    let mut paths = Vec::new();
+    for reference in extract_output_file_references(text) {
+        push_if_existing_file(&reference, &mut paths, workspace_root);
     }
-
-    // Phase 2 — markdown hyperlinks `[text](href)` referencing local files.
-    let bytes = text.as_bytes();
-    let len = bytes.len();
-    let mut i = 0;
-    while i + 2 < len {
-        if bytes[i] == b']' && bytes[i + 1] == b'(' {
-            let href_start = i + 2;
-            if let Some(rel_end) = text[href_start..].find(')') {
-                let href = text[href_start..href_start + rel_end].trim();
-                // Skip protocols already handled above and non-local URLs.
-                if !href.is_empty()
-                    && !href.starts_with("computer://")
-                    && !href.starts_with("file://")
-                    && !href.starts_with("http://")
-                    && !href.starts_with("https://")
-                    && !href.starts_with("mailto:")
-                    && !href.starts_with("tel:")
-                    && !href.starts_with('#')
-                    && !href.starts_with("//")
-                    && is_downloadable_by_extension(href)
-                {
-                    push_if_existing_file(href, &mut paths, workspace_root);
-                }
-                i = href_start + rel_end + 1;
-            } else {
-                i += 2;
-            }
-        } else {
-            i += 1;
-        }
-    }
-
     paths
 }
 
@@ -752,5 +770,31 @@ mod tests {
             .ends_with(std::path::Path::new("artifacts").join("report.pptx")));
         assert!(std::path::Path::new(&paths[0]).exists());
         let _ = std::fs::remove_dir_all(base);
+    }
+}
+
+#[cfg(test)]
+mod output_reference_tests {
+    use super::extract_output_file_references;
+    #[test]
+    fn pelican_image_and_file_link_are_delivered_once_without_local_probing() {
+        let text = "![Preview](computer://pelican-preview.png)\n- [Image](computer://pelican-preview.png)\n- [Animation](computer://pelican-bicycle.html)";
+        assert_eq!(
+            extract_output_file_references(text),
+            ["pelican-preview.png", "pelican-bicycle.html"]
+        );
+    }
+    #[test]
+    fn real_markdown_handles_spaces_parentheses_reference_links_and_code_examples() {
+        let text = "![Preview](<computer://output/预览 图(1).png>)\n[file][artifact]\n\n[artifact]: file:///workspace/result%20final.html\n\n`computer://secret.png`\n\n```md\n![example](computer://private.png)\n```\n\n![remote](https://example.com/photo.png)";
+        assert_eq!(
+            extract_output_file_references(text),
+            ["output/预览 图(1).png", "/workspace/result final.html"]
+        );
+    }
+    #[test]
+    fn runtime_and_relative_images_are_retained_without_requiring_host_local_files() {
+        assert_eq!(extract_output_file_references("![Result](images/new.png)\n[Report](openbitfun://current-session/artifacts/report.html)"),
+            ["images/new.png", "openbitfun://current-session/artifacts/report.html"]);
     }
 }

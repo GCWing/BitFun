@@ -36,7 +36,7 @@ function request(requestId: string, sessionId = 'session-1'): PermissionRequest 
     sessionId,
     toolCallId: `${requestId}-tool`,
     projectId: 'project-1',
-    agentId: 'agentic',
+    agentId: 'Standard',
     action: 'edit',
     resources: ['src/main.rs'],
     source: { kind: 'tool_call', identity: 'Write' },

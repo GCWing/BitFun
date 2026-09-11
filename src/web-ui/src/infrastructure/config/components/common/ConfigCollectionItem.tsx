@@ -11,6 +11,8 @@ export interface ConfigCollectionItemProps extends React.HTMLAttributes<HTMLDivE
   control: React.ReactNode;
   details?: React.ReactNode;
   disabled?: boolean;
+  /** Separates details interaction from the item's disabled appearance. */
+  detailsDisabled?: boolean;
   expanded?: boolean;
   onToggle?: () => void;
   /** Lets non-interactive row space toggle details while preserving nested controls. */
@@ -25,6 +27,7 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
   control,
   details,
   disabled = false,
+  detailsDisabled = disabled,
   expanded: expandedProp,
   onToggle,
   toggleOnRowClick = false,
@@ -39,7 +42,7 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
   const hasDetails = Boolean(details);
 
   const toggleDetails = () => {
-    if (!hasDetails || disabled) return;
+    if (!hasDetails || detailsDisabled) return;
     if (isControlled) {
       onToggle?.();
     } else {
@@ -48,7 +51,7 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
   };
 
   const handleRowClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!toggleOnRowClick || !hasDetails || disabled) return;
+    if (!toggleOnRowClick || !hasDetails || detailsDisabled) return;
     const target = event.target;
     if (
       target instanceof Element
@@ -68,7 +71,7 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
     >
       <div data-overflow-trigger
         className={`openbitfun-config-page-row openbitfun-config-page-row--center openbitfun-collection-item__row ${
-          toggleOnRowClick && hasDetails && !disabled ? 'openbitfun-collection-item__row--toggleable' : ''
+          toggleOnRowClick && hasDetails && !detailsDisabled ? 'openbitfun-collection-item__row--toggleable' : ''
         }`}
         data-openbitfun-component="config"
         data-openbitfun-part="collectionRow"
@@ -102,7 +105,7 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
                 type="button"
                 className="openbitfun-collection-btn openbitfun-collection-item__details-toggle"
                 onClick={toggleDetails}
-                disabled={disabled}
+                disabled={detailsDisabled}
                 aria-labelledby={labelId}
                 aria-expanded={isExpanded}
                 aria-controls={detailsId}
@@ -127,7 +130,9 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
             aria-hidden={!isExpanded}
             {...(!isExpanded ? { inert: '' } : {})}
           >
-            <div className="openbitfun-collection-item__details" data-openbitfun-component="config" data-openbitfun-part="collectionDetails">{details}</div>
+            <div className="openbitfun-collection-item__details-clip">
+              <div className="openbitfun-collection-item__details" data-openbitfun-component="config" data-openbitfun-part="collectionDetails">{details}</div>
+            </div>
           </div>
         </RetainedMountBoundary>
       ) : null}

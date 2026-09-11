@@ -64,6 +64,31 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun workspaceDirectoryIntentLoadsOnlyTheRequestedBranchWithoutChangingActiveState() = runTest {
+        val transport = FakeSessionTransport().apply {
+            listSessionsOverride = { _ ->
+                """{"resp":"ok","has_more":false,"sessions":[{"id":"branch","title":"Branch","agent_type":"code"}]}"""
+            }
+        }
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.LoadWorkspaceSessions("/other/repo/"))
+        store.dispatch(RemoteSessionIntent.LoadWorkspaceSessions("/other/repo"))
+        advanceUntilIdle()
+
+        assertIs<RemoteSessionUiState.Idle>(store.state.value)
+        val branch = store.workspaceDirectory.value.workspace("/other/repo")!!
+        assertEquals(WorkspaceSessionDirectoryStatus.READY, branch.status)
+        assertEquals(listOf("branch"), branch.sessions.map { it.id })
+        assertEquals("/other/repo", branch.sessions.single().workspacePath)
+        val requests = transport.commands.filter { it.cmd == "list_sessions" }
+        assertEquals(1, requests.size)
+        assertEquals("/other/repo", requests.single().workspacePath)
+        assertEquals(50, requests.single().limit)
+        assertTrue(transport.commands.none { it.cmd == "get_workspace_info" })
+    }
+
+    @Test
     fun initialListingAndCatalogRequestsOverlapWithoutChangingReadyOrdering() = runTest {
         val transport = FakeSessionTransport()
         val listGate = CompletableDeferred<Unit>()
@@ -1027,6 +1052,62 @@ class RemoteSessionStoreTest {
     }
 
     @Test
+    fun imageOnlyMessagesAreSentAndAcknowledgedForNativePickers() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        val images = listOf(ComposerImage("photo-1", "data:image/png;base64,abc", "image/png"))
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "", images))
+        runCurrent()
+        val sent = transport.commands.last { it.cmd == "send_message" }
+        assertEquals("", sent.content)
+        assertEquals(images.single().dataUrl, sent.imageContexts?.single()?.dataUrl)
+        assertNull(sent.imageContexts?.single()?.imagePath)
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertFalse(ready.busy)
+        assertEquals(listOf("photo-1"), ready.lastSentMessage?.imageIds)
+        assertEquals("s-code", ready.lastSentMessage?.sessionId)
+        store.stop()
+    }
+
+    @Test
+    fun imageSendFailureDoesNotConsumeAttachmentsAndAckKeepsNewTyping() = runTest {
+        val transport = FakeSessionTransport()
+        val store = RemoteSessionStore.create(this, transport)
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        val images = listOf(ComposerImage("photo-1", "data:image/png;base64,abc", "image/png"))
+        store.dispatch(RemoteSessionIntent.UpdateDraft("look"))
+        transport.sendMessageFailure = RelayFailure.NetworkUnreachable
+        val failureGate = CompletableDeferred<Unit>()
+        transport.commandGates["send_message"] = failureGate
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "look", images))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.UpdateDraft("edited while waiting"))
+        failureGate.complete(Unit)
+        runCurrent()
+        val failed = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("edited while waiting", failed.draft)
+        assertNull(failed.lastSentMessage)
+        assertFalse(failed.busy)
+
+        transport.sendMessageFailure = null
+        val gate = CompletableDeferred<Unit>()
+        transport.commandGates["send_message"] = gate
+        store.dispatch(RemoteSessionIntent.SendMessage("s-code", "look", images))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.UpdateDraft("next question"))
+        gate.complete(Unit)
+        runCurrent()
+        val ready = assertIs<RemoteSessionUiState.Ready>(store.state.value)
+        assertEquals("next question", ready.draft)
+        assertEquals(listOf("photo-1"), ready.lastSentMessage?.imageIds)
+        assertFalse(ready.busy)
+        store.stop()
+    }
+
+    @Test
     fun sendMessageFallsBackToTheLocallyCreatedRecordWhenTheFilterHidesTheSession() = runTest {
         val transport = FakeSessionTransport()
         val store = RemoteSessionStore.create(this, transport)
@@ -1102,6 +1183,30 @@ class RemoteSessionStoreTest {
         assertIs<RemoteSessionUiState.Ready>(store.state.value)
         assertEquals(ConnectionPhase.CONNECTED, store.connectionPhase.value)
         store.dispatch(RemoteSessionIntent.Stop)
+    }
+
+    @Test
+    fun rapidCacheMissesIssueOnlyTheFirstAndLatestTranscriptRequests() = runTest {
+        val transport = FakeSessionTransport()
+        transport.nonCancellableCommands += "get_session_messages"
+        val store = RemoteSessionStore.create(this, transport)
+
+        store.dispatch(RemoteSessionIntent.Open("s-code"))
+        runCurrent()
+        val firstRequest = transport.lateCommandContinuations.remove("get_session_messages")!!
+        store.dispatch(RemoteSessionIntent.Open("s-cowork"))
+        runCurrent()
+        store.dispatch(RemoteSessionIntent.Open("s-agentic"))
+        runCurrent()
+
+        assertEquals(1, transport.commands.count { it.cmd == "get_session_messages" })
+        firstRequest.resume(Unit)
+        runCurrent()
+
+        val transcriptRequests = transport.commands.filter { it.cmd == "get_session_messages" }
+        assertEquals(2, transcriptRequests.size)
+        assertEquals("s-agentic", transcriptRequests.last().sessionId)
+        store.stop()
     }
 
     @Test

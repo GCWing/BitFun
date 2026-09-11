@@ -1,6 +1,6 @@
 {
   "name": "openbitfun-mobile-web",
-  "version": "1.0.0",
+  "version": "1.0.0-beta",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,6 +11,8 @@
     "dev": "vite",
     "test:ui-components": "node --test tests/mobile-ui-components.test.mjs",
     "test:account-login": "node --test tests/account-login.test.mjs",
+    "test:account-browser": "node --test tests/browser-account.test.mjs",
+    "test:images": "node --test tests/image-compressor.test.mjs",
     "test:workspace-identity": "node --test tests/workspace-identity.test.mjs",
     "type-check": "tsc --noEmit",
     "build": "vite build",
@@ -26,7 +28,6 @@
     "react-dom": "^18.3.1",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^15.6.6",
-    "qr-scanner": "^1.4.2",
     "remark-gfm": "^4.0.1",
     "zustand": "^5.0.10"
   },
@@ -35,6 +36,7 @@
     "@types/react-dom": "^18.3.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@vitejs/plugin-react": "^4.6.0",
+    "puppeteer-core": "21.11.0",
     "sass": "^1.93.2",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",

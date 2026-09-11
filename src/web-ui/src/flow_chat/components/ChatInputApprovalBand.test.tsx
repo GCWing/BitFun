@@ -63,7 +63,7 @@ function request(overrides: Partial<PermissionRequest> = {}): PermissionRequest 
     toolCallId: 'tool-1',
     projectPath: '/workspace/OpenBitFun',
     projectId: 'project-1',
-    agentId: 'agentic',
+    agentId: 'Standard',
     action: 'edit',
     resources: ['src/main.rs'],
     saveResources: ['src/main.rs'],

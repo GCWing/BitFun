@@ -431,7 +431,7 @@
     }
   },
   "session": {
-    "new": "新建会话",
+    "new": "新会话",
     "newCode": "新建 Code 会话",
     "newCowork": "新建 Cowork 会话",
     "newClaw": "新建 Claw 会话",
@@ -624,12 +624,13 @@
     "codeBlock": "代码块",
     "image": "图片",
     "url": "URL",
+    "dropToAdd": "松开即可添加",
     "dragHint": "拖放文件到此处添加上下文"
   },
   "agent": {
     "title": "智能体",
     "select": "选择智能体",
-    "default": "默认助手",
+    "default": "$t(shared:agents.default)",
     "coding": "编程助手",
     "review": "审核",
     "architect": "架构师",
@@ -725,7 +726,6 @@
     "harness": {
       "selectorTooltip": "当前执行：{{name}}",
       "fixedTooltip": "本会话使用 {{name}}，开始后已固定。",
-      "activateBalanced": "切换到标准 Harness",
       "compatibilityShort": "兼容模式",
       "comingSoon": "开发中",
       "comingSoonNotice": "「{{name}}」Harness 执行框架正在开发中。",
@@ -742,17 +742,29 @@
       "profileChangeOutcomeUnknown": "暂时无法确认 Harness 是否已切换，请刷新会话后再重试。",
       "profileUnavailable": "当前 OpenBitFun Host 不支持该 Harness。",
       "profileChangeFailed": "切换 Harness 失败，请重试。",
+      "rememberFailed": "Harness 已切换，但未能记住本次选择。之后的新会话可能继续使用原默认设置。",
       "otherAgentsTitle": "智能体",
       "otherAgentsEmpty": "当前没有可用的主智能体",
       "unavailable": "不可用",
       "agentUnavailable": "当前 Host 或设置不支持 {{name}}。",
       "profiles": {
-        "minimal": { "name": "极简" },
-        "balanced": { "name": "标准" },
-        "ultimate": { "name": "极致" },
-        "creative": { "name": "创造" },
-        "other": { "name": "智能体" }
-      }
+        "other": {
+          "name": "智能体"
+        },
+        "Minimal": {
+          "name": "$t(shared:agents.Minimal)"
+        },
+        "Standard": {
+          "name": "$t(shared:agents.Standard)"
+        },
+        "Ultimate": {
+          "name": "$t(shared:agents.Ultimate)"
+        },
+        "Creative": {
+          "name": "$t(shared:agents.Creative)"
+        }
+      },
+      "activateStandard": "切换到标准 Harness"
     },
     "agents": {
       "available": "可用",
@@ -760,9 +772,15 @@
       "comingSoon": "开发中",
       "comingSoonNotice": "直接调用「{{name}}」Agent 的能力正在开发中。",
       "reviewUnavailable": "Review Agent 需要一个包含可审查变更的活动会话。",
-      "review": { "name": "Review" },
-      "cowork": { "name": "Cowork" },
-      "computerUse": { "name": "Computer Use" }
+      "review": {
+        "name": "Review"
+      },
+      "cowork": {
+        "name": "Cowork"
+      },
+      "computerUse": {
+        "name": "Computer Use"
+      }
     },
     "addBoostTooltip": "指令、上下文、图片或 Skill",
     "modeChangeFailed": "切换智能体模式失败，请重试。",
@@ -837,7 +855,6 @@
     "boostSkillsEmpty": "暂无已启用的 Skill",
     "openSkillsLibrary": "管理 Skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
-    "resetToAgentic": "移除当前 Agent",
     "defaultModeSetTooltip": "将 {{mode}} 设为新聊天默认模式",
     "defaultModeUnsetTooltip": "默认模式覆盖已启用，点击清除",
     "defaultModeSet": "已将 {{mode}} 设为新聊天默认模式。",
@@ -919,20 +936,22 @@
     "sendingToMain": "主会话：{{title}}",
     "sendingToBtw": "侧问会话：{{title}}",
     "modeDescriptions": {
-      "agentic": "AI 主导执行，自动规划和完成编码任务，拥有完整的工具访问能力",
       "Claw": "个人助理模式：面向个人工作区和日常事务，使用独立的助理上下文",
       "Cowork": "协作模式：先澄清再推进，轻量跟踪进度，随时验证结果",
       "ComputerUse": "独立电脑操作智能体：感知本机环境，操作应用、浏览器与系统界面",
       "DeepResearch": "深度研究：并行派发多个子 Agent 同时调研不同章节，快速生成高质量研究报告",
-      "Ultra": "群体规划模式：适合复杂任务，可能并发发起较多模型请求，从而增加 API 成本和供应商限流压力"
+      "Standard": "AI 主导执行，自动规划和完成编码任务，拥有完整的工具访问能力",
+      "Ultimate": "群体规划模式：适合复杂任务，可能并发发起较多模型请求，从而增加 API 成本和供应商限流压力"
     },
     "modeNames": {
-      "agentic": "Agentic",
-      "Claw": "Claw",
-      "Cowork": "Cowork",
-      "ComputerUse": "Computer Use",
-      "DeepResearch": "Deep Research",
-      "Ultra": "Ultra"
+      "Claw": "$t(shared:agents.Claw)",
+      "Cowork": "$t(shared:agents.Cowork)",
+      "ComputerUse": "$t(shared:agents.ComputerUse)",
+      "DeepResearch": "$t(shared:agents.DeepResearch)",
+      "Standard": "$t(shared:agents.Standard)",
+      "Ultimate": "$t(shared:agents.Ultimate)",
+      "Minimal": "$t(shared:agents.Minimal)",
+      "Creative": "$t(shared:agents.Creative)"
     },
     "openFolder": "打开文件夹…",
     "selectWorkspaceTitle": "选择工作区目录",
@@ -1360,6 +1379,12 @@
     "sessionOverviewBackgroundFinished": "{{count}} 个最近已结束",
     "sessionOverviewPullRequests": "打开工作区拉取请求",
     "agentTree": "Agents",
+    "agentTreeDelete": "删除会话",
+    "agentTreeDeleteConfirm": "确定删除“{{name}}”及其所有后代会话吗？此操作无法撤销。",
+    "agentTreeDeleteFailed": "删除 Agent 会话分支失败。",
+    "agentTreeDeleteUnsupported": "暂不支持单独删除离线派发任务中的 Agent。",
+    "agentTreeActiveOnly": "仅显示活跃 Agent",
+    "agentTreeNoActive": "当前没有活跃 Agent",
     "agentTreeLoading": "正在加载 Agent 会话树...",
     "agentTreeEmpty": "当前会话没有子 Agent",
     "agentTreeLoadFailed": "无法加载 Agent 会话树。",
@@ -1379,12 +1404,10 @@
       "error": "$t(shared:statuses.failed)",
       "idle": "空闲"
     },
-    "backgroundCommandOverview": "后台终端",
+    "backgroundCommandOverview": "后台命令",
     "backgroundCommands": "后台命令（{{count}}）",
     "backgroundCommandEmpty": "暂无后台命令",
-    "backgroundTerminalEmpty": "暂无后台终端",
     "backgroundCommandUntitled": "后台命令",
-    "backgroundCommandSession": "会话 #{{id}}",
     "backgroundCommandStatusRunning": "进行中",
     "backgroundCommandStatusFinished": "已结束",
     "backgroundCommandActions": "命令操作",
@@ -1419,9 +1442,10 @@
     "sendInput": "发送输入",
     "sendInputUnavailable": "只能向正在运行的交互式命令发送输入。",
     "copy": "复制输出",
+    "copyRaw": "复制原始输出",
+    "replayIncomplete": "较早的输出已丢弃，无法完整恢复终端状态；保留内容可能显示不完整。",
+    "unknownGeometry": "无法确定源终端尺寸，不能准确重放输出。你仍可复制原始输出。",
     "copyCommand": "复制命令",
-    "simplifiedView": "简化显示",
-    "simplifiedViewTooltip": "隐藏终端控制符，让输出更易读。",
     "loading": "正在加载输出...",
     "empty": "暂未捕获到输出。",
     "remote": "远程",
@@ -1973,7 +1997,7 @@
       "executing": "执行中...",
       "subAgentFailed": "子代理任务执行失败",
       "subAgentTaskFailed": "子代理任务失败",
-      "failed": "失败",
+      "failed": "$t(shared:statuses.failed)",
       "confirmDelegate": "确认委派",
       "cancel": "取消",
       "task": "任务",
@@ -2007,7 +2031,7 @@
       "status": {
         "pending": "等待中",
         "running": "执行中",
-        "completed": "已完成",
+        "completed": "$t(shared:statuses.done)",
         "failed": "执行失败"
       },
       "loadingMore": "正在加载更多输出...",
@@ -2197,9 +2221,9 @@
       "paramsReceiving": "接收参数中",
       "preparing": "准备中",
       "running": "执行中",
-      "completed": "已完成",
-      "error": "失败",
-      "cancelled": "已取消"
+      "completed": "$t(shared:statuses.done)",
+      "error": "$t(shared:statuses.failed)",
+      "cancelled": "$t(shared:statuses.cancelled)"
     },
     "toolbar": {
       "executing": "执行中...",
@@ -2444,15 +2468,14 @@
     }
   },
   "welcome": {
+    "openingMorning": "早安，今天由你开场。",
+    "openingAfternoon": "下午好，给今天加点意思。",
+    "openingEvening": "晚上好，按你的节奏来。",
+    "openingNight": "夜深了，想法可以慢慢说。",
     "greetingMorning": "早安",
-    "subtitleMorning": "新的一天，新的可能，让我们一起创造些什么",
     "greetingAfternoon": "下午好",
-    "subtitleAfternoon": "新的一天，新的可能，让我们一起创造些什么",
     "greetingEvening": "晚上好",
-    "subtitleEvening": "夜晚安静，最适合沉浸式编码",
     "greetingNight": "夜深了",
-    "subtitleNight": "灵感不眠，让我们继续",
-    "aiPartner": "编程搭档",
     "subtitleMorningCowork": "清晨头脑最清醒，把今天的想法和任务整理一下吧",
     "subtitleAfternoonCowork": "下午好，有什么要推进或整理的，一起来",
     "subtitleEveningCowork": "收尾、复盘、或是为明天做准备——都行",

@@ -49,20 +49,26 @@ describe('builtin appearance preset output', () => {
     const settings = getBuiltinAppearance('openbitfun-light')?.renderers?.['theme-tokens']?.settings;
     for (const tokens of [settings?.tokens, settings?.scopes?.chrome].filter(Boolean)) {
       for (const [name, value] of Object.entries(themes.light)) {
-        if (name.startsWith('color.field.')) expect(tokens?.[themeCssVariables[name as ThemeTokenName]]).toBe(value);
+        if (name.startsWith('color.field.') || name === 'color.actionCard.background' || name.startsWith('color.composer.')) expect(tokens?.[themeCssVariables[name as ThemeTokenName]]).toBe(value);
       }
     }
+    expect(settings?.tokens['--openbitfun-color-number-badge-background']).toBe(themes.light['color.numberBadge.background']);
+    expect(settings?.tokens['--openbitfun-color-key-hint-content']).toBe(themes.light['color.keyHint.content']);
+    expect(settings?.tokens['--openbitfun-color-scrollbar-thumb']).toBe(themes.light['color.scrollbar.thumb']);
     expect(settings?.tokens['--openbitfun-color-field-border']).toBe('rgba(0, 0, 0, 0.08)');
     expect(settings?.tokens['--openbitfun-color-field-border-hover']).toBe('rgba(0, 0, 0, 0.20)');
     expect(settings?.tokens['--openbitfun-color-field-border-active']).toBe('rgba(0, 0, 0, 0.20)');
     expect(settings?.tokens['--openbitfun-color-field-border-focus']).toBe(themes.light['color.field.borderFocus']);
+    expect(settings?.tokens['--openbitfun-color-field-group-background']).toBe('rgba(0, 0, 0, 0.03)');
     expect(settings?.tokens['--openbitfun-color-field-placeholder']).toBe('rgba(0, 0, 0, 0.40)');
     for (const palette of builtinAppearancePalettes) {
       if (palette.id === 'openbitfun-light') continue;
       const tokens = getBuiltinAppearanceThemeTokens(palette.id);
+      expect(tokens['--openbitfun-color-action-card-background']).toBe(palette.colors.element.base);
       expect(tokens['--openbitfun-color-field-border']).toBe(palette.colors.border.base);
       expect(tokens['--openbitfun-color-field-border-focus']).toBe(palette.colors.accent[500]);
       expect(tokens['--openbitfun-color-field-border-active']).toBe(palette.colors.accent[500]);
+      expect(tokens['--openbitfun-color-field-group-background']).toBe(palette.colors.background.tertiary);
       expect(tokens['--openbitfun-color-field-placeholder']).toBe(palette.colors.text.muted);
     }
   });
@@ -79,7 +85,7 @@ describe('builtin appearance preset output', () => {
     expect(light['--openbitfun-component-button-content']).toBe('rgba(0, 0, 0, 0.80)');
     expect(light['--openbitfun-component-button-text-content']).toBe('#059cb0');
     expect(light['--openbitfun-color-action-primary-background']).toBe('#101a27');
-    expect(light['--openbitfun-color-action-neutral-content']).toBe('rgba(0, 0, 0, 0.60)');
+    expect(light['--openbitfun-color-action-neutral-content']).toBe('rgba(0, 0, 0, 0.80)');
   });
 
   it('preserves the action colors of branded presets through the Button contract', () => {
@@ -89,6 +95,17 @@ describe('builtin appearance preset output', () => {
       expect(tokens['--openbitfun-component-button-primary-background']).toBe(tokens['--openbitfun-color-action-primary-background']);
       expect(tokens['--openbitfun-component-button-text-content']).toBe(tokens['--openbitfun-color-accent-default']);
       expect(tokens['--openbitfun-component-button-content']).toBe(tokens['--openbitfun-color-action-neutral-content']);
+    }
+  });
+
+  it('keeps menu label and caption colors consistent between the public light theme and product portals', () => {
+    const settings = getBuiltinAppearance('openbitfun-light')!.renderers!['theme-tokens']!.settings;
+    for (const tokens of [settings.tokens, ...(settings.scopes?.chrome ? [settings.scopes.chrome] : [])]) {
+      expect(tokens['--openbitfun-color-action-neutral-content']).toBe(themes.light['color.action.neutral.content']);
+      expect(tokens['--openbitfun-color-content-caption']).toBe(themes.light['color.content.caption']);
+    }
+    for (const palette of builtinAppearancePalettes.filter(p => p.id !== 'openbitfun-light')) {
+      expect(getBuiltinAppearanceThemeTokens(palette.id)['--openbitfun-color-action-neutral-content']).toBe(palette.colors.text.secondary);
     }
   });
 

@@ -28,6 +28,7 @@ export function useSessionModeSelection(
   target: SessionModeSelectionTarget | null,
   publishSelection: (modeId: string) => void,
   reportFailure: (error: unknown, modeId: string) => void,
+  onSelectionCommitted?: (modeId: string) => void,
 ): {
   isModeChangePending: boolean;
   publishModeSelection: (modeId: string) => void;
@@ -35,11 +36,13 @@ export function useSessionModeSelection(
 } {
   const publishRef = useRef(publishSelection);
   const failureRef = useRef(reportFailure);
+  const committedRef = useRef(onSelectionCommitted);
   const sessionQueuesRef = useRef(new Map<string, SessionModeSelectionQueue>());
   const mountedRef = useRef(true);
   const [, setQueueRevision] = useState(0);
   publishRef.current = publishSelection;
   failureRef.current = reportFailure;
+  committedRef.current = onSelectionCommitted;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -66,6 +69,7 @@ export function useSessionModeSelection(
   const requestModeChange = useCallback((modeId: string) => {
     if (!sessionId) {
       publishRef.current(modeId);
+      committedRef.current?.(modeId);
       return;
     }
     const intent: ModeSelectionIntent = {
@@ -100,6 +104,7 @@ export function useSessionModeSelection(
 
       if (!failed) {
         current.publish(current.request.modeId);
+        committedRef.current?.(current.request.modeId);
       }
 
       const next = queue.next;

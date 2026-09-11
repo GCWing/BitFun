@@ -15,21 +15,27 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+function clientForTest() {
+  const client = new RelayHttpClient('https://relay.example.com', { token: 'test', userId: 'user-a', deviceId: 'browser', masterKey: new Uint8Array(32).fill(7) });
+  client.setTargetDeviceId('home-device');
+  return client;
+}
+
 describe('mobile RemoteSessionManager target routing', () => {
-  it('keeps one browser-page identity across heartbeat requests and manager recreation', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    const send = vi.spyOn(client, 'sendCommand').mockResolvedValue({ resp: 'pong' });
+  it('uses the authenticated browser device across heartbeat requests and manager recreation', async () => {
+    const client = clientForTest();
+    const send = vi.spyOn(client, 'sendDeviceRpc').mockResolvedValue({ resp: 'pong' });
     await new RemoteSessionManager(client).ping();
     await new RemoteSessionManager(client).ping();
-    const first = send.mock.calls[0][0] as { client: { id: string; name: string } };
-    expect(first.client.id).toMatch(/^[a-f0-9]{32}$/);
+    const first = send.mock.calls[0][1] as { client: { id: string; name: string } };
+    expect(first.client.id).toBe(client.controllerDeviceId);
     expect(first.client.name).toBeTruthy();
-    expect(send.mock.calls[1][0]).toEqual(expect.objectContaining({ cmd: 'ping', client: first.client }));
+    expect(send.mock.calls[1][1]).toEqual(expect.objectContaining({ cmd: 'ping', client: first.client }));
   });
 
   it('attaches request-proven SSH identity to legacy session rows sharing one path', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    const send = vi.spyOn(client, 'sendCommand').mockResolvedValue({
+    const client = clientForTest();
+    const send = vi.spyOn(client, 'sendDeviceRpc').mockResolvedValue({
       resp: 'sessions',
       sessions: [{ session_id: 'legacy-session', workspace_path: '/projects/herdr' }],
       has_more: false,
@@ -39,7 +45,7 @@ describe('mobile RemoteSessionManager target routing', () => {
       const result = await manager.listSessions('/projects/herdr', 30, 0, '', {
         remoteConnectionId: `ssh-${host}`, remoteSshHost: `host-${host}`,
       });
-      expect(send).toHaveBeenLastCalledWith(expect.objectContaining({
+      expect(send).toHaveBeenLastCalledWith('home-device', expect.objectContaining({
         cmd: 'list_sessions', workspace_path: '/projects/herdr',
         remote_connection_id: `ssh-${host}`, remote_ssh_host: `host-${host}`,
       }), expect.anything());
@@ -49,58 +55,25 @@ describe('mobile RemoteSessionManager target routing', () => {
     }
   });
 
-  it('invalidates an active room request and starts a usable generation after late identity', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
+  it('invalidates an in-flight command when a new account logs in', async () => {
+    const client = clientForTest();
     const workspace = deferred<any>();
-    const targetChanges: number[] = [];
-    client.onControlTargetChange((snapshot) => targetChanges.push(snapshot.epoch));
-    let workspaceRequestCount = 0;
-    vi.spyOn(client, 'sendCommand').mockImplementation((command: any) => {
-      if (command.cmd === 'get_workspace_info') {
-        workspaceRequestCount += 1;
-        if (workspaceRequestCount === 1) return workspace.promise;
-        return Promise.resolve({
-          resp: 'workspace_info',
-          has_workspace: true,
-          project_name: 'Current home workspace',
-        });
-      }
-      if (command.cmd === 'get_delegated_identity') {
-        return Promise.resolve({
-          resp: 'delegate_identity',
-          token: 'late-token',
-          master_key: btoa(String.fromCharCode(...new Uint8Array(32).fill(7))),
-          user_id: 'late-user',
-          device_id: 'home-device',
-        });
-      }
-      throw new Error(`Unexpected command: ${command.cmd}`);
-    });
+    vi.spyOn(client, 'sendDeviceRpc').mockImplementationOnce(() => workspace.promise)
+      .mockResolvedValue({ resp: 'workspace_info', has_workspace: true });
     const manager = new RemoteSessionManager(client);
-    const initialEpoch = client.controlTargetEpoch;
-
-    const activeRoomRequest = manager.getWorkspaceInfo();
-    await expect(client.requestDelegatedIdentity()).resolves.toBe(true);
-    expect(client.pairedDeviceId).toBe('home-device');
-    expect(client.homeDeviceId).toBe('home-device');
-    expect(client.controlTargetEpoch).toBeGreaterThan(initialEpoch);
-    expect(targetChanges).toEqual([client.controlTargetEpoch]);
-
-    workspace.resolve({
-      resp: 'workspace_info',
-      has_workspace: true,
-      project_name: 'Home workspace',
-    });
-    await expect(activeRoomRequest).rejects.toBeInstanceOf(RemoteControlTargetChangedError);
-    await expect(manager.getWorkspaceInfo()).resolves.toMatchObject({
-      project_name: 'Current home workspace',
-    });
+    const stale = manager.getWorkspaceInfo();
+    client.setAccountIdentity({ token: 'b', userId: 'user-b', deviceId: 'browser', masterKey: new Uint8Array(32).fill(8) });
+    expect(client.targetDeviceId).toBeNull();
+    workspace.resolve({ resp: 'workspace_info', has_workspace: true });
+    await expect(stale).rejects.toBeInstanceOf(RemoteControlTargetChangedError);
+    client.setTargetDeviceId('new-device');
+    await expect(manager.getWorkspaceInfo()).resolves.toMatchObject({ has_workspace: true });
   });
 
-  it('invalidates an in-flight room request on disconnect without delegated credentials', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
+  it('invalidates an in-flight device request on account disconnect', async () => {
+    const client = clientForTest();
     const workspace = deferred<any>();
-    vi.spyOn(client, 'sendCommand').mockImplementation(() => workspace.promise);
+    vi.spyOn(client, 'sendDeviceRpc').mockImplementation(() => workspace.promise);
     const manager = new RemoteSessionManager(client);
     const initialEpoch = client.controlTargetEpoch;
 
@@ -112,29 +85,17 @@ describe('mobile RemoteSessionManager target routing', () => {
     await expect(activeRoomRequest).rejects.toBeInstanceOf(RemoteControlTargetChangedError);
   });
 
-  it('never falls back to the home room when a remote target temporarily lacks credentials', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    client.homeDeviceId = 'home-device';
-    client.setPairedDeviceId('remote-device');
-    const remoteRequest = vi.spyOn(client, 'sendDeviceRpc')
-      .mockRejectedValueOnce(new Error('No delegated identity'));
-    const homeRequest = vi.spyOn(client, 'sendCommand')
-      .mockResolvedValueOnce({ resp: 'workspace_info', has_workspace: true });
-    const manager = new RemoteSessionManager(client);
-
-    await expect(manager.getWorkspaceInfo()).rejects.toThrow('No delegated identity');
-    expect(remoteRequest).toHaveBeenCalledWith(
-      'remote-device',
-      expect.objectContaining({ cmd: 'get_workspace_info' }),
-      { retryable: true },
-    );
-    expect(homeRequest).not.toHaveBeenCalled();
+  it('rejects a missing target without sending any command', async () => {
+    const client = clientForTest();
+    client.setTargetDeviceId(null);
+    const request = vi.spyOn(client, 'sendDeviceRpc');
+    await expect(new RemoteSessionManager(client).getWorkspaceInfo()).rejects.toThrow();
+    expect(request).not.toHaveBeenCalled();
   });
 
   it('rejects a deferred A response after the control target switches to B', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    client.homeDeviceId = 'home-device';
-    client.setPairedDeviceId('device-a');
+    const client = clientForTest();
+    client.setTargetDeviceId('device-a');
     const responseA = deferred<any>();
     vi.spyOn(client, 'sendDeviceRpc').mockImplementation((deviceId) => {
       if (deviceId === 'device-a') return responseA.promise;
@@ -147,7 +108,7 @@ describe('mobile RemoteSessionManager target routing', () => {
     const manager = new RemoteSessionManager(client);
 
     const requestA = manager.getWorkspaceInfo();
-    client.setPairedDeviceId('device-b');
+    client.setTargetDeviceId('device-b');
     await expect(manager.getWorkspaceInfo()).resolves.toMatchObject({
       project_name: 'Device B',
     });
@@ -161,17 +122,16 @@ describe('mobile RemoteSessionManager target routing', () => {
   });
 
   it('rejects a deferred A error after an A to B to A ABA switch', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    client.homeDeviceId = 'home-device';
-    client.setPairedDeviceId('device-a');
+    const client = clientForTest();
+    client.setTargetDeviceId('device-a');
     const responseA = deferred<any>();
     vi.spyOn(client, 'sendDeviceRpc').mockImplementation(() => responseA.promise);
     const manager = new RemoteSessionManager(client);
     const firstAEpoch = client.controlTargetEpoch;
 
     const requestA = manager.getWorkspaceInfo();
-    client.setPairedDeviceId('device-b');
-    client.setPairedDeviceId('device-a');
+    client.setTargetDeviceId('device-b');
+    client.setTargetDeviceId('device-a');
     expect(client.controlTargetEpoch).toBeGreaterThan(firstAEpoch);
     responseA.reject(new Error('Device A request failed'));
 
@@ -180,9 +140,8 @@ describe('mobile RemoteSessionManager target routing', () => {
   });
 
   it('does not send a later file chunk to B after a download starts on A', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    client.homeDeviceId = 'home-device';
-    client.setPairedDeviceId('device-a');
+    const client = clientForTest();
+    client.setTargetDeviceId('device-a');
     const remoteRequest = vi.spyOn(client, 'sendDeviceRpc').mockResolvedValue({
       resp: 'file_chunk',
       name: 'from-a.txt',
@@ -195,7 +154,7 @@ describe('mobile RemoteSessionManager target routing', () => {
     const manager = new RemoteSessionManager(client);
 
     const download = manager.readFile('/tmp/from-a.txt', undefined, () => {
-      client.setPairedDeviceId('device-b');
+      client.setTargetDeviceId('device-b');
     });
 
     await expect(download).rejects.toBeInstanceOf(RemoteControlTargetChangedError);
@@ -211,9 +170,8 @@ describe('mobile RemoteSessionManager target routing', () => {
   });
 
   it('bounds a remote reasoning-setting write independently from long-running commands', async () => {
-    const client = new RelayHttpClient('https://relay.example.com', 'room');
-    client.homeDeviceId = 'home-device';
-    client.setPairedDeviceId('remote-device');
+    const client = clientForTest();
+    client.setTargetDeviceId('remote-device');
     const remoteRequest = vi.spyOn(client, 'sendDeviceRpc').mockResolvedValue({
       resp: 'session_model_updated',
       session_id: 'session-a',
@@ -234,5 +192,45 @@ describe('mobile RemoteSessionManager target routing', () => {
       }),
       { retryable: false, timeoutMs: 20_000 },
     );
+  });
+});
+
+
+describe('mobile output file transfer integrity', () => {
+  const chunk = (offset: number, bytes: string, total = 4) => ({
+    resp: 'file_chunk', name: 'preview.png', chunk_base64: btoa(bytes),
+    offset, chunk_size: bytes.length, total_size: total, mime_type: 'image/png',
+  });
+
+  it('reassembles short padded chunks using bytes and retains the owning session', async () => {
+    const client = clientForTest();
+    const send = vi.spyOn(client, 'sendDeviceRpc')
+      .mockResolvedValueOnce(chunk(0, 'a'))
+      .mockResolvedValueOnce(chunk(1, 'bc'))
+      .mockResolvedValueOnce(chunk(3, 'd'));
+    const file = await new RemoteSessionManager(client).readFile('preview.png', 'origin-session');
+    expect(atob(file.contentBase64)).toBe('abcd');
+    expect(file.size).toBe(4);
+    expect(send.mock.calls.map(call => call[1])).toEqual([0, 1, 3].map(offset => expect.objectContaining({
+      cmd: 'read_file_chunk', path: 'preview.png', session_id: 'origin-session', offset,
+    })));
+  });
+
+  it.each([
+    { offset: 3 }, { chunk_size: 2 }, { total_size: 5 },
+    { name: 'different.png' }, { chunk_base64: '', chunk_size: 0 }, { revision: 'changed' },
+  ])('rejects truncated, inconsistent or reordered chunks: %j', async invalid => {
+    const client = clientForTest();
+    vi.spyOn(client, 'sendDeviceRpc').mockResolvedValueOnce(chunk(0, 'ab'))
+      .mockResolvedValueOnce({ ...chunk(2, 'c'), ...invalid });
+    await expect(new RemoteSessionManager(client).readFile('preview.png', 'origin')).rejects.toThrow();
+  });
+
+  it('stops oversized inline previews after the first bounded response', async () => {
+    const client = clientForTest();
+    const send = vi.spyOn(client, 'sendDeviceRpc').mockResolvedValue(chunk(0, 'a', 100));
+    await expect(new RemoteSessionManager(client).readFile('preview.png', 'origin', undefined, 8)).rejects.toThrow('too large');
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][1]).toEqual(expect.objectContaining({ limit: 8 }));
   });
 });

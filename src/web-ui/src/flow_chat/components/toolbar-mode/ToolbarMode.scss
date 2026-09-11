@@ -62,6 +62,15 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
+.openbitfun-toolbar-mode[data-openbitfun-communication-mode='voice'] {
+  border: 0;
+  border-radius: calc(var(--openbitfun-space-8) + var(--openbitfun-space-1));
+  background: transparent;
+  box-shadow: none;
+
+  &::before { content: none; }
+}
+
 .openbitfun-toolbar-mode__header {
   flex: 0 0 auto;
   height: 32px;
@@ -138,7 +147,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: var(--openbitfun-radius-sm);
   cursor: pointer;
   transition:
-    transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
     background-color 160ms ease,
     color 160ms ease,
     opacity 160ms ease;
@@ -146,11 +154,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   &:hover:not(:disabled) {
     background: var(--openbitfun-color-action-secondary-hover);
     color: var(--openbitfun-color-accent-default);
-    transform: scale(1.1);
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.95);
   }
 
   &:disabled {
@@ -520,10 +523,6 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   &:hover {
     background: var(--openbitfun-color-action-neutral-surface-pressed);
     color: var(--openbitfun-color-content-primary);
-  }
-
-  &:active {
-    transform: scale(0.95);
   }
 
   &--confirm {

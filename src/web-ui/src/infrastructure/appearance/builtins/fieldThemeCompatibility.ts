@@ -14,5 +14,9 @@ export function withLegacyFieldTokens(
   if (result['--openbitfun-color-field-border-active'] === undefined && legacyFocus !== undefined) {
     result['--openbitfun-color-field-border-active'] = legacyFocus;
   }
+  const legacyGroup = tokens?.['--openbitfun-color-surface-tertiary'];
+  if (result['--openbitfun-color-field-group-background'] === undefined && legacyGroup !== undefined) {
+    result['--openbitfun-color-field-group-background'] = legacyGroup;
+  }
   return result;
 }

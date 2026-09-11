@@ -1,19 +1,4 @@
-import { RemoteMiniAppRequest } from './RemoteMiniAppModels';
-export interface RemoteDescriptor {
-  relayUrl: string;
-  roomId: string;
-  publicKey: string;
-  accountAuth: boolean;
-  accountUsername: string;
-}
 
-export interface PairState {
-  descriptor?: RemoteDescriptor;
-  connected: boolean;
-  deviceId: string;
-  userId: string;
-  message: string;
-}
 
 export class EncryptedPayload {
   encrypted_data: string = '';
@@ -110,7 +95,6 @@ export interface ChallengeCommand {
 }
 
 export interface RemoteCommand {
-  request?: RemoteMiniAppRequest;
   cmd: string;
   _request_id?: string;
   session_id?: string;
@@ -506,6 +490,7 @@ export interface FileInfo {
 }
 
 export interface ReadFileChunkResponse extends CommandStatusResponse {
+  revision?: string;
   name?: string;
   chunk_base64?: string;
   offset?: number;
@@ -522,6 +507,7 @@ export interface ReadFileResult {
 }
 
 export interface ReadFileChunkResult {
+  revision?: string;
   name: string;
   contentBase64: string;
   offset: number;

@@ -18,12 +18,12 @@ const UPDATE_PROGRESS_EVENT: &str = "openbitfun-update-progress";
 /// `scripts/desktop-tauri-build.mjs`, which bakes the same pair into the bundle.
 const GITHUB_UPDATER_ENDPOINT: &str = match option_env!("OPENBITFUN_UPDATER_PRIMARY_ENDPOINT") {
     Some(endpoint) => endpoint,
-    None => "https://github.com/GCWing/OpenBitFun/releases/latest/download/latest.json",
+    None => "https://github.com/GCWing/OpenBitFun/releases/latest/download/latest-v1.json",
 };
 const OPENBITFUN_UPDATER_ENDPOINT: &str = match option_env!("OPENBITFUN_UPDATER_FALLBACK_ENDPOINT")
 {
     Some(endpoint) => endpoint,
-    None => "https://openbitfun.com/release/latest.json",
+    None => "https://openbitfun.com/release/latest-v1.json",
 };
 
 /// Throughput probe settings, matching the CLI updater and the relay deploy
@@ -45,7 +45,7 @@ struct UpdaterManifestInfo {
 /// a new release.
 ///
 /// Tauri walks `endpoints` and stops at the first that returns a usable
-/// manifest, then downloads from the URL *inside that manifest*. `latest.json`
+/// manifest, then downloads from the URL *inside that manifest*. `latest-v1.json`
 /// is ~2 KB, so a reachable-but-crawling GitHub always wins the race to answer
 /// and then pins an 80-160 MB download to itself — the mirror is only ever tried
 /// when GitHub errors outright. We therefore probe the actual GitHub package.
@@ -65,7 +65,7 @@ async fn updater_endpoints_by_policy() -> Vec<tauri::Url> {
     };
 
     // Probe the package each origin would actually serve, not its manifest.
-    // `latest.json` is ~2 KB, so probing it measures round-trip latency and
+    // `latest-v1.json` is ~2 KB, so probing it measures round-trip latency and
     // tells us nothing about an 80-160 MB transfer. Each manifest names its own
     // download URL, which is exactly the thing worth measuring.
     let platform = updater_platform_key();
@@ -101,7 +101,7 @@ async fn updater_endpoints_by_policy() -> Vec<tauri::Url> {
     default_endpoints()
 }
 
-/// Tauri's `latest.json` platform key for this host, e.g. `darwin-aarch64`.
+/// Tauri's `latest-v1.json` platform key for this host, e.g. `darwin-aarch64`.
 /// Mirrors `scripts/generate-tauri-latest-json.mjs`.
 fn updater_platform_key() -> String {
     let os = match std::env::consts::OS {
@@ -1083,7 +1083,7 @@ mod tests {
         ));
     }
 
-    /// The probe reads `platforms[<key>].url` out of `latest.json`; if this key
+    /// The probe reads `platforms[<key>].url` out of `latest-v1.json`; if this key
     /// stops matching what scripts/generate-tauri-latest-json.mjs emits, every
     /// probe silently scores 0 and ranking degrades to the configured order.
     #[test]

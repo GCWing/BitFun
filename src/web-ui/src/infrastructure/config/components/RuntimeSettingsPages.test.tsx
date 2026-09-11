@@ -33,6 +33,7 @@ vi.mock('@/infrastructure/confirm-dialog', () => ({ confirmDanger: vi.fn() }));
 vi.mock('@/shared/notification-system', () => ({ useNotification: () => ({}), notificationService: { dismiss: vi.fn(), success: vi.fn(), error: mocks.error, info: vi.fn(), warning: vi.fn() } }));
 vi.mock('./GlobalPermissionRulesDialog', () => ({ GlobalPermissionRulesDialog: () => null }));
 vi.mock('./SessionTitleConfig', () => ({ default: () => null }));
+vi.mock('./DefaultHarnessConfig', () => ({ default: () => <div>default-harness-config</div> }));
 vi.mock('./ReviewCapacitySection', () => ({ default: () => null }));
 vi.mock('./ToolJsonRepairSection', () => ({ default: () => null }));
 vi.mock('@openbitfun/ui', async (original) => ({
@@ -172,6 +173,7 @@ describe('Flashgrep settings availability', () => {
   it.each(['normal', 'remote'])('only exposes indexing for local workspaces (%s)', async (workspaceKind) => {
     mocks.workspace = { workspaceKind };
     await act(async () => root.render(<SessionWorkspaceSettingsPage />));
+    expect(container.textContent).toContain('default-harness-config');
     expect(container.textContent?.includes('features.workspaceSearch.enable')).toBe(workspaceKind === 'normal');
   });
 });

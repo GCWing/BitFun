@@ -229,10 +229,6 @@
       color: var(--openbitfun-color-content-primary);
     }
 
-    &:active {
-      transform: scale(0.9);
-    }
-
     svg {
       flex-shrink: 0;
     }
@@ -263,10 +259,6 @@
       background: var(--openbitfun-color-surface-subtle);
       border-color: var(--openbitfun-color-action-neutral-surface-pressed);
       color: var(--openbitfun-color-content-primary);
-    }
-
-    &:active {
-      transform: scale(0.98);
     }
 
     svg {

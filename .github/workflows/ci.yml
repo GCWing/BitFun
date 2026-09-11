@@ -655,6 +655,15 @@ jobs:
         if: needs.build-impact.outputs.frontend_required != 'false'
         run: pnpm --dir src/mobile-web run type-check
 
+      - name: Test mobile web account login and reload
+        if: needs.build-impact.outputs.frontend_required != 'false'
+        run: pnpm --dir src/mobile-web run test:account-login
+
+      - name: Test mobile web browser account persistence and concurrency
+        if: needs.build-impact.outputs.frontend_required != 'false'
+        timeout-minutes: 5
+        run: pnpm --dir src/mobile-web run test:account-browser
+
       - name: Build mobile web
         if: needs.build-impact.outputs.frontend_required != 'false'
         run: pnpm run build:mobile-web

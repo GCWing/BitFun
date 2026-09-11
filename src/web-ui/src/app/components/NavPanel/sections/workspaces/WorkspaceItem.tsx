@@ -110,7 +110,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     renameWorkspace,
   } = useWorkspaceContext();
   const { switchLeftPanelTab } = useApp();
-  const openNavScene = useNavSceneStore(s => s.openNavScene);
+  const openWorkspaceResources = useNavSceneStore(s => s.openWorkspaceResources);
   const historySessionOpenTransition = useSyncExternalStore(
     subscribeHistorySessionOpenTransition,
     getHistorySessionOpenTransitionSnapshot,
@@ -515,12 +515,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     };
   }, [menuOpen, workspace]);
 
-  const handleActivate = useCallback(async () => {
-    if (!isActive) {
-      await setActiveWorkspace(workspace.id);
-    }
-  }, [isActive, setActiveWorkspace, workspace.id]);
-
   const handleCollapseToggle = useCallback(() => {
     setSessionsCollapsed(prev => !prev);
   }, []);
@@ -681,7 +675,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     }
   }, [t, workspace.rootPath]);
 
-  const handleCreateSession = useCallback(async (mode?: 'agentic' | 'Cowork' | 'Claw') => {
+  const handleCreateSession = useCallback(async (mode?: 'Standard' | 'Cowork' | 'Claw') => {
     setMenuOpen(false);
     const resolvedMode = mode ?? (workspace.workspaceKind === WorkspaceKind.Assistant ? 'Claw' : undefined);
     try {
@@ -722,7 +716,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   ]);
 
   const handleCreateProjectSession = useCallback(() => {
-    void handleCreateSession('agentic');
+    void handleCreateSession();
   }, [handleCreateSession]);
 
   const handleCreateAcpSession = useCallback(async (client: AcpClientInfo) => {
@@ -790,18 +784,10 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     }
   }, [setActiveWorkspace, t, workspace]);
 
-  const handleOpenFiles = useCallback(async () => {
-    try {
-      await handleActivate();
-      switchLeftPanelTab('files');
-      openNavScene('file-viewer');
-    } catch (error) {
-      notificationService.error(
-        error instanceof Error ? error.message : t('nav.workspaces.revealFailed'),
-        { duration: 4000 }
-      );
-    }
-  }, [handleActivate, openNavScene, switchLeftPanelTab, t]);
+  const handleOpenFiles = useCallback(() => {
+    switchLeftPanelTab('files');
+    openWorkspaceResources(workspace.id);
+  }, [openWorkspaceResources, switchLeftPanelTab, workspace.id]);
 
   if (workspace.workspaceKind === WorkspaceKind.Assistant) {
     return (
@@ -877,6 +863,20 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
           </Tooltip>
 
           <div className="openbitfun-nav-panel__assistant-item-menu" data-openbitfun-component="workspace-item" data-openbitfun-part="menu" ref={menuRef} onClick={e => e.stopPropagation()}>
+            <Tooltip content={t('nav.workspaces.actions.newSession')} placement="right" followCursor>
+              <button
+                data-openbitfun-component="workspace-item"
+                data-openbitfun-part="action"
+                type="button"
+                className="openbitfun-nav-panel__assistant-item-menu-trigger"
+                onClick={() => { void handleCreateSession(); }}
+                aria-label={t('nav.workspaces.actions.newSession')}
+                data-testid="nav-workspace-new-session-btn"
+                data-workspace-id={workspace.id}
+              >
+                <Icon name="plus" size="xs" />
+              </button>
+            </Tooltip>
             <Tooltip content={t('nav.resources.title')} placement="right" followCursor>
               <button
                 data-openbitfun-component="workspace-item"
@@ -1350,6 +1350,20 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
 
         <div className="openbitfun-nav-panel__workspace-item-actions" onClick={e => e.stopPropagation()}>
           <div className="openbitfun-nav-panel__workspace-item-menu" data-openbitfun-component="workspace-item" data-openbitfun-part="menu" ref={menuRef}>
+            <Tooltip content={t('nav.sessions.newSession')} placement="right" followCursor>
+              <button
+                data-openbitfun-component="workspace-item"
+                data-openbitfun-part="action"
+                type="button"
+                className="openbitfun-nav-panel__workspace-item-menu-trigger"
+                onClick={handleCreateProjectSession}
+                aria-label={t('nav.sessions.newSession')}
+                data-testid="nav-workspace-new-session-btn"
+                data-workspace-id={workspace.id}
+              >
+                <Icon name="plus" size="xs" />
+              </button>
+            </Tooltip>
             <Tooltip content={t('nav.resources.title')} placement="right" followCursor>
               <button
                 data-openbitfun-component="workspace-item"

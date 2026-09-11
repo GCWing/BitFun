@@ -32,9 +32,8 @@ use openbitfun_services_integrations::remote_connect::{
     remote_workspace_updated_response, resolve_remote_agent_type, resolve_remote_cancel_decision,
     resolve_remote_execution_image_contexts, resolve_remote_file_chunk_range,
     resolve_remote_workspace_path, should_send_remote_model_catalog, submit_remote_dialog,
-    ActiveTurnSnapshot, ChatImageAttachment, ChatMessage, ChatMessageItem, DeviceIdentity,
-    ImageAttachment, KeyPair, PairingChallenge, PairingProtocol, PairingResponse, PairingState,
-    QrGenerator, QrPayload, RelayMessage, RemoteAssistantWorkspaceFacts, RemoteCancelDecision,
+    ActiveTurnSnapshot, ChatImageAttachment, ChatMessage, ChatMessageItem, ImageAttachment,
+    QrGenerator, RelayMessage, RemoteAssistantWorkspaceFacts, RemoteCancelDecision,
     RemoteCancelRuntimeHost, RemoteCancelTaskRequest, RemoteChatHistoryRound,
     RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
     RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteCommand, RemoteCommandRuntimeHost,
@@ -55,104 +54,26 @@ use openbitfun_services_integrations::remote_connect::{
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-#[tokio::test]
-async fn remote_connect_pairing_primitives_live_in_services_owner() {
-    let desktop = DeviceIdentity {
-        device_id: "desktop-id".to_string(),
-        device_name: "Desktop".to_string(),
-        mac_address: "00:11:22:33:44:55".to_string(),
-    };
-    let mobile = DeviceIdentity {
-        device_id: "mobile-id".to_string(),
-        device_name: "Mobile".to_string(),
-        mac_address: "66:77:88:99:AA:BB".to_string(),
-    };
-
-    let mut protocol = PairingProtocol::new(desktop);
-    let payload = protocol
-        .initiate("https://relay.example.com")
-        .await
-        .unwrap();
-    assert_eq!(protocol.state().await, PairingState::WaitingForScan);
-    assert_eq!(payload.url, "https://relay.example.com");
-
-    let mobile_keypair = KeyPair::generate();
-    let challenge = protocol
-        .on_peer_joined(&mobile_keypair.public_key_base64())
-        .await
-        .unwrap();
-    let response = PairingProtocol::answer_challenge(
-        &challenge,
-        &mobile,
-        Some("install-1".to_string()),
-        Some("user-1".to_string()),
-    );
-
-    assert!(protocol.verify_response(&response).await.unwrap());
-    assert_eq!(protocol.state().await, PairingState::Connected);
-}
-
 #[test]
-fn remote_connect_qr_and_relay_primitives_live_in_services_owner() {
-    let payload = QrPayload {
-        room_id: "room 1".to_string(),
-        url: "https://relay.example.com/socket".to_string(),
-        device_id: "device/id".to_string(),
-        device_name: "Desktop Device".to_string(),
-        public_key: "public/key".to_string(),
-        version: 1,
+fn relay_invitations_and_authentication_use_the_same_protocol_for_all_endpoints() {
+    for endpoint in [
+        "https://remote.openbitfun.com/v/1.0.0",
+        "http://192.168.1.8:9700",
+    ] {
+        assert_eq!(
+            QrGenerator::build_device_url(endpoint, "desktop-1").unwrap(),
+            format!("{endpoint}/#/pair?did=desktop-1")
+        );
+    }
+    let message = RelayMessage::AuthConnect {
+        token: "test-token".into(),
+        device_name: "Desktop".into(),
+        device_kind: "desktop".into(),
     };
-
-    let url = QrGenerator::build_url(&payload, "https://mobile.example.com/", "zh-CN", None);
-    assert!(url.starts_with("https://mobile.example.com/#/pair?"));
-    assert!(url.contains("relay=wss%3A%2F%2Frelay.example.com%2Fsocket"));
-    assert!(url.contains("lang=zh-CN"));
-    assert!(!url.contains("auth=account"));
-
-    let account_url = QrGenerator::build_url(
-        &payload,
-        "https://mobile.example.com/",
-        "zh-CN",
-        Some("alice"),
+    assert_eq!(
+        serde_json::to_value(message).unwrap()["type"],
+        "auth_connect"
     );
-    assert!(account_url.contains("auth=account"));
-    assert!(account_url.contains("user=alice"));
-
-    let auth_only_url =
-        QrGenerator::build_url(&payload, "https://mobile.example.com/", "zh-CN", Some(""));
-    assert!(auth_only_url.contains("auth=account"));
-    assert!(!auth_only_url.contains("user="));
-
-    let with_password = PairingProtocol::answer_challenge_with_password(
-        &PairingChallenge {
-            challenge: "abc".to_string(),
-            timestamp: 1,
-        },
-        &DeviceIdentity {
-            device_id: "m1".to_string(),
-            device_name: "Phone".to_string(),
-            mac_address: "00:00:00:00:00:00".to_string(),
-        },
-        Some("install-1".to_string()),
-        Some("alice".to_string()),
-        Some("secret".to_string()),
-    );
-    let json = serde_json::to_value(&with_password).expect("serialize pairing response");
-    assert_eq!(json["user_id"], "alice");
-    assert_eq!(json["password"], "secret");
-    let parsed: PairingResponse =
-        serde_json::from_value(json).expect("deserialize pairing response");
-    assert_eq!(parsed.password.as_deref(), Some("secret"));
-
-    let message = RelayMessage::CreateRoom {
-        room_id: Some(payload.room_id),
-        device_id: payload.device_id,
-        device_type: "desktop".to_string(),
-        public_key: payload.public_key,
-    };
-    let json = serde_json::to_value(message).expect("serialize relay message");
-    assert_eq!(json["type"], "create_room");
-    assert_eq!(json["device_type"], "desktop");
 }
 
 #[test]
@@ -1293,7 +1214,7 @@ async fn remote_connect_dialog_runtime_owns_restore_prewarm_and_submit_order() {
     let submitted = host.submitted();
     assert_eq!(submitted.session_id, "session-1");
     assert_eq!(submitted.content, "hello");
-    assert_eq!(submitted.resolved_agent_type, "agentic");
+    assert_eq!(submitted.resolved_agent_type, "Standard");
     assert_eq!(
         submitted
             .binding_workspace
@@ -1709,6 +1630,7 @@ fn remote_connect_file_response_assembly_owns_base64_wire_shape() {
     assert_eq!(content_json["size"], 17);
 
     let chunk_response = remote_file_chunk_response(Ok(RemoteWorkspaceFileChunk {
+        revision: String::new(),
         name: "report.md".to_string(),
         bytes: b"remote file".to_vec(),
         offset: 6,
@@ -1796,6 +1718,71 @@ async fn remote_connect_file_command_handler_owns_owner_flow_and_uses_host_root(
     );
 
     std::fs::remove_dir_all(base).expect("cleanup remote workspace");
+}
+
+struct UnavailableSessionFileHost;
+
+#[async_trait::async_trait]
+impl RemoteWorkspaceFileRuntimeHost for UnavailableSessionFileHost {
+    async fn resolve_remote_file_workspace_root(&self, _: Option<&str>) -> Option<PathBuf> {
+        panic!("A session provider error must never access the legacy local root")
+    }
+
+    async fn read_remote_file(
+        &self,
+        _: &str,
+        session: Option<&str>,
+        _: u64,
+    ) -> Result<Option<RemoteWorkspaceFileContent>, String> {
+        assert_eq!(session, Some("remote-session"));
+        Err("Session host is offline".into())
+    }
+
+    async fn read_remote_file_chunk(
+        &self,
+        _: &str,
+        session: Option<&str>,
+        _: u64,
+        _: u64,
+    ) -> Result<Option<RemoteWorkspaceFileChunk>, String> {
+        assert_eq!(session, Some("remote-session"));
+        Err("Session host is offline".into())
+    }
+
+    async fn remote_file_info(
+        &self,
+        _: &str,
+        session: Option<&str>,
+    ) -> Result<Option<RemoteWorkspaceFileInfo>, String> {
+        assert_eq!(session, Some("remote-session"));
+        Err("Session host is offline".into())
+    }
+}
+
+#[tokio::test]
+async fn remote_connect_file_provider_errors_never_fall_back_to_local_files() {
+    let path = "computer://output.png".to_string();
+    let session_id = Some("remote-session".to_string());
+    for command in [
+        RemoteCommand::ReadFile {
+            path: path.clone(),
+            session_id: session_id.clone(),
+        },
+        RemoteCommand::ReadFileChunk {
+            path: path.clone(),
+            session_id: session_id.clone(),
+            offset: 0,
+            limit: 3,
+        },
+        RemoteCommand::GetFileInfo { path, session_id },
+    ] {
+        assert_eq!(
+            handle_remote_workspace_file_command(&UnavailableSessionFileHost, &command).await,
+            RemoteResponse::Error {
+                message: "Session host is offline".into()
+            }
+        );
+    }
 }
 
 #[test]
@@ -1980,7 +1967,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
         RemoteSessionMetadata {
             session_id: "session-1".to_string(),
             name: "first".to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             created_at_ms: 1_700_000_000_000,
             last_active_at_ms: 1_700_000_001_000,
             turn_count: 3,
@@ -2111,7 +2098,7 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
 fn remote_connect_session_create_contract_preserves_workspace_binding() {
     let request = build_remote_session_create_request(
         "Remote Session",
-        "agentic",
+        "Standard",
         Some("D:/workspace/project"),
         RemoteSessionWorkspaceIdentity::new(
             Some("ssh-1".to_string()),
@@ -2121,7 +2108,7 @@ fn remote_connect_session_create_contract_preserves_workspace_binding() {
     );
 
     assert_eq!(request.session_name, "Remote Session");
-    assert_eq!(request.agent_type, "agentic");
+    assert_eq!(request.agent_type, "Standard");
     assert_eq!(
         request.workspace_path.as_deref(),
         Some("D:/workspace/project")
@@ -2133,20 +2120,21 @@ fn remote_connect_session_create_contract_preserves_workspace_binding() {
 
 #[test]
 fn remote_connect_agent_type_mapping_preserves_current_mobile_aliases() {
-    assert_eq!(resolve_remote_agent_type(Some("code")), "agentic");
-    assert_eq!(resolve_remote_agent_type(Some("agentic")), "agentic");
-    assert_eq!(resolve_remote_agent_type(Some("Agentic")), "agentic");
-    assert_eq!(resolve_remote_agent_type(Some("balanced")), "agentic");
-    assert_eq!(resolve_remote_agent_type(Some("standard")), "agentic");
-    assert_eq!(resolve_remote_agent_type(Some("minimal")), "minimal");
-    assert_eq!(resolve_remote_agent_type(Some("ultimate")), "Ultra");
-    assert_eq!(resolve_remote_agent_type(Some("Ultra")), "Ultra");
+    assert_eq!(resolve_remote_agent_type(Some("code")), "Standard");
+    assert_eq!(resolve_remote_agent_type(Some("Standard")), "Standard");
+    assert_eq!(resolve_remote_agent_type(Some("Standard")), "Standard");
+    assert_eq!(resolve_remote_agent_type(Some("balanced")), "Standard");
+    assert_eq!(resolve_remote_agent_type(Some("standard")), "Standard");
+    assert_eq!(resolve_remote_agent_type(Some("minimal")), "Minimal");
+    assert_eq!(resolve_remote_agent_type(Some("MINIMAL")), "Minimal");
+    assert_eq!(resolve_remote_agent_type(Some("ultimate")), "Ultimate");
+    assert_eq!(resolve_remote_agent_type(Some("Ultimate")), "Ultimate");
     assert_eq!(resolve_remote_agent_type(Some("cowork")), "Cowork");
     assert_eq!(resolve_remote_agent_type(Some("Cowork")), "Cowork");
-    assert_eq!(resolve_remote_agent_type(Some("plan")), "agentic");
-    assert_eq!(resolve_remote_agent_type(Some("Plan")), "agentic");
-    assert_eq!(resolve_remote_agent_type(Some("unknown")), "agentic");
-    assert_eq!(resolve_remote_agent_type(None), "agentic");
+    assert_eq!(resolve_remote_agent_type(Some("plan")), "Standard");
+    assert_eq!(resolve_remote_agent_type(Some("Plan")), "Standard");
+    assert_eq!(resolve_remote_agent_type(Some("unknown")), "Standard");
+    assert_eq!(resolve_remote_agent_type(None), "Standard");
 }
 
 #[test]
@@ -2287,26 +2275,6 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
     assert_eq!(poll["since_version"], 7);
     assert_eq!(poll["known_msg_count"], 3);
     assert_eq!(poll["known_model_catalog_version"], 11);
-
-    let get_identity = serde_json::to_value(RemoteCommand::GetDelegatedIdentity)
-        .expect("serialize get delegated identity command");
-    assert_eq!(get_identity["cmd"], "get_delegated_identity");
-    let parsed: RemoteCommand = serde_json::from_str(r#"{"cmd":"get_delegated_identity"}"#)
-        .expect("parse get delegated identity command");
-    assert_eq!(parsed, RemoteCommand::GetDelegatedIdentity);
-
-    let identity = serde_json::to_value(RemoteResponse::DelegateIdentity {
-        token: "token-1".to_string(),
-        user_id: "user-1".to_string(),
-        master_key: "bWFzdGVyLWtleQ==".to_string(),
-        device_id: "device-1".to_string(),
-    })
-    .expect("serialize delegate identity response");
-    assert_eq!(identity["resp"], "delegate_identity");
-    assert_eq!(identity["token"], "token-1");
-    assert_eq!(identity["user_id"], "user-1");
-    assert_eq!(identity["master_key"], "bWFzdGVyLWtleQ==");
-    assert_eq!(identity["device_id"], "device-1");
 }
 
 #[test]
@@ -3174,4 +3142,16 @@ fn control_ping_accepts_legacy_and_additive_client_identity() {
         serde_json::from_value::<LegacyCommand>(current).unwrap(),
         LegacyCommand::Ping
     ));
+}
+
+#[test]
+fn file_chunk_revision_is_additive_for_legacy_peers() {
+    let legacy = serde_json::json!({"resp":"file_chunk","name":"a.png","chunk_base64":"AQ==",
+        "offset":0,"chunk_size":1,"total_size":1,"mime_type":"image/png"});
+    let response: RemoteResponse = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(serde_json::to_value(response).unwrap(), legacy);
+    let mut current = legacy;
+    current["revision"] = serde_json::json!("1:123");
+    let response: RemoteResponse = serde_json::from_value(current.clone()).unwrap();
+    assert_eq!(serde_json::to_value(response).unwrap(), current);
 }

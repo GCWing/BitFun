@@ -535,7 +535,7 @@ mod tests {
         let projected = project_agentic_frontend_event(AgenticEvent::SessionCreated {
             session_id: "session-1".to_string(),
             session_name: "Isolated task".to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             workspace_path: Some("/worktrees/wt-1".to_string()),
             project_workspace_path: Some("/repo".to_string()),
             execution_target: Some(SessionExecutionTarget {

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -50,12 +51,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.graphics.asImageBitmap
+import com.openbitfun.mobile.app.ui.common.ConnectionSheetHeader
+import com.openbitfun.mobile.app.ui.common.ConnectionSheetFooter
+import com.openbitfun.mobile.app.ui.common.connectionSheetTextStyle
 import com.openbitfun.mobile.app.R
 import com.openbitfun.mobile.app.platform.deviceIdentity
 import com.openbitfun.mobile.app.viewmodel.AccountViewModel
 import com.openbitfun.mobile.core.feature.account.AccountFailureReason
 import com.openbitfun.mobile.core.feature.account.AccountIntent
 import com.openbitfun.mobile.core.feature.account.AccountUiState
+import com.openbitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
 import com.openbitfun.mobile.app.ui.theme.openBitFunColors
 
 private val AccountCardShape = RoundedCornerShape(24.dp)
@@ -72,10 +78,10 @@ internal fun AccountScreen(
         AccountUiState.Idle, AccountUiState.Restoring -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
-        AccountUiState.SigningIn, AccountUiState.SignedOut, is AccountUiState.Failed -> AccountLoginPage(
+        AccountUiState.SigningIn, AccountUiState.SignedOut, is AccountUiState.Authorizing, is AccountUiState.Failed -> AccountLoginPage(
             state = current,
             onBack = onBack,
-            onLogin = { relay, username, password -> viewModel.dispatch(AccountIntent.Login(relay, username, password)) },
+            onLogin = { viewModel.dispatch(AccountIntent.Login) },
             modifier = modifier,
         )
         is AccountUiState.Ready -> AccountProfilePage(
@@ -90,104 +96,45 @@ internal fun AccountScreen(
 }
 
 @Composable
-private fun AccountLoginPage(
+internal fun AccountLoginPage(
     state: AccountUiState,
     onBack: () -> Unit,
-    onLogin: (String, String, String) -> Unit,
+    onLogin: () -> Unit,
     modifier: Modifier,
 ) {
-    var relayUrl by rememberSaveable { mutableStateOf("https://remote.openbitfun.com/relay") }
-    var username by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
-    var passwordVisible by rememberSaveable { mutableStateOf(false) }
-    val busy = state is AccountUiState.SigningIn
-    val canSubmit = relayUrl.isNotBlank() && username.isNotBlank() && password.isNotEmpty() && !busy
-    Box(modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                .padding(start = 28.dp, end = 28.dp, top = 118.dp, bottom = 44.dp),
-        ) {
-            Text(stringResource(R.string.account_login_title), fontSize = 32.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
-            Text(stringResource(R.string.account_login_body), fontSize = 15.sp, lineHeight = 22.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp, bottom = 42.dp))
-            AccountInput(username, stringResource(R.string.account_username_placeholder), { username = it }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next))
-            AccountInput(
-                password,
-                stringResource(R.string.account_password_placeholder),
-                { password = it },
-                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
-                trailing = {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(painterResource(if (passwordVisible) R.drawable.ic_symbol_eye else R.drawable.ic_symbol_eye_slash), contentDescription = null, modifier = Modifier.size(24.dp))
+    val busy = state is AccountUiState.SigningIn || state is AccountUiState.Authorizing
+    val canSubmit = !busy
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    Column(modifier.fillMaxWidth()) {
+        ConnectionSheetHeader(onBack, uniformGlyph = true)
+        Box(Modifier.weight(1f, fill = false).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp).heightIn(min = MobileDesignGeometry.LoginSheetBodyMinHeight),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(stringResource(R.string.account_login_title),
+                    style = MaterialTheme.typography.displayMedium.connectionSheetTextStyle(), textAlign = TextAlign.Center)
+                Text(stringResource(R.string.account_login_body),
+                    style = MaterialTheme.typography.bodyMedium.connectionSheetTextStyle(),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp))
+                (state as? AccountUiState.Authorizing)?.let { authorization ->
+                    Button(onClick = { uriHandler.openUri(authorization.authorizationUrl) }) {
+                        Text(stringResource(R.string.account_open_github))
                     }
-                },
-                modifier = Modifier.padding(top = 14.dp),
-            )
-            Text(stringResource(R.string.account_login_server), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 4.dp, top = 26.dp, bottom = 8.dp))
-            AccountInput(
-                relayUrl,
-                stringResource(R.string.account_relay_url_placeholder),
-                { relayUrl = it },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { if (canSubmit) onLogin(relayUrl, username, password) }),
-                modifier = Modifier.height(52.dp),
-            )
-            (state as? AccountUiState.Failed)?.let { failure ->
-                Text(stringResource(failure.reason.messageRes()), color = MaterialTheme.colorScheme.error, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 12.dp))
+                }
+                (state as? AccountUiState.Failed)?.let { failure ->
+                    Text(stringResource(failure.reason.messageRes()), color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall.connectionSheetTextStyle(), modifier = Modifier.padding(top = 12.dp))
+                }
             }
-            Spacer(Modifier.height(if (state is AccountUiState.Failed) 22.dp else 30.dp))
-            Button(
-                onClick = { onLogin(relayUrl, username, password) },
-                enabled = canSubmit,
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
-                    disabledContentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-            ) { Text(stringResource(if (busy) R.string.account_signing_in else R.string.account_sign_in), fontSize = 17.sp, fontWeight = FontWeight.Bold) }
         }
-        AccountBackButton(onBack, Modifier.padding(start = 28.dp, top = 22.dp))
+        ConnectionSheetFooter(
+            label = stringResource(if (busy) R.string.account_signing_in else R.string.account_login_title),
+            primary = true, elevated = false, enabled = canSubmit, onClick = onLogin,
+        )
     }
-}
-
-@Composable
-private fun AccountInput(
-    value: String,
-    placeholder: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    visualTransformation: VisualTransformation = VisualTransformation.None,
-    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
-    keyboardActions: KeyboardActions = KeyboardActions.Default,
-    trailing: (@Composable (() -> Unit))? = null,
-) {
-    TextField(
-        value = value,
-        onValueChange = onValueChange,
-        placeholder = { Text(placeholder, fontSize = 17.sp) },
-        singleLine = true,
-        visualTransformation = visualTransformation,
-        keyboardOptions = keyboardOptions,
-        keyboardActions = keyboardActions,
-        trailingIcon = trailing,
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surface,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-            disabledContainerColor = MaterialTheme.colorScheme.surface,
-            focusedIndicatorColor = openBitFunColors.transparent,
-            unfocusedIndicatorColor = openBitFunColors.transparent,
-            cursorColor = MaterialTheme.colorScheme.onSurface,
-            focusedTextColor = MaterialTheme.colorScheme.onSurface,
-            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
-            focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        ),
-        shape = RoundedCornerShape(18.dp),
-        modifier = modifier.fillMaxWidth().height(58.dp),
-    )
 }
 
 @Composable
@@ -212,7 +159,7 @@ private fun AccountProfilePage(
         Spacer(Modifier.height(30.dp))
         Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
             Column(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                AccountAvatar(70)
+                AccountAvatar(70, state.avatarUrl)
                 Text(state.username, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(state.userId, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(0.88f), textAlign = TextAlign.Center)
             }
@@ -295,9 +242,17 @@ private fun AccountDetailRow(label: String, value: String) {
 }
 
 @Composable
-private fun AccountAvatar(size: Int) {
+private fun AccountAvatar(size: Int, url: String? = null) {
+    val bitmap by androidx.compose.runtime.produceState<android.graphics.Bitmap?>(null, url) {
+        value = null
+        value = com.openbitfun.mobile.app.platform.loadAccountAvatar(url)
+    }
     Box(Modifier.size(size.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-        Icon(painterResource(R.drawable.ic_symbol_person), contentDescription = null, modifier = Modifier.size((size * 0.52f).dp))
+        val loaded = bitmap
+        if (loaded != null) androidx.compose.foundation.Image(
+            bitmap = loaded.asImageBitmap(), contentDescription = null,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.size(size.dp),
+        ) else Icon(painterResource(R.drawable.ic_symbol_person), contentDescription = null, modifier = Modifier.size((size * 0.52f).dp))
     }
 }
 

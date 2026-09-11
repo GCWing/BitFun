@@ -131,7 +131,8 @@ export class ExplorerController {
       ...this.config,
       ...config,
     });
-    const rootChanged = this.config.rootPath !== nextConfig.rootPath;
+    const rootChanged = this.config.rootPath !== nextConfig.rootPath
+      || this.config.remoteConnectionId !== nextConfig.remoteConnectionId;
     const optionsChanged = didReloadRelevantOptionsChange(this.lastAppliedConfig, nextConfig);
     this.config = nextConfig;
     this.model.configure(nextConfig);
@@ -441,6 +442,7 @@ export class ExplorerController {
     try {
       const children = await this.provider.getChildren({
         path: canonicalPath,
+        remoteConnectionId: this.config.remoteConnectionId,
         options: this.config,
       });
 

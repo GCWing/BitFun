@@ -197,6 +197,38 @@ describe('HooksConfig imported Hook management', () => {
     expect(container.textContent).toContain('activation.title');
   });
 
+  it('shows PI and DeepSeek Harness discoveries without offering execution or import', async () => {
+    const externalSources = ['pi', 'deepseek-harness'].map((ecosystemId) => ({
+      ...source,
+      key: { providerId: `${ecosystemId}.hooks`, sourceId: 'extension' },
+      ecosystemId,
+      displayName: `${ecosystemId} extension`,
+      locationHint: `${ecosystemId}/extension.ts`,
+      sourceKind: 'plugin_file',
+    }));
+    getSnapshotMock.mockResolvedValue({
+      ...snapshot,
+      catalog: {
+        ...catalog,
+        sources: externalSources,
+        entries: externalSources.map((item) => ({
+          stableKey: `${item.ecosystemId}:hook`, source: item.key,
+          nativeEvent: item.ecosystemId === 'pi' ? 'tool_call' : 'PreToolUse',
+          handlerKind: 'function', projectionStatus: 'native_only',
+          nativeActivation: 'unknown', matcher: { kind: 'dynamic' }, contentVersion: 'v1',
+        })),
+      },
+    });
+    await act(async () => root.render(<HooksConfig embedded />));
+    await flush();
+    expect(container.textContent).toContain('tool_call');
+    expect(container.textContent).toContain('PreToolUse');
+    expect(container.textContent).toContain('discovery.readOnly');
+    expect(container.textContent).not.toContain('imports.review');
+    expect(planImportMock).not.toHaveBeenCalled();
+    expect(applyImportMock).not.toHaveBeenCalled();
+  });
+
   it('explains the empty imported Hooks state instead of leaving an empty row', async () => {
     getSnapshotMock.mockResolvedValue({
       ...snapshot,

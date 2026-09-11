@@ -2,7 +2,7 @@ import { preferences } from '@kit.ArkData';
 import { Encoding } from './Encoding';
 import { HarmonyUpgradeIdentityContract } from './HarmonyUpgradeIdentityContract';
 import { OhosError } from './OhosError';
-import { RemoteDescriptorParser } from './RemoteDescriptorParser';
+import { accountDeviceLink } from './AccountDeviceLink';
 import { RemoteLogger } from './RemoteLogger';
 import { RemoteModelPreferenceStore } from './RemoteModelController';
 
@@ -53,7 +53,7 @@ export class MobileIdentityStore implements RemoteModelPreferenceStore {
     };
     if (snapshot.remoteUrl.length > 0) {
       RemoteLogger.info(
-        `pairing snapshot restored room=${this.roomReference(snapshot.remoteUrl)} saved_at=${snapshot.pairingSavedAt}`
+        `pairing snapshot restored device=${this.deviceReference(snapshot.remoteUrl)} saved_at=${snapshot.pairingSavedAt}`
       );
     }
     return snapshot;
@@ -73,7 +73,7 @@ export class MobileIdentityStore implements RemoteModelPreferenceStore {
     } catch (err) {
       throw OhosError.wrap('mobile identity save pairing snapshot', err);
     }
-    RemoteLogger.info(`pairing snapshot saved room=${this.roomReference(normalizedUrl)} saved_at=${savedAt}`);
+    RemoteLogger.info(`pairing snapshot saved device=${this.deviceReference(normalizedUrl)} saved_at=${savedAt}`);
   }
 
   async clearPairingInput(): Promise<void> {
@@ -155,9 +155,9 @@ export class MobileIdentityStore implements RemoteModelPreferenceStore {
     }
   }
 
-  private roomReference(remoteUrl: string): string {
+  private deviceReference(remoteUrl: string): string {
     try {
-      return RemoteDescriptorParser.parse(remoteUrl).roomId.slice(0, 8);
+      return accountDeviceLink(remoteUrl)?.deviceId.slice(0, 8) || 'unavailable';
     } catch (_err) {
       return 'invalid';
     }

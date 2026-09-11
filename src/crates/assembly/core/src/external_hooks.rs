@@ -16,8 +16,10 @@ use crate::external_sources::{host_execution_domain_id, normalize_workspace_root
 use crate::service::workspace::{global_worktree_topology_service, WorktreeTopologyFreshness};
 use openbitfun_claude_code_adapter::{ClaudeCodeHookProvider, ClaudeCodeHookProviderOptions};
 use openbitfun_codex_adapter::{CodexHookProvider, CodexHookProviderOptions};
+use openbitfun_dsh_adapter::DshHookProvider;
 use openbitfun_external_sources::ExternalHookCatalogCoordinator;
 use openbitfun_opencode_adapter::{OpenCodeHookProvider, OpenCodeHookProviderOptions};
+use openbitfun_pi_adapter::PiHookProvider;
 use openbitfun_product_domains::external_hook_catalog::ExternalHookSourceProvider;
 use openbitfun_product_domains::external_hook_import::PreparedExternalHookImport;
 use openbitfun_product_domains::external_sources::{
@@ -241,6 +243,8 @@ pub(crate) async fn service_for(
                 })?,
             },
             vec![
+                Arc::new(DshHookProvider::default()),
+                Arc::new(PiHookProvider::default()),
                 Arc::new(OpenCodeHookProvider::new(OpenCodeHookProviderOptions {
                     project_root_override: project_boundary.clone(),
                     ..OpenCodeHookProviderOptions::default()

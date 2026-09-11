@@ -41,6 +41,7 @@
     "emptyError": "此字段不能為空"
   },
   "markdown": {
+    "imageUnavailable": "圖片預覽載入失敗",
     "remoteImageUnavailable": "派發任務暫不支援圖片預覽",
     "copySuccess": "複製成功",
     "copyCode": "複製代碼",
@@ -627,5 +628,15 @@
     "selectProjectDirectory": "選擇要開啟的專案目錄"
   },
   "hide": "隱藏",
-  "show": "顯示"
+  "show": "顯示",
+  "workbench": {
+    "dragToPopOut": "拖到頂端彈出",
+    "releaseToPopOut": "放開以彈出",
+    "save": "儲存",
+    "discard": "捨棄變更",
+    "cancel": "取消",
+    "unsavedMessage": "關閉前儲存「{{title}}」的變更？",
+    "closeOtherContent": "關閉其他內容標籤",
+    "closeAllContent": "關閉所有內容標籤"
+  }
 }

@@ -13,6 +13,7 @@ import './GalleryDetailModal.scss';
 interface GalleryDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
+  className?: string;
   icon?: React.ReactNode;
   iconGradient?: string;
   title: string;
@@ -34,6 +35,7 @@ interface GalleryDetailModalProps {
 const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
   isOpen,
   onClose,
+  className,
   icon,
   iconGradient,
   title,
@@ -92,7 +94,10 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
       onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
       size={size}
       aria-labelledby={usesHeroTitle ? heroTitleId : undefined}
-      className={stableHeight ? 'gallery-detail-modal__surface--stable-height' : undefined}
+      className={[
+        stableHeight ? 'gallery-detail-modal__surface--stable-height' : '',
+        className,
+      ].filter(Boolean).join(' ') || undefined}
       data-testid={testId}
     >
       <DialogHeader className={usesHeroTitle ? 'gallery-detail-modal__dialog-header--hero-title' : undefined}>

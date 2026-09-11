@@ -687,7 +687,7 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-openbitfun-component="about-dialog"][data-openbitfun-part="updateCard"][data-openbitfun-state~="downloading"] [data-openbitfun-component="about-dialog"][data-openbitfun-part="progressFill"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="nav-panel"][data-openbitfun-part="topAction"][data-openbitfun-action="new-session"][data-openbitfun-state~="active"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="canvas-editor-area"][data-openbitfun-part="root"][data-openbitfun-layout="grid"]');
-    expect(snapshot.cssText).toContain('[data-openbitfun-component="canvas-tab"][data-openbitfun-part="root"][data-openbitfun-state~="active"]');
+    expect(snapshot.cssText).toContain('[data-openbitfun-product-component="canvas-tab"][data-openbitfun-product-part="root"][data-openbitfun-state~="active"]');
   });
 
   it('compiles dedicated contracts for large interactive owners', () => {
@@ -1030,11 +1030,11 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-openbitfun-component="keyboard-shortcuts"][data-openbitfun-part="item"][data-openbitfun-state~="recording"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="task-tool-display"][data-openbitfun-part="root"][data-openbitfun-state~="failed"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="application-settings"][data-openbitfun-part="notifications"]');
-    expect(snapshot.cssText).toContain('[data-openbitfun-component="markdown-editor"][data-openbitfun-part="root"][data-openbitfun-view="source"]');
+    expect(snapshot.cssText).toContain('[data-openbitfun-product-component="markdown-editor"][data-openbitfun-product-part="root"][data-openbitfun-view="source"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="plan-viewer"][data-openbitfun-part="editorPanel"][data-openbitfun-state~="expanded"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="terminal-tool"][data-openbitfun-part="screen"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="app-layout"][data-openbitfun-part="root"][data-openbitfun-state~="toolbar"]');
-    expect(snapshot.cssText).toContain('[data-openbitfun-component="skill-group-picker"][data-openbitfun-part="token"][data-openbitfun-state~="selected"]');
+    expect(snapshot.cssText).toContain('[data-openbitfun-product-component="skill-group-picker"][data-openbitfun-product-part="token"][data-openbitfun-state~="selected"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="working-copy-view"][data-openbitfun-part="file"][data-openbitfun-state~="selected"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="assistant-config-page"][data-openbitfun-part="persona"][data-openbitfun-state~="selected"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="assistant-defaults-page"][data-openbitfun-part="skill"][data-openbitfun-state~="covered"]');
@@ -1044,7 +1044,7 @@ describe('AppearanceCompiler', () => {
     expect(snapshot.cssText).toContain('[data-openbitfun-component="skills-config"][data-openbitfun-part="marketItem"][data-openbitfun-state~="installed"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="diff-editor"][data-openbitfun-part="loading"][data-openbitfun-state~="loading"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="agent-companion-desktop-pet"][data-openbitfun-part="hitbox"][data-openbitfun-state~="attention"]');
-    expect(snapshot.cssText).toContain('[data-openbitfun-component="tool-group-picker"][data-openbitfun-part="token"][data-openbitfun-state~="selected"]');
+    expect(snapshot.cssText).toContain('[data-openbitfun-product-component="tool-group-picker"][data-openbitfun-product-part="token"][data-openbitfun-state~="selected"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="inline-diff-preview"][data-openbitfun-part="root"][data-openbitfun-state~="empty"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="export-image"][data-openbitfun-part="trigger"][data-openbitfun-state~="exporting"]');
     expect(snapshot.cssText).toContain('[data-openbitfun-component="user-message-item"][data-openbitfun-part="root"][data-openbitfun-state~="failed"]');

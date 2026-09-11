@@ -231,7 +231,24 @@ fn stored_agent_profile_from_overrides(
         enabled_user_skills,
         subagent_overrides,
         tool_permission_rules,
+        ..Default::default()
     })
+}
+
+fn retain_profile_extensions(
+    profile_id: &str,
+    canonical: Option<AgentProfileConfig>,
+    extensions: Map<String, Value>,
+) -> Option<AgentProfileConfig> {
+    if extensions.is_empty() {
+        return canonical;
+    }
+    let mut config = canonical.unwrap_or_else(|| AgentProfileConfig {
+        profile_id: profile_id.to_string(),
+        ..Default::default()
+    });
+    config.extensions = extensions;
+    Some(config)
 }
 
 fn build_agent_profile_view(
@@ -284,18 +301,21 @@ fn canonicalize_agent_profile(
         stored.profile_id = profile_id.to_string();
     }
 
-    Ok(stored_agent_profile_from_overrides(
-        StoredAgentProfileOverrides {
-            agent_id: profile_id,
-            added_tools: stored.added_tools,
-            removed_tools: stored.removed_tools,
-            disabled_user_skills: stored.disabled_user_skills,
-            enabled_user_skills: stored.enabled_user_skills,
-            subagent_overrides: stored.subagent_overrides,
-            tool_permission_rules: stored.tool_permission_rules,
-            default_tools,
-            valid_tools,
-        },
+    let canonical = stored_agent_profile_from_overrides(StoredAgentProfileOverrides {
+        agent_id: profile_id,
+        added_tools: stored.added_tools,
+        removed_tools: stored.removed_tools,
+        disabled_user_skills: stored.disabled_user_skills,
+        enabled_user_skills: stored.enabled_user_skills,
+        subagent_overrides: stored.subagent_overrides,
+        tool_permission_rules: stored.tool_permission_rules,
+        default_tools,
+        valid_tools,
+    });
+    Ok(retain_profile_extensions(
+        profile_id,
+        canonical,
+        stored.extensions,
     ))
 }
 
@@ -343,10 +363,19 @@ async fn get_profile_defaults() -> HashMap<String, Vec<String>> {
 
 pub async fn get_agent_profile_configs() -> OpenBitFunResult<HashMap<String, AgentProfileConfig>> {
     let config_service = GlobalConfigManager::get_service().await?;
-    Ok(config_service
-        .get_config(Some("ai.agent_profiles"))
-        .await
-        .unwrap_or_default())
+    let raw = config_service.get_config(Some("ai.agent_profiles")).await?;
+    let mut migrated =
+        openbitfun_config_contracts::agent_identity_migration::canonicalize_agent_profile_keys(
+            &raw,
+        )
+        .map_err(OpenBitFunError::config)?;
+    migrated.retain(|_, value| !value.is_null());
+    let mut profiles: HashMap<String, AgentProfileConfig> =
+        serde_json::from_value(Value::Object(migrated))?;
+    for (id, config) in &mut profiles {
+        config.profile_id = id.clone();
+    }
+    Ok(profiles)
 }
 
 pub async fn get_agent_profile_views() -> OpenBitFunResult<HashMap<String, AgentProfileView>> {
@@ -370,6 +399,7 @@ pub async fn get_agent_profile_views() -> OpenBitFunResult<HashMap<String, Agent
 }
 
 pub async fn get_agent_profile_view(agent_id: &str) -> OpenBitFunResult<AgentProfileView> {
+    let agent_id = openbitfun_core_types::agent_identity::canonical_agent_id(agent_id);
     let views = get_agent_profile_views().await?;
     views
         .get(agent_id)
@@ -381,6 +411,7 @@ pub async fn persist_agent_profile_from_value(
     agent_id: &str,
     config: Value,
 ) -> OpenBitFunResult<()> {
+    let agent_id = openbitfun_core_types::agent_identity::canonical_agent_id(agent_id);
     let config_service = GlobalConfigManager::get_service().await?;
     let agent_defaults = get_agent_defaults().await;
     let default_tools = agent_defaults
@@ -491,7 +522,10 @@ pub async fn persist_agent_profile_from_value(
                         .unwrap_or_default()
                 };
 
-                if let Some(canonical) = stored_agent_profile_from_tool_selection(
+                let extensions = current
+                    .map(|config| config.extensions.clone())
+                    .unwrap_or_default();
+                let canonical = stored_agent_profile_from_tool_selection(
                     agent_id,
                     enabled_tools,
                     disabled_user_skills,
@@ -500,7 +534,10 @@ pub async fn persist_agent_profile_from_value(
                     tool_permission_rules,
                     default_tools,
                     &valid_tools,
-                ) {
+                );
+                if let Some(canonical) =
+                    retain_profile_extensions(&profile_id, canonical, extensions)
+                {
                     stored_configs.insert(profile_id, canonical);
                 } else {
                     stored_configs.remove(&profile_id);
@@ -528,6 +565,7 @@ pub async fn reset_agent_profile_to_default(agent_id: &str) -> OpenBitFunResult<
                         && current.enabled_user_skills.is_empty()
                         && current.subagent_overrides.is_empty()
                         && current.tool_permission_rules.is_empty()
+                        && current.extensions.is_empty()
                     {
                         stored_configs.remove(&profile_id);
                     }
@@ -549,12 +587,14 @@ pub async fn canonicalize_agent_profile_configs(
         .update_config(
             "ai.agent_profiles",
             |raw_agent_profiles: &mut Map<String, Value>| {
+                let migrated = openbitfun_config_contracts::agent_identity_migration::canonicalize_agent_profile_keys(raw_agent_profiles)
+                    .map_err(OpenBitFunError::config)?;
                 let mut rewritten_agent_profiles = Map::new();
                 let mut updated_profiles = Vec::new();
                 let mut removed_profile_configs = Vec::new();
 
                 for (profile_id, default_tools) in &profile_defaults {
-                    let raw_profile = raw_agent_profiles.get(profile_id);
+                    let raw_profile = migrated.get(profile_id);
                     let canonical = canonicalize_agent_profile(
                         profile_id,
                         raw_profile,
@@ -579,19 +619,12 @@ pub async fn canonicalize_agent_profile_configs(
                 // Profiles we cannot resolve defaults for are kept, not dropped. Canonicalization
                 // runs at startup with no workspace, so project-scoped sub-agents are invisible
                 // here; pruning them would silently discard the user's stored selection every
-                // launch. Records that no longer deserialize are still removed, so one bad entry
-                // cannot take the whole map down when it is read back.
-                for (profile_id, raw_profile) in raw_agent_profiles.iter() {
+                // launch. Unknown or unreadable records must survive an upgrade unchanged.
+                for (profile_id, raw_profile) in migrated.iter() {
                     if profile_defaults.contains_key(profile_id) {
                         continue;
                     }
-                    match serde_json::from_value::<AgentProfileConfig>(raw_profile.clone()) {
-                        Ok(config) => {
-                            rewritten_agent_profiles
-                                .insert(profile_id.clone(), serde_json::to_value(config)?);
-                        }
-                        Err(_) => removed_profile_configs.push(profile_id.clone()),
-                    }
+                    rewritten_agent_profiles.insert(profile_id.clone(), raw_profile.clone());
                 }
 
                 *raw_agent_profiles = rewritten_agent_profiles;
@@ -630,6 +663,26 @@ mod tests {
     use openbitfun_runtime_ports::{PermissionEffect, PermissionRule};
     use serde_json::Value;
     use std::collections::HashSet;
+
+    #[test]
+    fn canonicalization_retains_future_fields_even_without_known_overrides() {
+        for raw in [
+            serde_json::json!({"profile_id": "Standard", "future_policy": {"enabled": false}}),
+            serde_json::json!({"profile_id": "Standard", "removed_tools": ["Bash"], "future_policy": ["x"]}),
+        ] {
+            let config = canonicalize_agent_profile(
+                "Standard",
+                Some(&raw),
+                &["Bash".into()],
+                &HashSet::from(["Bash".into()]),
+            )
+            .unwrap()
+            .unwrap();
+            let saved = serde_json::to_value(config).unwrap();
+            assert_eq!(saved["future_policy"], raw["future_policy"]);
+            assert_eq!(saved["removed_tools"], raw["removed_tools"]);
+        }
+    }
 
     /// Skill selection is stored per agent profile, so every agent whose default
     /// tools include `Skill` must resolve to a profile default. Otherwise saving
@@ -683,7 +736,7 @@ mod tests {
     fn stored_agent_profile_from_overrides_keeps_enabled_user_skills() {
         let valid_tools = HashSet::new();
         let stored = stored_agent_profile_from_overrides(StoredAgentProfileOverrides {
-            agent_id: "agentic",
+            agent_id: "Standard",
             added_tools: Vec::new(),
             removed_tools: Vec::new(),
             disabled_user_skills: Vec::new(),
@@ -695,7 +748,7 @@ mod tests {
         })
         .expect("mode config should be retained when skill overrides exist");
 
-        assert_eq!(stored.profile_id, "coding_shared");
+        assert_eq!(stored.profile_id, "Standard");
         assert_eq!(
             stored.enabled_user_skills,
             vec!["user::openbitfun-system::ppt-design".to_string()]
@@ -712,7 +765,7 @@ mod tests {
             AgentSubagentOverrideState::Disabled,
         );
         let stored = stored_agent_profile_from_overrides(StoredAgentProfileOverrides {
-            agent_id: "agentic",
+            agent_id: "Standard",
             added_tools: Vec::new(),
             removed_tools: Vec::new(),
             disabled_user_skills: Vec::new(),
@@ -724,7 +777,7 @@ mod tests {
         })
         .expect("mode config should be retained when subagent overrides exist");
 
-        assert_eq!(stored.profile_id, "coding_shared");
+        assert_eq!(stored.profile_id, "Standard");
         assert_eq!(stored.subagent_overrides, subagent_overrides);
     }
 
@@ -737,7 +790,7 @@ mod tests {
             PermissionEffect::Deny,
         )];
         let stored = stored_agent_profile_from_overrides(StoredAgentProfileOverrides {
-            agent_id: "agentic",
+            agent_id: "Standard",
             added_tools: Vec::new(),
             removed_tools: Vec::new(),
             disabled_user_skills: Vec::new(),
@@ -761,7 +814,7 @@ mod tests {
                 "effect": "allow"
             }]
         });
-        let canonical = canonicalize_agent_profile("agentic", Some(&raw), &[], &HashSet::new())
+        let canonical = canonicalize_agent_profile("Standard", Some(&raw), &[], &HashSet::new())
             .expect("profile should canonicalize")
             .expect("permission-only profile should be present");
 
@@ -781,11 +834,11 @@ mod tests {
     #[test]
     fn canonicalize_agent_profile_preserves_mcp_override_before_registration() {
         let raw = serde_json::json!({
-            "profile_id": "coding_shared",
+            "profile_id": "Standard",
             "added_tools": ["mcp__github__list_issues", "missing_static_tool"]
         });
         let canonical = canonicalize_agent_profile(
-            "coding_shared",
+            "Standard",
             Some(&raw),
             &["Read".to_string()],
             &HashSet::from(["Read".to_string()]),
@@ -802,11 +855,11 @@ mod tests {
     #[test]
     fn canonicalize_agent_profile_preserves_explicit_canvas_selection() {
         let raw = serde_json::json!({
-            "profile_id": "coding_shared",
+            "profile_id": "Standard",
             "added_tools": ["CreateCanvas"]
         });
         let canonical = canonicalize_agent_profile(
-            "coding_shared",
+            "Standard",
             Some(&raw),
             &["Read".to_string()],
             &HashSet::from(["Read".to_string(), "CreateCanvas".to_string()]),
@@ -821,8 +874,8 @@ mod tests {
     #[test]
     fn shared_modes_report_shared_profile_members() {
         assert_eq!(
-            agent_profile_member_mode_ids_for("agentic"),
-            vec!["agentic".to_string()]
+            agent_profile_member_mode_ids_for("Standard"),
+            vec!["Standard".to_string()]
         );
         assert_eq!(
             agent_profile_member_mode_ids_for("Cowork"),

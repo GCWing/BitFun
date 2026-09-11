@@ -62,6 +62,14 @@ describe('WorkspaceAPI', () => {
     });
   });
 
+  it('browses the resource tree through the explicit remote workspace scope', async () => {
+    invokeMock.mockResolvedValue([]);
+    await workspaceAPI.explorerGetChildren('/workspace', 'remote-connection-2');
+    expect(invokeMock).toHaveBeenCalledWith('explorer_get_children', {
+      request: { path: '/workspace', remoteConnectionId: 'remote-connection-2' },
+    });
+  });
+
   it('browses a directory through the explicit remote workspace scope', async () => {
     invokeMock.mockResolvedValueOnce([]);
 

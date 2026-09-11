@@ -32,35 +32,9 @@
   gap: var(--openbitfun-control-flow-chat-inline-gap);
 }
 
-.welcome-panel__greeting-inner {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-end;
-  gap: var(--openbitfun-space-4);
-}
 
-.welcome-panel__greeting-text {
-  display: flex;
-  flex-direction: column;
-  gap: var(--openbitfun-control-flow-chat-inline-gap);
-  min-width: 0;
-}
 
-.welcome-panel__heading {
-  margin: 0;
-  font-size: var(--openbitfun-type-heading-display-font-size);
-  font-weight: var(--openbitfun-type-heading-page-font-weight);
-  color: var(--openbitfun-color-content-primary);
-  line-height: var(--openbitfun-type-flow-meta-line-height);
-  letter-spacing: var(--openbitfun-type-heading-dialog-letter-spacing);
-}
 
-.welcome-panel__tagline {
-  margin: 6px 0 0;
-  font-size: var(--openbitfun-type-flow-lead-font-size);
-  color: var(--openbitfun-color-content-muted);
-  line-height: var(--openbitfun-type-flow-support-line-height);
-}
 
 /* ── Divider ── */
 
@@ -126,10 +100,6 @@
 .welcome-panel__inline-btn:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent);
   outline-offset: 1px;
-}
-
-.welcome-panel__inline-btn:active:not(:disabled) {
-  transform: scale(0.97);
 }
 
 .welcome-panel__inline-btn--active {
@@ -220,9 +190,6 @@
     padding: var(--openbitfun-space-5) var(--openbitfun-space-4);
   }
 
-  .welcome-panel__heading {
-    font-size: var(--openbitfun-type-flow-page-title-font-size);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -19,7 +19,9 @@ class FakeAudioBufferSource {
   startedAt: number | null = null;
   stopped = false;
 
-  connect(): void {}
+  destination: AudioNode | null = null;
+
+  connect(destination: AudioNode): void { this.destination = destination; }
 
   disconnect(): void {}
 
@@ -34,13 +36,23 @@ class FakeAudioBufferSource {
   }
 }
 
+class FakeAnalyser {
+  fftSize = 0;
+  readonly frequencyBinCount = 128;
+  disconnected = false;
+  connect(): void {}
+  disconnect(): void { this.disconnected = true; }
+  getByteFrequencyData(data: Uint8Array): void { data.fill(96); }
+}
+
 class FakeAudioContext {
   static latest: FakeAudioContext | null = null;
 
   readonly sampleRate: number;
-  readonly currentTime = 1;
+  currentTime = 1;
   readonly destination = {} as AudioDestinationNode;
   readonly sources: FakeAudioBufferSource[] = [];
+  readonly analyser = new FakeAnalyser();
   state: AudioContextState = 'suspended';
   resumeCalls = 0;
 
@@ -58,6 +70,8 @@ class FakeAudioContext {
     this.sources.push(source);
     return source as unknown as AudioBufferSourceNode;
   }
+
+  createAnalyser(): AnalyserNode { return this.analyser as unknown as AnalyserNode; }
 
   async resume(): Promise<void> {
     this.resumeCalls += 1;
@@ -109,5 +123,40 @@ describe('realtime PCM playback', () => {
 
     await player.close();
     expect(context?.state).toBe('closed');
+  });
+
+  it('reads assistant activity from audible playback, including queued audio after provider completion', async () => {
+    vi.stubGlobal('window', { atob: globalThis.atob, AudioContext: FakeAudioContext });
+    const player = RealtimePcmPlayer.create(24_000);
+    const secondOfAudio = btoa(String.fromCharCode(0).repeat(48_000));
+    await player.enqueue(secondOfAudio);
+    await player.enqueue(secondOfAudio);
+    const context = FakeAudioContext.latest!;
+    expect(context.analyser.fftSize).toBe(256);
+    expect(context.sources[1].destination).toBe(context.analyser);
+    expect(player.isPlaying()).toBe(false);
+    expect(player.readFrequencyData()).toBeNull();
+    context.currentTime = 1.1;
+    expect(player.isPlaying()).toBe(true);
+    expect(player.readFrequencyData()?.[0]).toBe(96);
+    context.currentTime = 2.5;
+    expect(player.isPlaying()).toBe(true);
+    context.currentTime = 3.1;
+    expect(player.isPlaying()).toBe(false);
+    expect(player.readFrequencyData()).toBeNull();
+    await player.close();
+    expect(context.analyser.disconnected).toBe(true);
+  });
+
+  it('prevents an interrupted enqueue from reviving playback after stop', async () => {
+    vi.stubGlobal('window', { atob: globalThis.atob, AudioContext: FakeAudioContext });
+    const player = RealtimePcmPlayer.create(24_000);
+    const pending = player.enqueue('AAAAAA==');
+    player.stop();
+    await pending;
+    expect(FakeAudioContext.latest?.sources).toHaveLength(1);
+    expect(player.isPlaying()).toBe(false);
+    expect(player.readFrequencyData()).toBeNull();
+    await player.close();
   });
 });

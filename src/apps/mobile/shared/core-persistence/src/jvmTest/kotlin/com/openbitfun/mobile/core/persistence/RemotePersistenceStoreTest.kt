@@ -152,8 +152,8 @@ class RemotePersistenceStoreTest {
     @Test
     fun sessionListPrunesOldestPerDevice() = runTest {
         val (sessions, _) = stores()
-        sessions.save("device-a", (20 downTo 0).map { session("s$it", "%04d".format(it)) })
-        assertEquals(20, sessions.load("device-a").size)
+        sessions.save("device-a", (60 downTo 0).map { session("s$it", "%04d".format(it)) })
+        assertEquals(60, sessions.load("device-a").size)
         assertTrue(sessions.load("device-a").none { it.sessionId == "s0" })
     }
 
@@ -162,6 +162,56 @@ class RemotePersistenceStoreTest {
         val (_, transcript) = stores()
         transcript.saveCursor("device-a", "s1", PersistedRemoteCursor("poll-7", 12, "models-3"))
         assertEquals(PersistedRemoteCursor("poll-7", 12, "models-3"), transcript.loadCursor("device-a", "s1"))
+    }
+
+    @Test
+    fun sessionListRewriteObservesTitleOnlyChanges() = runTest {
+        val (sessions, _) = stores()
+        val original = session("s1", "2026-01-01")
+        sessions.save("device-a", listOf(original))
+        sessions.save("device-a", listOf(original.copy(title = "Renamed")))
+        assertEquals("Renamed", sessions.load("device-a").single().title)
+    }
+
+    @Test
+    fun deletingTranscriptAlsoDeletesItsCursorAndResidentCopy() = runTest {
+        val (_, transcript) = stores()
+        transcript.replace("device-a", "s1", listOf(message("m0", "cached")))
+        transcript.saveCursor("device-a", "s1", PersistedRemoteCursor("poll-7", 1, "models-3"))
+        assertEquals(1, transcript.load("device-a", "s1").size)
+
+        transcript.delete("device-a", "s1")
+
+        assertTrue(transcript.load("device-a", "s1").isEmpty())
+        assertEquals(null, transcript.loadCursor("device-a", "s1"))
+    }
+
+    @Test
+    fun workspaceCatalogRoundTripsInOrderAndRemainsDeviceScoped() = runTest {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        MobileDatabase.Schema.create(driver).await()
+        val workspaces = SqlDelightRemoteWorkspaceListStore(driver)
+        workspaces.save(
+            "device-a",
+            listOf(
+                PersistedRemoteWorkspace("/repo", "Repo", "today", "local"),
+                PersistedRemoteWorkspace("/assistant", "Assistant", "", "assistant"),
+            ),
+        )
+        workspaces.save("device-b", listOf(PersistedRemoteWorkspace("/other", "Other")))
+
+        assertEquals(listOf("/repo", "/assistant"), workspaces.load("device-a").map { it.path })
+        assertEquals(listOf("/other"), workspaces.load("device-b").map { it.path })
+    }
+
+    @Test
+    fun migratesV4DatabaseWithAnEmptyWorkspaceCache() = runTest {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        MobileDatabase.Schema.migrate(driver, 4, 5).await()
+        val workspaces = SqlDelightRemoteWorkspaceListStore(driver)
+        assertTrue(workspaces.load("device-a").isEmpty())
+        workspaces.save("device-a", listOf(PersistedRemoteWorkspace("/repo", "Repo")))
+        assertEquals("/repo", workspaces.load("device-a").single().path)
     }
 
     private fun session(id: String, updated: String) = PersistedRemoteSession(

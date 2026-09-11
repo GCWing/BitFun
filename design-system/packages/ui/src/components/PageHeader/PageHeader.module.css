@@ -60,11 +60,11 @@
   }
 
   .root[data-size="display"] .heading {
-    font-family: var(--openbitfun-type-display-sm-font-family);
-    font-size: var(--openbitfun-type-display-sm-font-size);
-    font-weight: var(--openbitfun-type-display-sm-font-weight);
-    line-height: var(--openbitfun-type-display-sm-line-height);
-    letter-spacing: var(--openbitfun-type-display-sm-letter-spacing);
+    font-family: var(--openbitfun-type-heading-welcome-font-family);
+    font-size: var(--openbitfun-type-heading-welcome-font-size);
+    font-weight: var(--openbitfun-type-heading-welcome-font-weight);
+    line-height: var(--openbitfun-type-heading-welcome-line-height);
+    letter-spacing: var(--openbitfun-type-heading-welcome-letter-spacing);
   }
 
   .required {
@@ -73,7 +73,7 @@
   }
 
   .description {
-    color: var(--openbitfun-color-content-muted);
+    color: var(--openbitfun-color-content-primary);
     font-family: var(--openbitfun-type-body-lg-font-family);
     font-size: var(--openbitfun-type-body-lg-font-size);
     font-weight: var(--openbitfun-type-body-lg-font-weight);
@@ -82,11 +82,24 @@
   }
 
   .root[data-size="sm"] .description {
+    color: var(--openbitfun-color-content-muted);
     font-family: var(--openbitfun-type-body-sm-font-family);
     font-size: var(--openbitfun-type-body-sm-font-size);
     font-weight: var(--openbitfun-type-body-sm-font-weight);
     line-height: var(--openbitfun-type-body-sm-line-height);
     letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
+  }
+
+  .root[data-size="display"] .content {
+    gap: var(--openbitfun-space-3);
+  }
+
+  .root[data-size="display"] .description {
+    font-family: var(--openbitfun-type-page-intro-font-family);
+    font-size: var(--openbitfun-type-page-intro-font-size);
+    font-weight: var(--openbitfun-type-page-intro-font-weight);
+    line-height: var(--openbitfun-type-page-intro-line-height);
+    letter-spacing: var(--openbitfun-type-page-intro-letter-spacing);
   }
 
   .action {

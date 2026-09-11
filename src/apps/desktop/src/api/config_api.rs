@@ -228,7 +228,7 @@ pub async fn save_cloud_speech_config(
     match state.config_service.save_cloud_speech_config(request).await {
         Ok(result) => {
             state.ai_client_factory.invalidate_cache();
-            crate::api::remote_connect_api::notify_settings_changed();
+
             info!(
                 "Cloud speech configuration saved atomically: model_id={}, created={}",
                 result.model_id, result.created
@@ -303,7 +303,6 @@ pub async fn reset_config(
             }
 
             // Notify auto-sync: config reset, upload to relay
-            crate::api::remote_connect_api::notify_settings_changed();
 
             Ok(message)
         }
@@ -344,7 +343,6 @@ pub async fn import_config(
             if result.success {
                 state.ai_client_factory.invalidate_cache();
                 info!("Config imported, AI client cache invalidated");
-                crate::api::remote_connect_api::notify_settings_changed();
             }
             Ok(to_json_value(result, "import config result")?)
         }

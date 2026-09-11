@@ -263,7 +263,23 @@ describe('ReleaseLetterModal', () => {
     act(() => motionQuery.dispatchEvent(new Event('change')));
     act(() => document.querySelector<HTMLButtonElement>('.release-letter__version-mark')!.click());
     expect(frames.size).toBe(1);
+    const scene = document.querySelector('.release-letter-scene')!;
+    const drawing = scene.querySelector('.release-letter-drawing')!.outerHTML;
     act(() => useAnnouncementStore.getState().closeModal());
     expect(frames.size).toBe(0);
+    expect(document.querySelector('.release-letter-scene')).toBe(scene);
+    expect(document.querySelector('[role="dialog"]')?.getAttribute('data-state')).toBe('exiting');
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('resize'));
+      motionQuery.matches = true;
+      motionQuery.dispatchEvent(new Event('change'));
+      vi.advanceTimersByTime(179);
+    });
+    expect(frames.size).toBe(0);
+    expect(document.querySelector('.release-letter-scene')).toBe(scene);
+    expect(scene.querySelector('.release-letter-drawing')!.outerHTML).toBe(drawing);
+    act(() => vi.advanceTimersByTime(1));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 });

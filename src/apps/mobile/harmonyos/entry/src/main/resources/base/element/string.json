@@ -26,7 +26,7 @@
     },
     {
       "name": "permission_distributed_datasync_reason",
-      "value": "Used to authorize a watch on the same OpenBitFun account so you do not have to type the password on the watch."
+      "value": "Used to authorize a watch on the same GitHub account using a separate device credential."
     }
   ]
 }

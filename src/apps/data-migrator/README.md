@@ -3,17 +3,11 @@
 [中文](README.zh-CN.md)
 
 A separate, optional desktop utility for importing old **BitFun** data into
-**OpenBitFun**. It runs without installing or opening the main application, has
-its own window and settings, and never starts or restarts Desktop. OpenBitFun
-does not bundle, download, or launch it automatically.
+**OpenBitFun**.
 
 ## Download and run
 
-Look for **OpenBitFun Data Migrator** releases with a `data-migrator-v*` tag on
-the [release page](https://github.com/GCWing/OpenBitFun/releases?q=data-migrator-v&expanded=true).
-These releases have their own version and assets; the main application's
-installer does not contain the tool. If no migrator release is listed, build
-from source using the commands below.
+**Latest release: [v0.1.1 — download Data Migrator](https://github.com/GCWing/OpenBitFun/releases/tag/data-migrator-v0.1.1).**
 
 | Platform | Download | Launch |
 | --- | --- | --- |
@@ -27,50 +21,33 @@ Linux packages are built on Ubuntu 22.04. No login or network connection is
 needed for migration. ARM Windows/Linux packages are not currently produced.
 
 1. Close BitFun, OpenBitFun, their CLI instances, and background data writers.
-2. Open Data Migrator. Check the **source and destination** directories. All
-   four locations on each side can be edited; apply changes before scanning.
+2. Open Data Migrator. Check the **source and destination** directories.
 3. Select the data groups, scan, then run the preflight plan.
-4. Review the destination and conflicts, then start migration. If known writers
+4. Review the destination, scope, and conflicts, then start migration. If known writers
    remain open, the tool waits for them to stop; it does not terminate them.
 5. Read the report. Sign in again or repair paths where indicated, close the
    tool, and open OpenBitFun yourself.
 
-The UI uses the shared design-system tokens bundled offline, follows the system
-light/dark/high-contrast setting, and offers English, Simplified Chinese, and
-Traditional Chinese.
-
 ## Data and compatibility
 
-The declared source range is BitFun `>=0.2.0,<1.0.0`; the archived integration
-fixture is **0.2.19**. This is format-based support, not a claim that every old
-release has been tested. The source must pass the probe and selected domain
-validators. Unsupported or corrupt data is kept and reported.
+Supported sources are **stable BitFun releases 0.2.17–0.2.19**, targeting
+**OpenBitFun 1.0**. Direct migration from 0.2.16 or earlier is not supported;
+upgrade BitFun first, launch it, and verify that your existing data is accessible.
 
-Scanning isolates invalid settings/model entries, workspace registrations, memory
-rows/files, SSH profiles, Remote Connect files/Bots, Sessions, Skills, MiniApps,
-and Agent definitions. Readable Turns within a damaged Session are recovered;
-derived Turn counts and workspace reference lists are rebuilt. Identical Turn
-copies are deduplicated; conflicting Turn identities are omitted with warnings.
-Nested user memory notes are supported. Legacy memory jobs are not read or
-imported: the runtime creates jobs on demand, and destination jobs stay intact.
-Optional Skills and MiniApps do not block importing Agent definitions.
-
-Item failures during staging are omitted from the committed manifest where the
-item has an independent storage boundary. Source data remains read-only and the
-report shows omissions and partial history recovery. Unreadable destination
-stores, unsafe paths, unsupported schemas, changed inputs, and transaction/write
-failures still protect the affected domain; independent domains can continue
-after successful rollback. A failed rollback stops execution. Review warnings
-and the report before retrying.
-
+Scanning isolates errors in individual sessions, runtime event logs, Skills,
+MiniApps, and Agent definitions. Valid items continue to migrate; skipped items
+remain in the source and are recorded in the report. Legacy session Turn counts
+are rebuilt from the actual files in the migration copy only.
+If an entire domain is unavailable, only that domain and its dependents are skipped.
+If a domain fails during execution, it is rolled back before independent domains
+continue. Execution stops if rollback cannot complete safely. Review warnings
+and the migration report before retrying.
 
 The destination is OpenBitFun: configuration schema **1**, workspace registry
 format **1**, coordination database schema **2**, and the session, memory,
 extension, and connection formats accepted by the shared storage owners in
 this source revision. Unknown product/configuration schemas and newer SQLite
-or session schemas fail validation. A future storage format requires a new
-migrator release; matching application and tool version numbers is unnecessary.
-Custom branded products are not supported by this tool.
+or session schemas fail validation.
 
 Migration covers settings and credentials; user Agents, Skills and MiniApps;
 workspaces, sessions and task records; memories; and local connection/device
@@ -85,15 +62,6 @@ staging, validation, backups, a migration lock and atomic replacement. Keep
 both applications closed until the run finishes. Cancellation and window close
 requests wait for an engine-declared safe boundary; already verified domains
 may remain imported.
-
-
-Agent coordination imports do not require historical Session/Turn references,
-parent relationships, counters, timestamps, or Swarm lineage to remain valid.
-Records that cannot be decoded or inserted under the target table constraints
-are skipped individually. Tasks without a mapped Agent are skipped instead of
-being attached to an unrelated target primary key. Existing target records still
-win conflicts; imported Agent primary keys and task references are remapped.
-Importing historical task state does not start or resume an Agent execution.
 
 ## Resume and diagnose
 
@@ -114,13 +82,52 @@ resuming them. Unreadable files are not deleted or reset.
 The tool remembers selected locations in its own `com.openbitfun.data-migrator`
 application configuration directory. It does not write main-app onboarding or
 reminder preferences. **Export failure diagnostics** writes a sanitized file
-containing result codes and journal phases; full local reports and backups
-can contain sensitive data and should stay private.
+containing result codes and journal phases. Review personal information before
+sharing full reports or optional data directories as described below.
 
 This tool only operates on files accessible on the computer where it runs.
 Remote workspace execution, remote control, Peer Device Mode and Detached
 Dispatch are not execution surfaces for it. Run it on the data-owning computer;
 importing stored connection records does not connect to or migrate a remote host.
+
+## Troubleshooting
+
+**Migration finishes, but workspaces or sessions are empty, or some data is missing**
+
+If you have already launched OpenBitFun or run a migration, existing destination data may take precedence and remain unchanged during retries.
+
+If OpenBitFun contains no new data you need to keep, you can clear its destination data and retry:
+
+1. Fully quit BitFun, OpenBitFun, and the migrator.
+2. Back up the following directories, then delete them. **This removes existing OpenBitFun settings, sessions, and other local data.**
+3. Run the migrator again, then launch OpenBitFun after migration finishes.
+
+Windows destination directories:
+
+```text
+%APPDATA%\openbitfun
+%USERPROFILE%\.openbitfun
+%LOCALAPPDATA%\OpenBitFun
+```
+
+**The issue persists after retrying**
+
+Open a report in [GitHub Issues](https://github.com/GCWing/OpenBitFun/issues) or share your feedback in the OpenBitFun user WeChat group. Include:
+
+- Your operating system and the BitFun, OpenBitFun, and migrator versions.
+- Steps to reproduce, the expected result, and the actual result.
+- The workspace and session name or ID associated with missing data.
+- Migration logs from the affected run.
+
+Windows migration log location:
+
+```text
+%APPDATA%\openbitfun\data\migrations\bitfun-to-openbitfun\runs\<run-id>\
+```
+
+Provide the log files from the affected run, such as `report.json`, `plan.json`, `journal.jsonl`, `locations.json`, and `release-observation.json` when present. The `stage` and `backup` directories contain personal data, so sharing them is optional and at your discretion; the log files listed above are usually sufficient for an initial report. Save the logs before clearing the destination directories for another attempt.
+
+Review the logs for personal information, such as usernames and paths, and redact it as needed before submitting.
 
 ## Build and release
 
@@ -148,6 +155,10 @@ and `DATA_MIGRATOR_SIGNING_PUBKEY` secrets, verify checksums/signatures, and cre
 a **draft** release for review. Manual workflow runs only upload CI artifacts.
 Publishing migrator releases does not start main-app packaging or update feeds.
 
+When publishing a new version, update the latest-release links in both README
+files on the default branch and review [RELEASE.md](RELEASE.md), the release
+description template used by the workflow. Keep guide paths stable for shared links.
+
 Each asset has a SHA-256 sidecar and a base64-encoded minisign `.sig`; the
 release also carries `SHA256SUMS` and `data-migrator.minisign.pub`. Verify the key
 against the maintainer's trusted key before checking signatures. Detached
@@ -155,3 +166,21 @@ signatures are distinct from Apple/Authenticode platform signing; the workflow
 does not currently configure those certificates or macOS notarization.
 
 Focused checks and architecture rules are in [AGENTS.md](AGENTS.md).
+
+### Handling damaged legacy data
+
+Scanning isolates invalid settings/model entries, workspace registrations, memory
+rows/files, SSH profiles, Remote Connect files/Bots, Sessions, Skills, MiniApps,
+and Agent definitions. Readable Turns within a damaged Session are recovered;
+derived Turn counts and workspace reference lists are rebuilt. Identical Turn
+copies are deduplicated; conflicting Turn identities are omitted with warnings.
+Nested user memory notes are supported. Legacy memory jobs are not read or
+imported: the runtime creates jobs on demand, and destination jobs stay intact.
+Optional Skills and MiniApps do not block importing Agent definitions.
+
+Item failures during staging are omitted from the committed manifest where the
+item has an independent storage boundary. Source data remains read-only and the
+report shows omissions and partial history recovery. Unreadable destination
+stores, unsafe paths, unsupported schemas, changed inputs, and transaction/write
+failures still protect the affected domain; independent domains can continue
+after successful rollback. A failed rollback stops execution.

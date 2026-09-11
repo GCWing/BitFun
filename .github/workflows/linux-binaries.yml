@@ -136,7 +136,7 @@ jobs:
           set -euo pipefail
           # Strip SemVer build metadata (`+<sha>`): GitHub rewrites non-alphanumeric
           # characters in uploaded release asset names, so a `+` in a filename would
-          # make every URL in linux-binaries.json a 404. Desktop packaging strips it
+          # make every URL in linux-binaries-v1.json a 404. Desktop packaging strips it
           # the same way, which also keeps the two asset sets on one version string.
           ASSET_VERSION="${RELEASE_VERSION%%+*}"
           echo "ASSET_VERSION=${ASSET_VERSION}" >>"$GITHUB_ENV"

@@ -67,11 +67,9 @@ export const SessionUsageModal: React.FC = () => {
     });
   }, [markdown, sessionId, t, workspacePath]);
 
-  if (!open) return null;
-
   return (
     <Dialog
-      open
+      open={open}
       onOpenChange={(nextOpen) => { if (!nextOpen) closeSessionUsageModal(); }}
       size="xl"
       className="session-usage-dialog"

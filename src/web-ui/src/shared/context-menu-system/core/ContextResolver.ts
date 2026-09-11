@@ -65,6 +65,7 @@ export class ContextResolver {
   resolve(event: MouseEvent | React.MouseEvent): MenuContext {
     const nativeEvent = 'nativeEvent' in event ? event.nativeEvent : event;
     const target = nativeEvent.target as HTMLElement;
+    const resourceOwner = target.closest<HTMLElement>('[data-resource-surface]');
 
     
     const baseContext: BaseContext = {
@@ -76,7 +77,13 @@ export class ContextResolver {
         y: nativeEvent.clientY
       },
       timestamp: Date.now(),
-      metadata: {}
+      metadata: {},
+      resourceScope: resourceOwner ? {
+        surfaceId: resourceOwner.dataset.resourceSurface!,
+        workspaceId: resourceOwner.dataset.resourceWorkspaceId,
+        workspacePath: resourceOwner.dataset.resourceWorkspacePath,
+        remoteConnectionId: resourceOwner.dataset.resourceConnectionId,
+      } : undefined,
     };
 
     

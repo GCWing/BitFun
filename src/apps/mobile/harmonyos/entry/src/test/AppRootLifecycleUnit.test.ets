@@ -1,3 +1,5 @@
+import { CloudAccountClient, CloudAccountSession } from '../main/ets/services/CloudAccountClient';
+import { CommandStatusResponse, RemoteCommand } from '../main/ets/model/RemoteModels';
 import { describe, expect, it } from '@ohos/hypium';
 import { RemoteI18n } from '../main/ets/i18n/RemoteI18n';
 import { AppRootHostPort } from '../main/ets/pages/host/AppRootHostAdapter';
@@ -31,6 +33,25 @@ class FakeAppRootHost implements AppRootHostPort {
   }
 }
 
+class SidebarSessionClient extends CloudAccountClient {
+  createCommands: RemoteCommand[] = [];
+  createTargets: string[] = [];
+  async deviceRpc<T extends CommandStatusResponse>(
+    _relayUrl: string, _session: CloudAccountSession, targetDeviceId: string,
+    command: RemoteCommand, _timeoutMs: number = 130000
+  ): Promise<T> {
+    if (command.cmd === 'get_workspace_info') return JSON.parse(
+      '{"has_workspace":true,"workspace_path":"/workspace","workspace_name":"Workspace"}') as T;
+    if (command.cmd === 'create_session') {
+      this.createCommands.push(command);
+      this.createTargets.push(targetDeviceId);
+      return JSON.parse('{"session_id":"new-session","title":"New session"}') as T;
+    }
+    if (command.cmd === 'get_session_messages') return JSON.parse('{"messages":[],"has_more":false}') as T;
+    return JSON.parse('{"sessions":[],"messages":[],"has_more":false,"is_running":false}') as T;
+  }
+}
+
 class TestAppRootRuntime extends AppRootRuntime {
   constructor(host: AppRootHostPort = new FakeAppRootHost()) {
     super(host);
@@ -39,22 +60,12 @@ class TestAppRootRuntime extends AppRootRuntime {
 
 export default function appRootLifecycleUnitTest() {
   describe('AppRootRuntime page hide lifecycle', () => {
-    it('keeps backgrounded general chat running on page hide', 0, () => {
+    it('keeps the controller rooted in the device directory across lifecycle changes', 0, () => {
       const runtime = new TestAppRootRuntime();
-      runtime.generalChatStreamLifecycleController.begin('session-1');
-
+      expect(runtime.appShellViewModel.currentRoute()).assertEqual(AppRoute.RemoteHome);
       runtime.onPageHide();
-
-      expect(runtime.generalChatStreamLifecycleController.hasActiveStream()).assertTrue();
-    });
-
-    it('still performs general chat cleanup when the app truly disappears', 0, () => {
-      const runtime = new TestAppRootRuntime();
-      runtime.generalChatStreamLifecycleController.begin('session-1');
-
       runtime.aboutToDisappear();
-
-      expect(runtime.generalChatStreamLifecycleController.hasActiveStream()).assertFalse();
+      expect(runtime.appShellViewModel.currentRoute()).assertEqual(AppRoute.RemoteHome);
     });
 
     it('routes HTTP Markdown links through the host without opening file preview', 0, async () => {
@@ -83,9 +94,8 @@ export default function appRootLifecycleUnitTest() {
       );
       await new Promise<void>((resolve: () => void) => setTimeout(resolve, 0));
 
-      expect(runtime.generalChatPageState.conversation.statusText)
+      expect(runtime.remotePageState.conversation.statusText)
         .assertEqual(RemoteI18n.t('errors.operationFailed'));
-      expect(runtime.remotePageState.conversation.statusText).assertEqual('');
     });
 
     it('closes preview before applying conversation navigation back', 0, () => {
@@ -106,6 +116,47 @@ export default function appRootLifecycleUnitTest() {
       expect(runtime.appShellState.showConnectSheet).assertTrue();
       expect(runtime.handleRootBack()).assertTrue();
       expect(runtime.appShellState.showConnectSheet).assertFalse();
+    });
+
+    it('creates a new remote session from the sidebar in compact and wide layouts', 0, async () => {
+      for (const wide of [false, true]) {
+        for (const agentType of ['code', 'minimal', 'agentic', 'Ultra', 'claw']) {
+          const runtime = new TestAppRootRuntime();
+          const client = new SidebarSessionClient();
+          await runtime.sessionManager.connectAccountDevice(client, 'https://relay.example.com',
+            { token: 'test-token', userId: '1', masterKey: new Uint8Array(32) }, 'desktop-a');
+          runtime.appShellState.wideLayout = wide;
+          runtime.remotePageState.connectionState = 'connected';
+          runtime.remotePageState.setControlTarget('account_device', 'desktop-a', 'Desktop A');
+          runtime.remotePageState.setWorkspace('Workspace', '/workspace', '', '', 'normal');
+          runtime.remotePageState.setActiveSession({ sessionId: 'old-session', title: 'Old', workspacePath: '/workspace', agentType: 'code' });
+          runtime.appShellViewModel.replaceRouteWithoutAnimation(AppRoute.RemoteChat, 'old-session');
+          runtime.appShellState.setSidebarVisible(true);
+          try {
+            await runtime.presentationActions.onSidebar.newChat(agentType);
+            expect(client.createCommands.length).assertEqual(1);
+            expect(client.createTargets[0]).assertEqual('desktop-a');
+            expect(client.createCommands[0].agent_type).assertEqual(agentType);
+            expect(client.createCommands[0].workspace_path).assertEqual('/workspace');
+            expect(runtime.remotePageState.activeSession.sessionId).assertEqual('new-session');
+            expect(runtime.appShellViewModel.currentRoute()).assertEqual(AppRoute.RemoteChat);
+            expect(runtime.appShellState.showSidebar).assertFalse();
+          } finally { runtime.onPageHide(); runtime.aboutToDisappear(); }
+        }
+      }
+    });
+
+    it('keeps sidebar navigation intact when session creation is unavailable', 0, async () => {
+      const runtime = new TestAppRootRuntime();
+      runtime.appShellState.setSidebarVisible(true);
+      await runtime.presentationActions.onSidebar.newChat();
+      expect(runtime.appShellState.showSidebar).assertTrue();
+      expect(runtime.appShellViewModel.currentRoute()).assertEqual(AppRoute.RemoteHome);
+      runtime.remotePageState.connectionState = 'connected';
+      runtime.remotePageState.setBusy(true);
+      await runtime.presentationActions.onSidebar.newChat();
+      expect(runtime.appShellState.showSidebar).assertTrue();
+      runtime.aboutToDisappear();
     });
 
     it('opens the scanner directly when adding a desktop', 0, () => {

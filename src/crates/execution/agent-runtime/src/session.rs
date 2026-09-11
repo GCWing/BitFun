@@ -21,6 +21,7 @@ pub struct Session {
     /// This is the mode the next dialog turn should run with by default. It is
     /// not required to match either the last surviving history turn or the last
     /// message submission accepted by the scheduler.
+    #[serde(deserialize_with = "openbitfun_core_types::agent_identity::deserialize_agent_id")]
     pub agent_type: String,
     /// Cached mode of the last surviving user dialog turn in history.
     ///
@@ -28,6 +29,9 @@ pub struct Session {
     /// first-entry vs ongoing mode prompts follow the surviving transcript
     /// after rollbacks or turn truncation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_optional_agent_id"
+    )]
     pub last_user_dialog_agent_type: Option<String>,
     /// Mode of the most recent user submission accepted by the scheduler.
     ///
@@ -35,6 +39,9 @@ pub struct Session {
     /// history rollback. It tracks session-level prompt-cache compatibility for
     /// the next accepted submission.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_optional_agent_id"
+    )]
     pub last_submitted_agent_type: Option<String>,
     #[serde(
         default,
@@ -90,6 +97,8 @@ impl CompressionState {
 
 impl Session {
     pub fn new(session_name: String, agent_type: String, config: SessionConfig) -> Self {
+        let agent_type =
+            openbitfun_core_types::agent_identity::canonical_agent_id(&agent_type).to_owned();
         let now = SystemTime::now();
         Self {
             session_id: Uuid::new_v4().to_string(),
@@ -116,6 +125,8 @@ impl Session {
         agent_type: String,
         config: SessionConfig,
     ) -> Self {
+        let agent_type =
+            openbitfun_core_types::agent_identity::canonical_agent_id(&agent_type).to_owned();
         let now = SystemTime::now();
         Self {
             session_id,
@@ -308,6 +319,7 @@ pub struct SessionSummary {
     pub session_id: String,
     pub session_name: String,
     /// Current/default mode selection for the session.
+    #[serde(deserialize_with = "openbitfun_core_types::agent_identity::deserialize_agent_id")]
     pub agent_type: String,
     /// Runtime-owned model selector currently bound to the session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -318,9 +330,15 @@ pub struct SessionSummary {
     pub reasoning_preset: Option<String>,
     /// Mode of the last surviving user dialog turn in the session history.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_optional_agent_id"
+    )]
     pub last_user_dialog_agent_type: Option<String>,
     /// Mode of the most recent user submission accepted by the scheduler.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_optional_agent_id"
+    )]
     pub last_submitted_agent_type: Option<String>,
     #[serde(
         default,
@@ -349,11 +367,17 @@ pub struct PersistedSessionStateFile {
     /// Derived runtime cache for reminder semantics. The source of truth lives
     /// on persisted dialog turns via `DialogTurnData.agent_type`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_optional_agent_id"
+    )]
     pub last_user_dialog_agent_type: Option<String>,
     /// Session-level prompt-cache guard state. This records the most recent user
     /// submission accepted by the scheduler and intentionally does not rewind on
     /// history rollback.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        deserialize_with = "openbitfun_core_types::agent_identity::deserialize_optional_agent_id"
+    )]
     pub last_submitted_agent_type: Option<String>,
     pub compression_state: CompressionState,
     pub runtime_state: SessionState,
@@ -428,7 +452,8 @@ mod tests {
             .remove("prompt_cache_lineage_id");
         let legacy_config: SessionConfig =
             serde_json::from_value(legacy_value).expect("deserialize legacy config");
-        let mut session = Session::new("Session".to_string(), "agentic".to_string(), legacy_config);
+        let mut session =
+            Session::new("Session".to_string(), "Standard".to_string(), legacy_config);
         assert!(session.config.prompt_cache_lineage_id.is_none());
         assert_eq!(
             session.effective_prompt_cache_lineage_id(),
@@ -544,12 +569,12 @@ mod tests {
     fn new_session_preserves_legacy_runtime_defaults() {
         let session = Session::new(
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig::default(),
         );
 
         assert_eq!(session.session_name, "Session");
-        assert_eq!(session.agent_type, "agentic");
+        assert_eq!(session.agent_type, "Standard");
         assert_eq!(session.dialog_turn_ids, Vec::<String>::new());
         assert_eq!(session.state, SessionState::Idle);
         assert_eq!(session.compression_state.compression_count, 0);
@@ -573,7 +598,7 @@ mod tests {
         let session = Session::new_with_id(
             "session_1".to_string(),
             "Main".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig {
                 model_id: Some("provider/model".to_string()),
                 workspace_path: Some("/worktrees/session_1".to_string()),
@@ -588,7 +613,7 @@ mod tests {
 
         assert_eq!(result.session_id, "session_1");
         assert_eq!(result.session_name, "Main");
-        assert_eq!(result.agent_type, "agentic");
+        assert_eq!(result.agent_type, "Standard");
         assert_eq!(result.model_id.as_deref(), Some("provider/model"));
         assert_eq!(
             result.workspace_path.as_deref(),
@@ -632,7 +657,7 @@ mod tests {
                 ..SessionConfig::default()
             },
             snapshot_session_id: Some("snapshot-1".to_string()),
-            last_user_dialog_agent_type: Some("agentic".to_string()),
+            last_user_dialog_agent_type: Some("Standard".to_string()),
             last_submitted_agent_type: Some("DeepReview".to_string()),
             compression_state: CompressionState {
                 last_compression_at: None,
@@ -656,7 +681,7 @@ mod tests {
                     "model_id": "model-a"
                 },
                 "snapshot_session_id": "snapshot-1",
-                "last_user_dialog_agent_type": "agentic",
+                "last_user_dialog_agent_type": "Standard",
                 "last_submitted_agent_type": "DeepReview",
                 "compression_state": {
                     "last_compression_at": null,

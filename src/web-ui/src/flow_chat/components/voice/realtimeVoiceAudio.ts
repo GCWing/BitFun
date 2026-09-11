@@ -21,10 +21,18 @@ export class RealtimePcmPlayer {
   private nextStartTime = 0;
   private sources = new Set<AudioBufferSourceNode>();
   private resumeInFlight: Promise<void> | null = null;
+  private readonly analyser: AnalyserNode;
+  private readonly frequencyData: Uint8Array<ArrayBuffer>;
+  private playbackStartedAt = Infinity;
+  private playbackEpoch = 0;
 
   private constructor(context: AudioContext, sampleRate: number) {
     this.context = context;
     this.sourceSampleRate = sampleRate;
+    this.analyser = context.createAnalyser();
+    this.analyser.fftSize = 256;
+    this.frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
+    this.analyser.connect(context.destination);
   }
 
   static create(sampleRate: number): RealtimePcmPlayer {
@@ -57,6 +65,20 @@ export class RealtimePcmPlayer {
 
   getAudioContext(): AudioContext {
     return this.context;
+  }
+
+  /** Uses the output clock, so queued packets and provider completion are not speech. */
+  isPlaying(): boolean {
+    return this.context.state === 'running'
+      && this.sources.size > 0
+      && this.context.currentTime >= this.playbackStartedAt
+      && this.context.currentTime < this.nextStartTime;
+  }
+
+  readFrequencyData(): Uint8Array<ArrayBuffer> | null {
+    if (!this.isPlaying()) return null;
+    this.analyser.getByteFrequencyData(this.frequencyData);
+    return this.frequencyData;
   }
 
   private unlockFromUserGesture(): void {
@@ -96,23 +118,26 @@ export class RealtimePcmPlayer {
   }
 
   async enqueue(pcm16Base64: string): Promise<void> {
+    const epoch = this.playbackEpoch;
     const samples = decodePcm16Base64(pcm16Base64);
     if (!samples.length || this.context.state === 'closed') {
       return;
     }
     await this.ensureRunning();
+    if (epoch !== this.playbackEpoch || this.currentState() === 'closed') return;
 
     const buffer = this.context.createBuffer(1, samples.length, this.sourceSampleRate);
     buffer.copyToChannel(samples, 0);
     const source = this.context.createBufferSource();
     source.buffer = buffer;
-    source.connect(this.context.destination);
+    source.connect(this.analyser);
     // Keep a small lead just like the official browser demo so network-sized
     // PCM chunks form one continuous output stream without overlapping.
     const startAt = this.nextStartTime > this.context.currentTime
       ? this.nextStartTime
       : this.context.currentTime + 0.04;
     this.nextStartTime = startAt + buffer.duration;
+    if (!this.sources.size) this.playbackStartedAt = startAt;
     this.sources.add(source);
     source.addEventListener('ended', () => {
       source.disconnect();
@@ -122,6 +147,7 @@ export class RealtimePcmPlayer {
   }
 
   stop(): void {
+    this.playbackEpoch += 1;
     this.sources.forEach(source => {
       try {
         source.stop();
@@ -132,10 +158,12 @@ export class RealtimePcmPlayer {
     });
     this.sources.clear();
     this.nextStartTime = this.context.currentTime;
+    this.playbackStartedAt = Infinity;
   }
 
   async close(): Promise<void> {
     this.stop();
+    this.analyser.disconnect();
     if (this.context.state !== 'closed') {
       await this.context.close();
     }

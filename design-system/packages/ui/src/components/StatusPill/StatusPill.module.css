@@ -18,7 +18,7 @@
     font-family: var(--openbitfun-type-meta-font-family);
     font-size: var(--openbitfun-type-meta-font-size);
     font-weight: var(--openbitfun-type-meta-font-weight);
-    line-height: var(--openbitfun-type-meta-line-height);
+    line-height: var(--openbitfun-type-status-pill-line-height);
     letter-spacing: var(--openbitfun-type-meta-letter-spacing);
     white-space: nowrap;
   }
@@ -85,7 +85,28 @@
     color: var(--openbitfun-color-status-danger-emphasis);
   }
 
+  .root[data-tone="info"][data-emphasis="true"] {
+    color: var(--openbitfun-color-status-info-emphasis);
+  }
+
+  .root[data-tone="success"][data-emphasis="true"] {
+    color: var(--openbitfun-color-status-success-emphasis);
+  }
+
+  .root[data-tone="warning"][data-emphasis="true"] {
+    color: var(--openbitfun-color-status-warning-emphasis);
+  }
+
+  .root[data-tone="danger"][data-emphasis="true"] {
+    color: var(--openbitfun-color-status-danger-emphasis);
+  }
+
+  .root[data-emphasis="true"] .leading {
+    --openbitfun-opacity-icon-artwork: 1;
+  }
+
   @media (forced-colors: active) {
+    .root[data-tone][data-emphasis] { color: CanvasText; }
     .root[data-tone] .leading { color: CanvasText; }
 
     .root {

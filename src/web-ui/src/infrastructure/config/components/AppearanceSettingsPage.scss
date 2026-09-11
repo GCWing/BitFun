@@ -796,10 +796,6 @@
       background: var(--openbitfun-color-surface-subtle);
     }
 
-    &:active:not(:disabled) {
-      transform: scale(0.992);
-    }
-
     &:disabled {
       cursor: default;
       opacity: var(--openbitfun-opacity-disabled);
@@ -1369,10 +1365,6 @@
       background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
-
-    &:active {
-      transform: scale(0.97);
-    }
 
     svg {
       width: 12px;

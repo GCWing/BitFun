@@ -125,6 +125,16 @@ CREATE TABLE remote_session_cursor (
     PRIMARY KEY (device_key, session_id)
 );
 
+CREATE TABLE remote_workspace_list (
+    device_key TEXT NOT NULL,
+    path TEXT NOT NULL,
+    name TEXT NOT NULL,
+    last_opened TEXT NOT NULL,
+    workspace_kind TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    PRIMARY KEY (device_key, path)
+);
+
 selectRemoteSessions:
 SELECT * FROM remote_session_list WHERE device_key = ? ORDER BY updated_at DESC, session_id ASC;
 
@@ -154,3 +164,16 @@ VALUES (?, ?, ?, ?, ?);
 
 selectRemoteCursor:
 SELECT * FROM remote_session_cursor WHERE device_key = ? AND session_id = ?;
+
+deleteRemoteCursor:
+DELETE FROM remote_session_cursor WHERE device_key = ? AND session_id = ?;
+
+selectRemoteWorkspaces:
+SELECT * FROM remote_workspace_list WHERE device_key = ? ORDER BY seq ASC;
+
+upsertRemoteWorkspace:
+INSERT OR REPLACE INTO remote_workspace_list(device_key, path, name, last_opened, workspace_kind, seq)
+VALUES (?, ?, ?, ?, ?, ?);
+
+deleteRemoteWorkspacesForDevice:
+DELETE FROM remote_workspace_list WHERE device_key = ?;

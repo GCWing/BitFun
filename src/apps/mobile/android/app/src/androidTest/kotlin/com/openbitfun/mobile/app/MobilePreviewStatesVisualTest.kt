@@ -82,6 +82,7 @@ class MobilePreviewStatesVisualTest {
     fun circleStatesHaveStableTouchTargetsAndMoreActionIsSafe() {
         composeRule.setContent { MobilePreviewCircleStates() }
         composeRule.onNodeWithTag(MOBILE_PREVIEW_CIRCLE_STATES_TEST_TAG).assertIsDisplayed()
+        // The shared control_touch_size contract is 48dp on all three platforms.
         listOf(
             MOBILE_PREVIEW_CIRCLE_SIDEBAR_TEST_TAG,
             MOBILE_PREVIEW_CIRCLE_MORE_TEST_TAG,
@@ -89,8 +90,8 @@ class MobilePreviewStatesVisualTest {
         ).forEach { tag ->
             composeRule.onNodeWithTag(tag)
                 .assertIsDisplayed()
-                .assertWidthIsEqualTo(44.dp)
-                .assertHeightIsEqualTo(44.dp)
+                .assertWidthIsEqualTo(48.dp)
+                .assertHeightIsEqualTo(48.dp)
         }
         composeRule.onNodeWithContentDescription("More actions").performClick()
         composeRule.onNodeWithTag(MOBILE_PREVIEW_CIRCLE_MORE_TEST_TAG).assertIsDisplayed()

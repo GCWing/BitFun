@@ -3,6 +3,7 @@
  */
 import { create } from 'zustand';
 import type { SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
+import type { ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
 import type { SubagentModelSelection } from '@/infrastructure/config/types';
 import {
   CAPABILITY_ACCENT,
@@ -13,32 +14,39 @@ import {
 export { CAPABILITY_CATEGORIES };
 export type { CapabilityCategory };
 
-/** 'mode' = primary agent mode (e.g. Agentic/Cowork); 'subagent' = sub-agent */
-export type AgentKind = 'mode' | 'subagent';
+export type { AgentKind } from '@/shared/agents/identity';
 
 export interface AgentCapability {
   category: CapabilityCategory;
   level: number;
 }
 
-export interface AgentWithCapabilities extends SubagentInfo {
+type PrimaryAgentEntry = ModeInfo & {
+  key: string;
+  agentKind: 'harness' | 'agent';
+  subagentSource?: never;
+  visibility?: never;
+  externalProviderLabel?: never;
+  supportsFollowUp?: never;
+};
+
+/** Invocation roles retain their own metadata instead of fabricating SubagentInfo for a Harness. */
+export type AgentWithCapabilities = (PrimaryAgentEntry | (SubagentInfo & { agentKind: 'subagent' })) & {
   capabilities: AgentCapability[];
   iconKey?: string;
-  /** Distinguishes primary agent mode from sub-agent */
-  agentKind?: AgentKind;
   visibleSubagentCount?: number;
   /** Explicit model selection for this Subagent, if it overrides the shared default. */
   subagentModelOverride?: SubagentModelSelection;
   /** Display name for an explicitly configured Subagent model override. */
   subagentModelDisplayName?: string;
-}
+};
 
 export const CAPABILITY_COLORS: Record<CapabilityCategory, string> = CAPABILITY_ACCENT;
 
 export type AgentsScenePage = 'home' | 'createAgent';
 export type AgentEditorMode = 'create' | 'edit';
 export type AgentFilterLevel = 'all' | 'builtin' | 'user' | 'project' | 'external';
-export type AgentFilterType = 'all' | 'mode' | 'subagent';
+export type AgentFilterType = 'all' | 'agent' | 'subagent';
 
 interface AgentsStoreState {
   page: AgentsScenePage;

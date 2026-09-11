@@ -51,3 +51,98 @@ test('workspace identity keys cannot collide through delimiter-shaped paths and 
   assert.notEqual(workspaceIdentityKey({ path: 'c:d', remote_connection_id: 'a', remote_ssh_host: 'b' }),
     workspaceIdentityKey({ path: 'd', remote_connection_id: 'a:b', remote_ssh_host: 'c' }));
 });
+
+const { projectWorkspaceCatalog } = await import(
+  `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`
+);
+const named = (identity, name) => ({ ...identity, name, last_opened: '' });
+const assistant = { path: '/assistant/workspace', name: 'Mina', workspace_kind: 'assistant', last_opened: '' };
+
+test('opened catalog excludes closed history and preserves the assistant identity name', () => {
+  const response = {
+    workspaces: [named(a, 'Closed SSH'), named(local, 'Project'), named({ path: '/old-worktree' }, 'Closed worktree')],
+    opened_workspaces: [assistant, named(local, 'Project')],
+  };
+  const catalog = projectWorkspaceCatalog(JSON.parse(JSON.stringify(response)));
+  assert.equal(catalog.source, 'opened');
+  assert.deepEqual(catalog.workspaces.map(w => w.name), ['Mina', 'Project']);
+  assert.equal(catalog.workspaces[0].workspace_kind, 'assistant');
+  // A successful empty refresh must stay empty, even with retained history.
+  assert.deepEqual(projectWorkspaceCatalog({ ...response, opened_workspaces: [] }).workspaces, []);
+  assert.deepEqual(response.workspaces.map(w => w.name), ['Closed SSH', 'Project', 'Closed worktree']);
+});
+
+test('catalog preserves same-path SSH identities and never substitutes a local assistant name', () => {
+  const response = { workspaces: [], opened_workspaces: [named(a, 'A'), named(b, 'B'), named(local, 'Local'), named(a, 'duplicate')] };
+  assert.deepEqual(projectWorkspaceCatalog(response).workspaces.map(w => w.name), ['A', 'B', 'Local']);
+});
+
+test('legacy hosts advertise recent-history fallback and resolve assistants without guessing paths', () => {
+  const legacy = JSON.parse(JSON.stringify({ workspaces: [
+    named({ path: assistant.path }, 'workspace'),
+    named({ path: '/ordinary/workspace' }, 'workspace'),
+    named({ path: assistant.path, remote_connection_id: 'ssh-a', remote_ssh_host: 'host-a' }, 'Remote workspace'),
+  ] }));
+  const catalog = projectWorkspaceCatalog(legacy, [assistant]);
+  assert.equal(catalog.source, 'recent');
+  assert.deepEqual(catalog.workspaces.map(w => w.name), ['Mina', 'workspace', 'Remote workspace']);
+  assert.equal(catalog.workspaces[0].workspace_kind, 'assistant');
+});
+
+async function moduleUrl(relative, imports = {}) {
+  let transformed = ts.transpileModule(await readFile(new URL(relative, import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  transformed = transformed.replace(/from (['"])([^'"]+)\1/g, (_, quote, specifier) => {
+    assert.ok(imports[specifier], `unexpected dependency ${specifier}`);
+    return `from ${JSON.stringify(imports[specifier])}`;
+  });
+  return `data:text/javascript;base64,${Buffer.from(transformed).toString('base64')}`;
+}
+const agentContract = await moduleUrl('../../shared/agent-harness/contract.generated.ts');
+const agentWire = await moduleUrl('../../shared/agent-harness/wire.ts', { './contract.generated': agentContract });
+const controlIdentity = await moduleUrl('../src/services/controlClientIdentity.ts');
+const managerUrl = await moduleUrl('../src/services/RemoteSessionManager.ts', {
+  '../../../shared/agent-harness/wire': agentWire,
+  './controlClientIdentity': controlIdentity,
+  './workspaceIdentity': `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`,
+});
+const { RemoteSessionManager, RemoteControlTargetChangedError } = await import(managerUrl);
+function catalogClient(handler) {
+  const client = {
+    controlTargetEpoch: 1,
+    targetDeviceId: 'desktop-a',
+    getControlTargetSnapshot: () => ({ epoch: client.controlTargetEpoch, deviceId: client.targetDeviceId }),
+    isControlTargetCurrent: snapshot => snapshot.epoch === client.controlTargetEpoch && snapshot.deviceId === client.targetDeviceId,
+    sendDeviceRpc: handler,
+  };
+  return client;
+}
+
+test('manager consumes the advertised opened catalog without issuing a legacy assistant read', async () => {
+  const calls = [];
+  const manager = new RemoteSessionManager(catalogClient(async (device, cmd) => {
+    calls.push(cmd.cmd);
+    return { resp: 'recent_workspaces', workspaces: [named(a, 'Closed')], opened_workspaces: [assistant] };
+  }));
+  const catalog = await manager.listWorkspaceCatalog();
+  assert.deepEqual(catalog.workspaces, [assistant]);
+  assert.deepEqual(calls, ['list_recent_workspaces']);
+});
+
+test('legacy catalog reads stay on one device generation across both requests', async () => {
+  const calls = [];
+  let completeAssistants;
+  const client = catalogClient(async (device, cmd) => {
+    calls.push([device, cmd.cmd]);
+    if (cmd.cmd === 'list_recent_workspaces') return { resp: 'recent_workspaces', workspaces: [] };
+    return new Promise(resolve => { completeAssistants = resolve; });
+  });
+  const pending = new RemoteSessionManager(client).listWorkspaceCatalog();
+  while (!completeAssistants) await new Promise(resolve => setImmediate(resolve));
+  client.controlTargetEpoch = 2;
+  client.targetDeviceId = 'desktop-b';
+  completeAssistants({ resp: 'assistant_list', assistants: [assistant] });
+  await assert.rejects(pending, RemoteControlTargetChangedError);
+  assert.deepEqual(calls, [['desktop-a', 'list_recent_workspaces'], ['desktop-a', 'list_assistants']]);
+});

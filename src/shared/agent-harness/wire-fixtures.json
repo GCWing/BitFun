@@ -1,0 +1,60 @@
+[
+  {
+    "command": "submit",
+    "canonical": {"agentType": "Standard", "workspacePath": "/target/worktree", "prompt": "Keep agentic in this source text", "jobId": "job-1"},
+    "legacy": {"agentType": "agentic", "workspacePath": "/target/worktree", "prompt": "Keep agentic in this source text", "jobId": "job-1"}
+  },
+  {
+    "command": "dispatch_target_list",
+    "canonical": {},
+    "legacy": {},
+    "canonicalResponse": [{"agentType": "Ultimate", "sessionId": "session-1", "workspacePath": "/target/worktree"}],
+    "legacyResponse": [{"agentType": "Ultra", "sessionId": "session-1", "workspacePath": "/target/worktree"}]
+  },
+  {
+    "command": "set_config",
+    "canonical": {"request": {"path": "app.flow_chat", "value": {"default_mode_strategy": "follow_last", "default_mode_id": "Standard", "last_mode_id": "Ultimate"}}},
+    "legacy": {"request": {"path": "app.flow_chat", "value": {"default_mode_strategy": "follow_last", "default_mode_id": "agentic", "last_mode_id": "Ultra"}}}
+  },
+  {
+    "command": "set_config",
+    "canonical": {"request": {"path": "app.flow_chat.last_mode_id", "value": "Minimal"}},
+    "legacy": {"request": {"path": "app.flow_chat.last_mode_id", "value": "minimal"}}
+  },
+  {
+    "command": "set_config",
+    "canonical": {"request": {"path": "ai.agent_profiles", "value": {"Standard": {"profile_id": "Standard", "future": {"agentType": "Standard"}}, "constructor": {"profile_id": "constructor"}, "plugin::agentic": {"profile_id": "plugin::agentic"}}}},
+    "legacy": {"request": {"path": "ai.agent_profiles", "value": {"coding_shared": {"profile_id": "coding_shared", "future": {"agentType": "Standard"}}, "constructor": {"profile_id": "constructor"}, "plugin::agentic": {"profile_id": "plugin::agentic"}}}}
+  },
+  {
+    "command": "set_config",
+    "canonical": {"request": {"path": "ai.agent_profiles.Standard", "value": {"profile_id": "Standard", "removed_tools": ["Bash"]}}},
+    "legacy": {"request": {"path": "ai.agent_profiles.coding_shared", "value": {"profile_id": "coding_shared", "removed_tools": ["Bash"]}}}
+  },
+  {
+    "command": "set_config",
+    "canonical": {"request": {"path": "custom.data", "value": {"agentType": "Standard", "profile_id": "Standard"}}},
+    "legacy": {"request": {"path": "custom.data", "value": {"agentType": "Standard", "profile_id": "Standard"}}}
+  },
+  {
+    "command": "get_config",
+    "canonical": {"request": {"path": "ai.agent_profiles.Standard"}},
+    "legacy": {"request": {"path": "ai.agent_profiles.coding_shared"}},
+    "canonicalResponse": {"profile_id": "Standard", "enabled_user_skills": ["user::docs"]},
+    "legacyResponse": {"profile_id": "coding_shared", "enabled_user_skills": ["user::docs"]}
+  },
+  {
+    "command": "get_config",
+    "canonical": {"request": {"path": "app.flow_chat.default_mode_id"}},
+    "legacy": {"request": {"path": "app.flow_chat.default_mode_id"}},
+    "canonicalResponse": "Standard",
+    "legacyResponse": "agentic"
+  },
+  {
+    "command": "get_configs",
+    "canonical": {"request": {"paths": ["ai.agent_profiles.Standard", "app.flow_chat.last_mode_id", "custom.data"]}},
+    "legacy": {"request": {"paths": ["ai.agent_profiles.coding_shared", "app.flow_chat.last_mode_id", "custom.data"]}},
+    "canonicalResponse": {"ai.agent_profiles.Standard": {"profile_id": "Standard"}, "app.flow_chat.last_mode_id": "Ultimate", "custom.data": {"agentType": "Standard"}},
+    "legacyResponse": {"ai.agent_profiles.coding_shared": {"profile_id": "coding_shared"}, "app.flow_chat.last_mode_id": "Ultra", "custom.data": {"agentType": "Standard"}}
+  }
+]

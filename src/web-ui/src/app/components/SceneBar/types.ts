@@ -29,7 +29,7 @@ export type SceneTabId =
   | 'todos'
   | 'insights'
   | 'shell'
-  | 'panel-view'
+  | `content:${string}`
   | `session:${string}`
   | `miniapp:${string}`;
 
@@ -74,6 +74,10 @@ export interface SceneTabDef {
 export interface SceneTab {
   id: SceneTabId;
   session?: SessionSceneTarget;
+  /** Reference to content state; the tab never owns an editor buffer. */
+  contentId?: string;
+  /** User ordering preference; independent of closability. */
+  pinned?: boolean;
   /** Last-used timestamp for activate/close fallback (e.g. which tab to activate after close). */
   lastUsed: number;
 }

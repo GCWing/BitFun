@@ -72,7 +72,7 @@ describe('assistant bootstrap draft', () => {
     readFileContent.mockClear();
     await render(session({ sessionId: 'existing', totalTurnCount: 3 }));
     expect(readFileContent).not.toHaveBeenCalled();
-    await render(session({ sessionId: 'code', mode: 'agentic' }));
+    await render(session({ sessionId: 'code', mode: 'Standard' }));
     expect(readFileContent).not.toHaveBeenCalled();
   });
 
@@ -81,7 +81,7 @@ describe('assistant bootstrap draft', () => {
     await render();
     expect(readFileContent).not.toHaveBeenCalled();
     sessionComposerStore.getState().clearDraft('claw-1');
-    await render(session({ sessionId: 'other', mode: 'agentic' }));
+    await render(session({ sessionId: 'other', mode: 'Standard' }));
     await render();
     expect(readFileContent).not.toHaveBeenCalled();
     expect(sessionComposerStore.getState().getDraft('claw-1').value).toBe('');
@@ -115,7 +115,7 @@ describe('assistant bootstrap draft', () => {
     let finish!: (content: string) => void;
     readFileContent.mockReturnValueOnce(new Promise<string>(resolve => { finish = resolve; }));
     await render();
-    await render(session({ sessionId: 'other', mode: 'agentic' }));
+    await render(session({ sessionId: 'other', mode: 'Standard' }));
     await act(async () => finish('# Bootstrap'));
     expect(sessionComposerStore.getState().getDraft('claw-1').value).toBe('');
     expect(sessionComposerStore.getState().getDraft('other').value).toBe('');

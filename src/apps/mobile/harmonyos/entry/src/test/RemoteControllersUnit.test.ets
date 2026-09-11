@@ -61,7 +61,6 @@ import {
 } from '../main/ets/services/CodeSyntaxHighlighter';
 import { RemoteCommandFactory } from '../main/ets/services/RemoteCommandFactory';
 import { RemoteCrypto, RemoteCryptoCipher } from '../main/ets/services/RemoteCrypto';
-import { RemoteDescriptorParser } from '../main/ets/services/RemoteDescriptorParser';
 import { RemoteActivityLifecycleController } from '../main/ets/services/RemoteActivityLifecycleController';
 import { RemoteChatCommandClient, RemoteChatCommandController } from '../main/ets/services/RemoteChatCommandController';
 import { RemoteChatPollingLifecycleController } from '../main/ets/services/RemoteChatPollingLifecycleController';
@@ -84,7 +83,6 @@ import {
   RemoteModelController,
   RemoteModelPreferenceStore
 } from '../main/ets/services/RemoteModelController';
-import { RemotePairingPolicy } from '../main/ets/services/RemotePairingPolicy';
 import { RemoteResponseMapper } from '../main/ets/services/RemoteResponseMapper';
 import { RemoteSessionClient, RemoteSessionController } from '../main/ets/services/RemoteSessionController';
 import { RemoteSessionManager } from '../main/ets/services/RemoteSessionManager';
@@ -328,6 +326,16 @@ export default function remoteControllersUnitTest() {
   });
 
   describe('MessageFileReferenceProjector', () => {
+    it('projects image, file URI and runtime artifact references without duplicate cards', 0, () => {
+      const references = MessageFileReferenceProjector.project(
+        '![Preview](preview.png) [Image](computer://preview.png) [Animation](file:///workspace/movie.html) ' +
+        '[Report](openbitfun://current-session/artifacts/report.pdf)'
+      );
+      expect(references.length).assertEqual(3);
+      expect(references[0].remotePath).assertEqual('preview.png');
+      expect(references[1].remotePath).assertEqual('/workspace/movie.html');
+      expect(references[2].remotePath).assertEqual('openbitfun://current-session/artifacts/report.pdf');
+    });
     it('deduplicates explicit desktop file cards by normalized target path', 0, () => {
       const references = MessageFileReferenceProjector.project(
         '[first](computer://src/main.rs#L4) and computer://src/main.rs:9, ' +
@@ -2133,12 +2141,16 @@ export default function remoteControllersUnitTest() {
     it('sends prepared remote messages and reports failed payloads', 0, async () => {
       const client = new FakeRemoteChatCommandClient();
       const succeeded: string[] = [];
+      const submittedImages: string[] = [];
       const failed: string[] = [];
       const busyEvents: boolean[] = [];
       const controller = new RemoteChatCommandController(client, {
         onMessagesLoaded: (_messages: ChatMessage[], _hasMoreMessages: boolean) => {},
         onMessageCountKnown: (_pollVersion: number, _knownMessageCount: number) => {},
         onTimelineReady: () => {},
+        onComposerSubmitted: (sessionId: string, _text: string, images: SelectedImageAttachment[]) => {
+          submittedImages.push(`${sessionId}:${images[0].id}`);
+        },
         onSendSucceeded: (turnId: string, pendingActiveId: string, localMessageId: string) => {
           succeeded.push(`${turnId}:${pendingActiveId}:${localMessageId}`);
         },
@@ -2194,6 +2206,8 @@ export default function remoteControllersUnitTest() {
       expect(client.sendRequests[1]).assertEqual('text:session-1:Retry text:code');
       expect(client.sendTurnIds[0]).assertEqual('local-1');
       expect(client.sendTurnIds[1]).assertEqual('local-2');
+      expect(submittedImages.length).assertEqual(1);
+      expect(submittedImages[0]).assertEqual('session-1:image-1');
       expect(succeeded[0]).assertEqual('turn-1:pending-1:local-1');
       expect(failed[0]).assertEqual('Retry text:0:local-2:pending-2');
       expect(busyEvents[0]).assertTrue();
@@ -2375,8 +2389,8 @@ export default function remoteControllersUnitTest() {
 
   describe('ChatComposerCapabilities', () => {
     it('keeps route-to-surface composer ownership explicit', 0, () => {
-      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.ChatHome)).assertTrue();
-      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.GeneralChat)).assertTrue();
+      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.ChatHome)).assertFalse();
+      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.GeneralChat)).assertFalse();
       expect(AppRouteContract.isGeneralComposerRoute(AppRoute.RemoteHome)).assertFalse();
       expect(AppRouteContract.isGeneralComposerRoute(AppRoute.RemoteChat)).assertFalse();
     });
@@ -2455,14 +2469,14 @@ export default function remoteControllersUnitTest() {
       expect(`${AppRoute.RemoteChat}`).assertEqual('RemoteChat');
       expect(AppRouteContract.isSessionRoute(AppRoute.ChatHome)).assertFalse();
       expect(AppRouteContract.isSessionRoute(AppRoute.RemoteHome)).assertFalse();
-      expect(AppRouteContract.isSessionRoute(AppRoute.GeneralChat)).assertTrue();
+      expect(AppRouteContract.isSessionRoute(AppRoute.GeneralChat)).assertFalse();
       expect(AppRouteContract.isSessionRoute(AppRoute.RemoteChat)).assertTrue();
       expect(generalParam.sessionId).assertEqual('general-session-1');
       expect(remoteParam.sessionId).assertEqual('remote-session-1');
     });
 
-    it('derives current route from NavPathStack path names with ChatHome as root', 0, () => {
-      expect(AppRouteContract.currentRoute([])).assertEqual(AppRoute.ChatHome);
+    it('derives current route from NavPathStack path names with RemoteHome as root', 0, () => {
+      expect(AppRouteContract.currentRoute([])).assertEqual(AppRoute.RemoteHome);
       expect(AppRouteContract.currentRoute([AppRoute.RemoteHome])).assertEqual(AppRoute.RemoteHome);
       expect(AppRouteContract.currentRoute([
         AppRoute.RemoteHome,
@@ -2470,7 +2484,7 @@ export default function remoteControllersUnitTest() {
       ])).assertEqual(AppRoute.RemoteChat);
       expect(AppRouteContract.currentRoute([
         AppRoute.GeneralChat
-      ])).assertEqual(AppRoute.GeneralChat);
+      ])).assertEqual(AppRoute.RemoteHome);
     });
 
     it('builds push path specs and suppresses duplicate current routes', 0, () => {
@@ -2492,32 +2506,31 @@ export default function remoteControllersUnitTest() {
       expect(remoteChatSpec.name).assertEqual(AppRoute.RemoteChat);
       expect(remoteChatSpec.hasSessionParam()).assertTrue();
       expect(remoteChatSpec.routeParam().sessionId).assertEqual('remote-session-1');
-      expect(generalChatSpec.name).assertEqual(AppRoute.GeneralChat);
-      expect(generalChatSpec.routeParam().sessionId).assertEqual('general-session-1');
+      expect(generalChatSpec === undefined).assertTrue();
     });
 
     it('classifies back actions without depending on ArkUI NavPathStack', 0, () => {
       expect(AppRouteContract.backAction(AppRoute.ChatHome, true))
         .assertEqual(AppNavigationBackAction.CloseSidebar);
       expect(AppRouteContract.backAction(AppRoute.GeneralChat, false))
-        .assertEqual(AppNavigationBackAction.CloseActiveChat);
+        .assertEqual(AppNavigationBackAction.AllowSystem);
       expect(AppRouteContract.backAction(AppRoute.RemoteChat, false))
         .assertEqual(AppNavigationBackAction.CloseActiveChat);
       expect(AppRouteContract.backAction(AppRoute.RemoteHome, false))
-        .assertEqual(AppNavigationBackAction.PopRemoteHome);
+        .assertEqual(AppNavigationBackAction.AllowSystem);
       expect(AppRouteContract.backAction(AppRoute.ChatHome, false))
         .assertEqual(AppNavigationBackAction.AllowSystem);
     });
 
-    it('splits remote routes from the general composer without overlap', 0, () => {
+    it('maps retired local route names to the remote controller', 0, () => {
       // The two predicates are complements by construction. Asserting both
       // directions on every route is what keeps a later edit from creating a
       // route that is somehow neither, or both.
-      expect(AppRouteContract.isRemoteRoute(AppRoute.ChatHome)).assertFalse();
-      expect(AppRouteContract.isRemoteRoute(AppRoute.GeneralChat)).assertFalse();
+      expect(AppRouteContract.isRemoteRoute(AppRoute.ChatHome)).assertTrue();
+      expect(AppRouteContract.isRemoteRoute(AppRoute.GeneralChat)).assertTrue();
       expect(AppRouteContract.isRemoteRoute(AppRoute.RemoteHome)).assertTrue();
       expect(AppRouteContract.isRemoteRoute(AppRoute.RemoteChat)).assertTrue();
-      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.ChatHome)).assertTrue();
+      expect(AppRouteContract.isGeneralComposerRoute(AppRoute.ChatHome)).assertFalse();
     });
 
     it('resumes an in-flight remote session instead of landing on the picker', 0, () => {

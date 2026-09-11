@@ -178,10 +178,6 @@ $_icon-size: 16px;
       background: var(--openbitfun-domain-git-branch-background-hover);
     }
 
-    &:active {
-      transform: scale(0.95);
-    }
-
     &:focus-visible {
       outline: 1px solid var(--openbitfun-color-accent-default);
       outline-offset: 1px;

@@ -285,6 +285,9 @@ internal fun ComposerBar(
                         enter = compactControlEnter,
                         exit = compactControlExit,
                     ) {
+                        if (capabilities.showVoiceInput && !busy && (draft.isNotBlank() || images.isNotEmpty())) {
+                            PrimaryActionButton(action = ComposerPrimaryAction.VOICE, onVoice = onVoice, onSend = onSend, onStop = onStop, testTag = "composer-voice")
+                        }
                         PrimaryActionButton(
                             action = action,
                             onVoice = onVoice,
@@ -332,6 +335,9 @@ internal fun ComposerBar(
                             )
                         }
                         Box(modifier = Modifier.weight(1f))
+                        if (capabilities.showVoiceInput && !busy && (draft.isNotBlank() || images.isNotEmpty())) {
+                            PrimaryActionButton(action = ComposerPrimaryAction.VOICE, onVoice = onVoice, onSend = onSend, onStop = onStop, testTag = "composer-voice")
+                        }
                         PrimaryActionButton(
                             action = action,
                             onVoice = onVoice,
@@ -666,6 +672,7 @@ private fun PrimaryActionButton(
     onVoice: () -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
+    testTag: String = COMPOSER_SEND_TEST_TAG,
 ) {
     val colors = MaterialTheme.colorScheme
     val enabled = action == ComposerPrimaryAction.STOP ||
@@ -684,7 +691,7 @@ private fun PrimaryActionButton(
         modifier = Modifier
             .size(ActionSize)
             .clip(CircleShape)
-            .background(if (action == ComposerPrimaryAction.STOP) colors.error else openBitFunColors.transparent)
+
             .clickable(enabled = enabled) {
                 when (action) {
                     ComposerPrimaryAction.STOP -> onStop()
@@ -697,16 +704,18 @@ private fun PrimaryActionButton(
                 contentDescription = actionDescription
                 role = Role.Button
             }
-            .testTag(COMPOSER_SEND_TEST_TAG),
+            .testTag(testTag),
     ) {
+        if (action == ComposerPrimaryAction.SEND || action == ComposerPrimaryAction.STOP) {
+            Box(Modifier.size(32.dp).clip(CircleShape).background(colors.primary))
+        }
         when (action) {
-            // A square on the red disc, not a glyph: it reads as "halt" at this
-            // size where a stop icon reads as a smudge.
+            // The same neutral primary disc as send, matching the reference composer.
             ComposerPrimaryAction.STOP -> Box(
                 modifier = Modifier
-                    .size(13.dp)
+                    .size(10.dp)
                     .clip(RoundedCornerShape(3.dp))
-                    .background(colors.onError),
+                    .background(colors.onPrimary),
             )
 
             ComposerPrimaryAction.VOICE, ComposerPrimaryAction.VOICE_BLOCKED -> Icon(
@@ -721,8 +730,8 @@ private fun PrimaryActionButton(
             else -> Icon(
                 painterResource(R.drawable.ic_symbol_arrow_up),
                 contentDescription = null,
-                tint = colors.onSurface,
-                modifier = Modifier.size(23.dp).alpha(
+                tint = if (action == ComposerPrimaryAction.SEND) colors.onPrimary else colors.onSurfaceVariant,
+                modifier = Modifier.size(20.dp).alpha(
                     if (action == ComposerPrimaryAction.SEND) 1f else DimmedAlpha,
                 ),
             )

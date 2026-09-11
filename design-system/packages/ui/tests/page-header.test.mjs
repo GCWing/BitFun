@@ -69,7 +69,7 @@ test("PageHeader styles use shared typography and content tokens", async () => {
   assert.match(styles, /--openbitfun-type-heading-page-font-size/);
   assert.match(styles, /--openbitfun-type-heading-section-font-size/);
   assert.match(styles, /--openbitfun-type-heading-display-font-size/);
-  assert.match(styles, /--openbitfun-type-display-sm-font-size/);
+  assert.match(styles, /--openbitfun-type-heading-welcome-font-size/);
   assert.match(styles, /--openbitfun-type-body-lg-font-size/);
   assert.match(styles, /--openbitfun-color-content-primary/);
   assert.match(styles, /--openbitfun-color-content-muted/);

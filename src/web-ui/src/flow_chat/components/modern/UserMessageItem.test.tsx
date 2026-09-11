@@ -141,6 +141,7 @@ vi.mock('@/shared/notification-system', () => ({
 vi.mock('@/infrastructure/event-bus', () => ({
   globalEventBus: {
     emit: vi.fn(),
+    on: vi.fn(() => () => {}),
   },
 }));
 
@@ -270,7 +271,7 @@ describe('UserMessageItem steering tag', () => {
     expect(container.querySelector('.user-message-item__actions')?.parentElement).toBe(meta);
     expect(time?.parentElement).not.toBe(bubble);
     expect(time?.dateTime).toBe('2026-09-03T06:32:08.000Z');
-    expect(time?.textContent?.trim()).not.toBe('');
+    expect(time?.textContent?.trim()).toMatch(/\d{2}:\d{2}:\d{2}/);
   });
 
   it('does not invent a send time when the persisted timestamp is invalid', () => {
@@ -592,9 +593,11 @@ describe('UserMessageItem steering tag', () => {
     const editButton = container.querySelector<HTMLButtonElement>('.user-message-item__edit-btn');
 
     expect(rollbackButton?.disabled).toBe(true);
-    expect(rollbackButton?.title).toContain(`message.rollbackDisabled${reason}`);
+    expect(rollbackButton?.getAttribute('aria-label')).toContain(`message.rollbackDisabled${reason}`);
+    expect(rollbackButton?.hasAttribute('title')).toBe(false);
     expect(editButton?.disabled).toBe(true);
-    expect(editButton?.title).toContain(`message.editDisabled${reason}`);
+    expect(editButton?.getAttribute('aria-label')).toContain(`message.editDisabled${reason}`);
+    expect(editButton?.hasAttribute('title')).toBe(false);
   });
 
   it('hides the edit button when the panel context disables user message editing', () => {

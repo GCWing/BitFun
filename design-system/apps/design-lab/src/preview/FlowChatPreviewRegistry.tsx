@@ -133,7 +133,7 @@ type FlowChatPreviewDefinitionMap = {
 type PreviewProps = FlowChatPreviewRenderOptions;
 
 function ChatComposerPreview({ interactive, state }: PreviewProps) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(state === "expanded" ? "Review the attached project notes and explain how the implementation should behave across narrow and wide windows." : "");
   const expanded = state === "expanded";
   const queued = state === "queued";
 
@@ -141,7 +141,7 @@ function ChatComposerPreview({ interactive, state }: PreviewProps) {
     <div className="flow-chat-composer-preview">
       <ChatComposer
         busy={state === "busy"}
-        contextBar={(
+        contextBar={state === "default" ? undefined : (
           <div className="flow-chat-composer-preview__context">
             <span><Monitor aria-hidden="true" />This computer</span>
             <span>OpenBitFun</span>

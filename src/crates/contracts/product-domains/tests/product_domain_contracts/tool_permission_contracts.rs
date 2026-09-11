@@ -459,7 +459,7 @@ fn permission_request_correlation_fields_use_stable_wire_shape() {
         project_path: Some("/workspace/project".to_string()),
         project_id: "project-1".to_string(),
         session_id: "session-1".to_string(),
-        agent_id: "agentic".to_string(),
+        agent_id: "Standard".to_string(),
         action: "read".to_string(),
         resources: vec!["README.md".to_string()],
         save_resources: Vec::new(),

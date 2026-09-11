@@ -101,11 +101,11 @@ vi.mock('@/infrastructure/confirm-dialog', () => ({
 }));
 
 vi.mock('@/features/market-account', () => ({
-  MarketAccountControls: () => <div data-testid="shared-market-account-controls" />,
+  AccountIdentityControls: () => <div data-testid="shared-market-account-controls" />,
 }));
 
-vi.mock('@/infrastructure/market-account', () => ({
-  useMarketAccount: () => mocks.accountState,
+vi.mock('@/infrastructure/account-identity', () => ({
+  useAccountIdentity: () => mocks.accountState,
 }));
 
 vi.mock('@/infrastructure/i18n/hooks/useI18n', () => ({

@@ -299,7 +299,7 @@ mod transcript_navigation_tests {
         let mut chat_state = ChatState::new(
             "session".to_string(),
             "Session".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             None,
         );
         chat_state.messages = vec![

@@ -19,11 +19,11 @@ pub use command_router::{
 pub use openbitfun_services_integrations::remote_connect::bot::{
     auto_push_failed_message, auto_push_intro, auto_push_skip_too_large_message,
     collect_auto_push_files, detect_mime_type, extract_computer_file_paths,
-    extract_downloadable_file_paths, format_file_size, get_file_metadata, load_bot_persistence,
-    read_workspace_file, resolve_workspace_path, save_bot_persistence, update_bot_persistence,
-    AutoPushFile, BotConfig, BotLanguage, BotPairingInfo, BotPersistenceData, MenuItem,
-    MenuItemStyle, MenuView, RemoteConnectFormState, RemoteDeviceTarget, SavedBotConnection,
-    WorkspaceFileContent,
+    extract_downloadable_file_paths, extract_output_file_references, format_file_size,
+    get_file_metadata, load_bot_persistence, read_workspace_file, resolve_workspace_path,
+    save_bot_persistence, update_bot_persistence, AutoPushFile, BotConfig, BotLanguage,
+    BotPairingInfo, BotPersistenceData, MenuItem, MenuItemStyle, MenuView, RemoteConnectFormState,
+    RemoteDeviceTarget, SavedBotConnection, WorkspaceFileContent,
 };
 
 use std::collections::HashMap;
@@ -80,6 +80,7 @@ impl BotSlotFence {
 /// work is not awaited during account replacement; instead every state commit
 /// is fenced and sanitized if it started under an older account epoch.
 pub(crate) struct BotRuntimeFence {
+    account_user_id: String,
     account_identity_epoch: Arc<AtomicU64>,
     observed_identity_epoch: AtomicU64,
     slot: Arc<BotSlotFence>,
@@ -96,11 +97,22 @@ impl BotRuntimeFence {
         Self {
             account_identity_epoch,
             observed_identity_epoch: AtomicU64::new(observed_identity_epoch),
+            account_user_id: String::new(),
             slot,
             lifecycle_generation,
         }
     }
 
+    pub(crate) fn with_account(mut self, user_id: String) -> Self {
+        self.account_user_id = user_id;
+        self
+    }
+
+    pub(crate) fn account_user_id(&self) -> String {
+        self.account_user_id.clone()
+    }
+
+    #[cfg(test)]
     pub(crate) fn standalone() -> Self {
         let account_identity_epoch = Arc::new(AtomicU64::new(0));
         let slot = Arc::new(BotSlotFence::default());
@@ -225,4 +237,54 @@ mod lifecycle_tests {
             .is_some());
         assert_eq!(committed.load(Ordering::Acquire), 2);
     }
+}
+
+/// Reads from the output's session, never from mutable bot menu selection.
+pub(crate) async fn read_output_file(
+    session_id: &str,
+    remote_target: Option<&command_router::RemoteBotTarget>,
+    reference: &str,
+    max_bytes: u64,
+    is_current: &(dyn Fn() -> bool + Sync),
+) -> Result<WorkspaceFileContent, String> {
+    if let Some(target) = remote_target {
+        if target.session_id != session_id {
+            return Err("Output session changed".into());
+        }
+        return target.read_file(reference, max_bytes, is_current).await;
+    }
+    let content = crate::service_agent_runtime::CoreServiceAgentRuntime::remote_file_target(
+        reference,
+        Some(session_id),
+    )
+    .await?
+    .read(max_bytes)
+    .await?;
+    Ok(WorkspaceFileContent {
+        name: content.name,
+        bytes: content.bytes,
+        mime_type: content.mime_type,
+        size: content.size,
+    })
+}
+
+/// Retire only the interactions actually observed in a completed remote turn.
+/// Another turn/device may still have a pending or queued question in this chat.
+pub(crate) async fn retire_remote_interactions<K: Eq + Hash>(
+    states: &tokio::sync::RwLock<HashMap<K, BotChatState>>,
+    chat_id: &K,
+    target: Option<&command_router::RemoteBotTarget>,
+    tool_ids: &[String],
+    fence: &BotRuntimeFence,
+    epoch: u64,
+) -> Option<command_router::BotInteractiveRequest> {
+    let target = target?;
+    if tool_ids.is_empty() {
+        return None;
+    }
+    let mut states = states.write().await;
+    if !fence.is_lifecycle_current() || fence.identity_epoch() != epoch {
+        return None;
+    }
+    command_router::retire_completed_remote_tools(states.get_mut(chat_id)?, target, tool_ids)
 }

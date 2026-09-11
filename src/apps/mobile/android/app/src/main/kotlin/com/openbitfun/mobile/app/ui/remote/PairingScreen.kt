@@ -1,5 +1,6 @@
 package com.openbitfun.mobile.app.ui.remote
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -25,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
@@ -37,14 +41,8 @@ import com.openbitfun.mobile.app.R
 import com.openbitfun.mobile.app.ui.chat.ConversationView
 import com.openbitfun.mobile.app.ui.common.CircleControl
 import com.openbitfun.mobile.app.ui.shell.MENU_TEST_TAG
-import com.openbitfun.mobile.app.viewmodel.PairingViewModel
 import com.openbitfun.mobile.core.feature.connection.ConnectionPhase
 import com.openbitfun.mobile.core.feature.layout.SettingsPlacement
-import com.openbitfun.mobile.core.feature.connection.connectionPhase
-import com.openbitfun.mobile.core.feature.pairing.ConnectionLiveness
-import com.openbitfun.mobile.core.feature.pairing.PairedWorkspace
-import com.openbitfun.mobile.core.feature.pairing.PairingIntent
-import com.openbitfun.mobile.core.feature.pairing.PairingUiState
 import com.openbitfun.mobile.core.feature.session.ConversationHeaderPresenter
 import com.openbitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceIntent
@@ -68,6 +66,7 @@ internal fun PairingScreen(
     onOpenSidebar: (() -> Unit)? = null,
     onBack: () -> Unit = {},
     onOpenAccount: () -> Unit = {},
+    onDeviceLink: (String) -> Unit = {},
     compact: Boolean = true,
     requestedSessionId: String? = null,
     creatingSession: Boolean = false,
@@ -76,65 +75,15 @@ internal fun PairingScreen(
     onRemoteHome: () -> Unit = {},
     startScanning: Boolean = false,
     onScanStarted: () -> Unit = {},
-    viewModel: PairingViewModel = viewModel(factory = PairingViewModel.Factory),
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val remoteState by viewModel.remoteState.collectAsStateWithLifecycle()
-    val workspaceState by viewModel.workspaceState.collectAsStateWithLifecycle()
-    // The heartbeat runs only while this surface is both composed and resumed:
-    // a ping every fifteen seconds from a backgrounded app buys nothing and
-    // costs a wake-up, and coming back is exactly when the answer is stale.
-    LifecycleResumeEffect(viewModel) {
-        viewModel.dispatch(PairingIntent.Foreground)
-        onPauseOrDispose { viewModel.dispatch(PairingIntent.Background) }
-    }
-
-    when (val current = state) {
-        is PairingUiState.Paired -> {
-            RemoteConnectedScreen(
-                remoteState = remoteState,
-                workspaceState = workspaceState,
-                phase = current.connectionPhase(),
-                settingsPlacement = settingsPlacement,
-                sessionDetailsPlacement = sessionDetailsPlacement,
-                viewSettingsPlacement = viewSettingsPlacement,
-                onOpenRemoteSettings = onOpenRemoteSettings,
-                deviceId = current.workspace.roomLabel,
-                createDevices = emptyList(),
-                desktopName = "",
-                onCreateDevicePick = {},
-                onSessionIntent = viewModel::dispatchSession,
-                onWorkspaceIntent = viewModel::dispatchWorkspace,
-                onOpenSidebar = onOpenSidebar,
-                compact = compact,
-                requestedSessionId = requestedSessionId,
-                creatingSession = creatingSession,
-                onOpenSession = onOpenSession,
-                onCreateSession = onCreateSession,
-                onRemoteHome = onRemoteHome,
-                connectionDetails = {
-                    PairedDetails(
-                        workspace = current.workspace,
-                        liveness = current.liveness,
-                        onVerify = { viewModel.dispatch(PairingIntent.Verify) },
-                        onDisconnect = { viewModel.dispatch(PairingIntent.Disconnect) },
-                    )
-                },
-                modifier = modifier,
-            )
-        }
-
-        else -> ConnectView(
-            state = current,
-            onSubmit = viewModel::dispatch,
-            onDismiss = { viewModel.dispatch(PairingIntent.Dismiss) },
-            onBack = onBack,
-            onOpenAccount = onOpenAccount,
-            startScanning = startScanning,
-            onScanStarted = onScanStarted,
-            modifier = modifier,
-        )
-    }
+    ConnectView(
+        onSubmit = onDeviceLink,
+        onBack = onBack,
+        onOpenAccount = onOpenAccount,
+        startScanning = startScanning,
+        onScanStarted = onScanStarted,
+        modifier = modifier,
+    )
 }
 
 /** The account-device route, which bypasses the QR pairing form entirely. */
@@ -369,11 +318,48 @@ private fun RemoteCompactHome(
     }
 }
 
+/** The remote landing page precedes the connection chooser, as on HarmonyOS. */
+@Composable
+internal fun DisconnectedRemoteHome(
+    onOpenSidebar: (() -> Unit)?,
+    onConnect: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().testTag("remote-disconnected-home")) {
+        RemoteShellHeader(onOpenSidebar = onOpenSidebar, onOpenRemoteSettings = null)
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth()
+                .padding(start = 20.dp, end = 20.dp, bottom = 48.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.size(74.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(painterResource(R.drawable.ic_symbol_desktop), contentDescription = null,
+                        modifier = Modifier.size(42.dp))
+                }
+            }
+            Text(stringResource(R.string.sidebar_connect_desktop),
+                style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+            Text(stringResource(R.string.remote_connect_description),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            Button(onClick = onConnect, shape = RoundedCornerShape(22.dp),
+                modifier = Modifier.width(136.dp).height(44.dp)) {
+                Text(stringResource(R.string.pairing_connect), style = MaterialTheme.typography.titleSmall)
+            }
+        }
+    }
+}
+
 @Composable
 private fun RemoteShellHeader(
     onOpenSidebar: (() -> Unit)?,
     subtitle: String = "",
-    onOpenRemoteSettings: () -> Unit,
+    onOpenRemoteSettings: (() -> Unit)?,
 ) {
     val hasSubtitle = subtitle.isNotBlank()
     Row(
@@ -414,13 +400,13 @@ private fun RemoteShellHeader(
                 )
             }
         }
-        CircleControl(
+        if (onOpenRemoteSettings != null) CircleControl(
             icon = R.drawable.ic_symbol_gearshape,
             glyphSize = 19,
             contentDescription = stringResource(R.string.remote_settings_title),
             onClick = onOpenRemoteSettings,
             modifier = Modifier,
-        )
+        ) else Box(Modifier.size(com.openbitfun.mobile.app.ui.theme.generated.MobileDesignGeometry.ControlTouchSize))
     }
 }
 
@@ -505,63 +491,5 @@ internal fun RemoteWorkspacePanel(
                 )
             }
         }
-    }
-}
-
-
-internal const val CONNECTION_RETRY_TEST_TAG: String = "connection-retry"
-
-@Composable
-internal fun PairedDetails(
-    workspace: PairedWorkspace,
-    liveness: ConnectionLiveness,
-    onVerify: () -> Unit,
-    onDisconnect: () -> Unit,
-) {
-    Text(stringResource(R.string.paired_title), style = MaterialTheme.typography.headlineSmall)
-    Text(
-        stringResource(R.string.paired_room, workspace.roomLabel),
-        style = MaterialTheme.typography.bodyMedium,
-    )
-    Text(
-        if (workspace.hasWorkspace && workspace.projectName != null) {
-            stringResource(R.string.paired_project, workspace.projectName!!)
-        } else {
-            stringResource(R.string.paired_no_workspace)
-        },
-        style = MaterialTheme.typography.bodyMedium,
-    )
-    workspace.authenticatedUserId?.let {
-        Text(
-            stringResource(R.string.paired_user, it),
-            style = MaterialTheme.typography.bodyMedium,
-        )
-    }
-    // A desktop that stopped answering has not un-paired: the room, its key and
-    // its transport are all still here, so the way out is another ping rather
-    // than the connect form. Re-pairing is a separate, manual act because an
-    // account room's password is never kept.
-    when (liveness) {
-        ConnectionLiveness.LIVE -> Unit
-        ConnectionLiveness.CHECKING -> Text(
-            stringResource(R.string.connection_checking),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        ConnectionLiveness.LOST -> {
-            Text(
-                stringResource(R.string.connection_lost_detail),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-            TextButton(
-                onClick = onVerify,
-                modifier = Modifier.testTag(CONNECTION_RETRY_TEST_TAG),
-            ) { Text(stringResource(R.string.connection_check_again)) }
-        }
-    }
-    Button(onClick = onDisconnect, modifier = Modifier.fillMaxWidth()) {
-        Text(stringResource(R.string.pairing_disconnect))
     }
 }

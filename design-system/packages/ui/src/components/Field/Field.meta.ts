@@ -23,7 +23,7 @@ export const fieldMeta = {
   tokens: [
     "color.content.requiredIndicator",
     "color.content.primary",
-    "color.content.muted",
+    "color.content.secondary",
     "color.status.danger.content",
     "layout.field.rootGap",
     "layout.field.horizontalGap",
@@ -35,7 +35,9 @@ export const fieldMeta = {
     "layout.field.labelGap",
     "layout.field.labelActionGap",
     "layout.field.controlGap",
-    "type.label.md.fontSize",
+    "type.label.selected.fontSize",
+    "type.meta.fontSize",
+    "type.fieldHelper.lineHeight",
     "type.support.fontSize",
   ],
 } as const satisfies ComponentMeta;

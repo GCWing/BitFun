@@ -7,13 +7,13 @@ import {
   type LetterBox,
 } from '../components/releaseLetterMotion';
 
-export function useReleaseLetterMotion() {
+export function useReleaseLetterMotion(active: boolean) {
   const sceneRef = useRef<HTMLDivElement>(null);
   const controls = useRef({ replay: () => {}, skip: () => {}, bounce: () => {} });
 
   useLayoutEffect(() => {
     const scene = sceneRef.current;
-    if (!scene) return;
+    if (!scene || !active) return;
     const find = <T extends Element>(selector: string) => scene.querySelector<T>(selector)!;
     const drawing = createLetterDrawing(find<SVGSVGElement>('.release-letter-drawing'));
     const background = find<HTMLElement>('.release-letter__construction');
@@ -194,7 +194,7 @@ export function useReleaseLetterMotion() {
       media?.removeEventListener('change', motionChanged);
       controls.current = { replay() {}, skip() {}, bounce() {} };
     };
-  }, []);
+  }, [active]);
 
   return {
     sceneRef,

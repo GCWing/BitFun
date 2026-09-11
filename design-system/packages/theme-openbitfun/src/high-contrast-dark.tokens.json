@@ -19,11 +19,25 @@
     }
   },
   "color": {
+    "composer": {
+      "border": { "$type": "color", "$value": "{color.field.border}" },
+      "contextBackground": { "$type": "color", "$value": "{color.surface.subtle}" }
+    },
+    "keyHint": {
+      "content": { "$type": "color", "$value": "{color.content.muted}" }
+    },
+    "numberBadge": {
+      "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
+    },
+    "actionCard": {
+      "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
+    },
     "surface": {
       "canvas": { "$type": "color", "$value": "{ref.color.gray.1000}" },
       "panel": { "$type": "color", "$value": "{ref.color.gray.900}" }
     },
     "content": {
+      "caption": { "$description": "Menu and navigation group captions; carries final opacity without attenuating primary text again.", "$type": "color", "$value": "{color.content.muted}" },
       "primary": { "$type": "color", "$value": "{ref.color.gray.0}" },
       "secondary": { "$type": "color", "$value": "{ref.color.gray.50}" },
       "muted": { "$type": "color", "$value": "{ref.color.gray.150}" }
@@ -51,6 +65,7 @@
       }
     },
     "field": {
+      "groupBackground": { "$description": "Grouped form tint; independent of opaque tertiary containers and transient subtle feedback.", "$type": "color", "$value": "{color.surface.tertiary}" },
       "borderActive": { "$type": "color", "$value": "{color.field.borderFocus}" },
       "placeholder": { "$type": "color", "$value": "{color.content.muted}" },
       "border": { "$type": "color", "$value": "{ref.color.gray.250}" },

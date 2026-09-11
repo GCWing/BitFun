@@ -19,7 +19,7 @@ interface ReleaseLetterParagraph {
   text: string;
 }
 
-export function parseReleaseLetterBody(body: string): ReleaseLetterParagraph[] {
+function parseReleaseLetterBody(body: string): ReleaseLetterParagraph[] {
   return body
     .split(/\r?\n\s*\r?\n/)
     .map(paragraph => paragraph.trim())
@@ -37,7 +37,9 @@ function ReleaseLetterScene({ title, body, titleId, descriptionId, closable }: {
   title: string; body: string; titleId: string; descriptionId: string; closable: boolean;
 }) {
   const { t, currentLanguage } = useAnnouncementI18n();
-  const { sceneRef, replay, skip, bounce } = useReleaseLetterMotion();
+  // Dialog retains this scene during exit; stop its work when visibility changes.
+  const modalVisible = useAnnouncementStore(state => state.modalVisible);
+  const { sceneRef, replay, skip, bounce } = useReleaseLetterMotion(modalVisible);
   const paragraphs = parseReleaseLetterBody(body);
   return (
     <div ref={sceneRef} className="release-letter-scene" data-motion-state="intro" data-content-ready="false" lang={currentLanguage}>

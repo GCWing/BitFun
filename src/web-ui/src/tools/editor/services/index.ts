@@ -32,7 +32,6 @@ export {
 } from './EditorExtensionManager';
 export { default as EditorExtensionManager } from './EditorExtensionManager';
 
-export * from './EditorReadyManager';
 
 export {
   DiffService,

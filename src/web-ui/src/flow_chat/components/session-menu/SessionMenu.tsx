@@ -17,7 +17,9 @@ import { Tooltip, Icon } from '@openbitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { activateMainSession } from '../../services/sessionActivation';
-import { useFlowChatSessions, resolveDisplayTitle } from './useFlowChatSessions';
+import { useFlowChatSessions } from './useFlowChatSessions';
+import { resolveSessionTitle } from '../../utils/sessionTitle';
+import { SessionTitleNumber } from '../SessionTitleNumber';
 import './SessionMenu.scss';
 
 interface SessionMenuProps {
@@ -27,7 +29,7 @@ interface SessionMenuProps {
 
 export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
   const { t } = useTranslation('flow-chat');
-  const { activeSessionId, sessions } = useFlowChatSessions();
+  const { activeSessionId, sessions, titleNumbers } = useFlowChatSessions();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -178,7 +180,8 @@ export const SessionMenu: React.FC<SessionMenuProps> = ({ onOpenChange }) => {
                 data-openbitfun-state={session.sessionId === activeSessionId ? 'active' : undefined}
                 onMouseDown={(e) => switchSession(e, session.sessionId)}
               >
-                {resolveDisplayTitle(session)}
+                <OverflowText>{resolveSessionTitle(session, t)}</OverflowText>
+                <SessionTitleNumber number={titleNumbers?.get(session.sessionId)} />
               </MenuItem>
             ))}
           </div>

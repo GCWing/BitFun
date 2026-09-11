@@ -60,7 +60,6 @@ import { fileSystemAppearanceDescriptor } from '@/tools/file-system/appearance';
 import { gitToolAppearanceDescriptor } from '@/tools/git/appearance';
 import { terminalToolAppearanceDescriptor } from '@/tools/terminal/appearance';
 import { workspaceToolAppearanceDescriptor } from '@/tools/workspace/appearance';
-import { relayDeployAppearanceDescriptor } from '@/features/relay-deploy/appearance';
 import { marketAccountControlsAppearanceDescriptor } from '@/features/market-account/appearance';
 import { sshRemoteAppearanceDescriptor } from '@/features/ssh-remote/appearance';
 import { workbenchAppearanceDescriptor } from '@/app/appearance';
@@ -69,12 +68,10 @@ import { shellAppearanceDescriptor } from '@/app/scenes/shell/appearance';
 import { agentsAppearanceDescriptor } from '@/app/scenes/agents/appearance';
 import { assistantAppearanceDescriptor } from '@/app/scenes/assistant/appearance';
 import { browserAppearanceDescriptor } from '@/app/scenes/browser/appearance';
-import { fileViewerAppearanceDescriptor } from '@/app/scenes/file-viewer/appearance';
 import { gitAppearanceDescriptor } from '@/app/scenes/git/appearance';
 import { miniAppAppearanceDescriptor, miniAppGalleryAppearanceDescriptor } from '@/app/scenes/miniapps/appearance';
 import { insightsAppearanceDescriptor } from '@/app/scenes/my-agent/appearance';
 import { pagesAppearanceDescriptor } from '@/app/scenes/pages/appearance';
-import { panelViewAppearanceDescriptor } from '@/app/scenes/panel-view/appearance';
 import { profileAppearanceDescriptor } from '@/app/scenes/profile/appearance';
 import { sessionAppearanceDescriptor } from '@/app/scenes/session/appearance';
 import { settingsAppearanceDescriptor } from '@/app/scenes/settings/appearance';
@@ -223,6 +220,7 @@ import { chatEmptyStateAppearanceDescriptor } from '@/flow_chat/components/ChatE
 import { copyOutputButtonAppearanceDescriptor } from '@/flow_chat/components/CopyOutputButton.appearance';
 import { copyableTextPreviewAppearanceDescriptor } from '@/flow_chat/components/CopyableTextPreview.appearance';
 import { currentSessionTitleAppearanceDescriptor } from '@/flow_chat/components/CurrentSessionTitle.appearance';
+import { sessionTitleNumberAppearanceDescriptor } from '@/flow_chat/components/SessionTitleNumber.appearance';
 import { coworkExampleCardsAppearanceDescriptor } from '@/flow_chat/components/CoworkExampleCards.appearance';
 import { imageAnalysisCardAppearanceDescriptor } from '@/flow_chat/components/ImageAnalysisCard.appearance';
 import { scrollToBottomButtonAppearanceDescriptor } from '@/flow_chat/components/ScrollToBottomButton.appearance';
@@ -342,7 +340,6 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(remoteConnectDisclaimerAppearanceDescriptor)
     .registerComponent(diffFullscreenViewerAppearanceDescriptor)
     .registerComponent(notificationButtonAppearanceDescriptor)
-    .registerComponent(relayDeployAppearanceDescriptor)
     .registerComponent(marketAccountControlsAppearanceDescriptor)
     .registerComponent(sshRemoteAppearanceDescriptor)
     .registerComponent(aboutDialogAppearanceDescriptor)
@@ -450,6 +447,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(copyOutputButtonAppearanceDescriptor)
     .registerComponent(copyableTextPreviewAppearanceDescriptor)
     .registerComponent(currentSessionTitleAppearanceDescriptor)
+    .registerComponent(sessionTitleNumberAppearanceDescriptor)
     .registerComponent(coworkExampleCardsAppearanceDescriptor)
     .registerComponent(imageAnalysisCardAppearanceDescriptor)
     .registerComponent(scrollToBottomButtonAppearanceDescriptor)
@@ -475,13 +473,11 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerScene(agentsAppearanceDescriptor)
     .registerScene(assistantAppearanceDescriptor)
     .registerScene(browserAppearanceDescriptor)
-    .registerScene(fileViewerAppearanceDescriptor)
     .registerScene(gitAppearanceDescriptor)
     .registerScene(miniAppGalleryAppearanceDescriptor)
     .registerScene(miniAppAppearanceDescriptor)
     .registerScene(insightsAppearanceDescriptor)
     .registerScene(pagesAppearanceDescriptor)
-    .registerScene(panelViewAppearanceDescriptor)
     .registerScene(profileAppearanceDescriptor)
     .registerScene(sessionAppearanceDescriptor)
     .registerScene(settingsAppearanceDescriptor)

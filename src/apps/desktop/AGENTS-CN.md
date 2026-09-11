@@ -23,10 +23,10 @@
 Peer Device Mode 的所有权和边界见 `docs/architecture/peer-device-mode.md`。
 前端防回归清单见 `src/web-ui/src/infrastructure/peer-device/README.md`。
 
-账户登录（同步选择未完成前勿落盘）见 `src/api/remote_connect_api.rs`
-（`PENDING_SYNC_CHOICE` / `account_finalize_login`）。
-一键部署 Relay：`src/api/relay_deploy_api.rs`，不变量见
-`src/web-ui/src/features/relay-deploy/README.md`。
+GitHub 身份统一由 `account_identity_api.rs` 提供；Relay 设备注册和生命周期位于
+`src/api/remote_connect_api.rs`。设置留在所属设备，不再提供云端/本地同步选择。
+Relay 部署向导已移除。保留 `src/apps/relay-server` 下供开发者使用的脚本和
+[运维文档](../relay-server/README.md)，不要重新加入产品 UI。
 
 如果改动影响多个运行时共享的行为，应把稳定契约、执行策略和服务放在各自的下层 owner
 crate；`src/crates/assembly/core` 只保留产品装配与兼容桥接。

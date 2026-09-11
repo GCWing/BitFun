@@ -19,6 +19,9 @@
  */
 
 import { create } from 'zustand';
+import { useContentResourceStore } from '../workbench/contentResourceStore';
+import { requestContentClose } from '../workbench/contentResourceLifecycle';
+import { getActiveSurfaceId, getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import {
   SCENE_TAB_REGISTRY,
   getSceneDef,
@@ -55,6 +58,7 @@ function getSceneDefOrMiniapp(id: SceneTabId) {
 }
 
 function isClosableScene(id: SceneTabId): boolean {
+  if (id.startsWith('content:')) return true;
   return isSceneTabClosable(getSceneDefOrMiniapp(id));
 }
 
@@ -69,8 +73,16 @@ export interface SessionSceneNavigation {
   activate: (target: SessionSceneTarget, isCurrent: () => boolean) => Promise<boolean>;
 }
 
+interface SessionSceneOpenOptions {
+  /** Commit contextual content only after the owning session is presented. */
+  onActivated?: () => void;
+  isCurrent?: () => boolean;
+}
+
 let sessionNavigation: SessionSceneNavigation | undefined;
 let navigationRequest = 0;
+const contentClosingRequests = new Map<SceneTabId, Promise<void>>();
+const contentSurfaceTabs = new Map<string, { tabs: SceneTab[]; activeTabId: SceneTabId | null }>();
 
 function resolveNavSceneId(sceneId: SceneTabId | null): SceneTabId | null {
   if (sceneId === null) return null;
@@ -90,17 +102,22 @@ interface SceneState {
   navigationSequence: number;
 
   openScene:    (id: SceneTabId) => void;
+  openContentScene: (resourceId: string, focus?: boolean) => void;
   /** Called after authoritative session selection, replaces only its workspace slot. */
-  openSessionScene: (target: SessionSceneTarget) => void;
+  openSessionScene: (target: SessionSceneTarget, options?: SessionSceneOpenOptions) => void;
+  /** Contextual navigation may only activate the existing, unchanged session reference. */
+  activateSessionScene: (target: SessionSceneTarget, options?: SessionSceneOpenOptions) => void;
   updateSessionScene: (target: SessionSceneTarget) => void;
   /** Resource reconciliation never deletes or stops the referenced sessions. */
   reconcileSessionScenes: (targets: ReadonlyMap<string, SessionSceneTarget>) => void;
   activateScene:(id: SceneTabId) => void;
-  closeScene:   (id: SceneTabId) => void;
+  closeScene:   (id: SceneTabId) => void | Promise<void>;
+  togglePinScene: (id: SceneTabId) => void;
+  reorderScene: (id: SceneTabId, targetId: SceneTabId, placement?: 'before' | 'after') => void;
   goBack:       () => void;
   goForward:    () => void;
   /** Reset tabs/history when entering or exiting Peer Device Mode. */
-  resetForPeerSwitch: () => void;
+  resetForPeerSwitch: (restoreContent?: boolean) => void;
 }
 
 function buildDefaultTabs(): SceneTab[] {
@@ -114,11 +131,12 @@ function buildDefaultTabs(): SceneTab[] {
  * Keeps pinned tabs ahead of regular tabs without opening or protecting them.
  */
 function orderPinnedTabsFirst(tabs: SceneTab[]): SceneTab[] {
-  const pinnedTabs = tabs.filter(tab => getSceneDefOrMiniapp(tab.id)?.pinned);
+  const isPinned = (tab: SceneTab) => tab.pinned ?? getSceneDefOrMiniapp(tab.id)?.pinned;
+  const pinnedTabs = tabs.filter(isPinned);
   if (pinnedTabs.length === 0) return tabs;
   return [
     ...pinnedTabs,
-    ...tabs.filter(tab => !getSceneDefOrMiniapp(tab.id)?.pinned),
+    ...tabs.filter(tab => !isPinned(tab)),
   ];
 }
 
@@ -161,12 +179,40 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   navigationSequence: 0,
 
   openScene: (requestedId) => {
+    if (requestedId === 'file-viewer') {
+      useNavSceneStore.getState().openNavScene('file-viewer');
+      return;
+    }
     const target = requestedId === 'session' ? sessionNavigation?.current() : undefined;
     if (requestedId === 'session' && !target) return;
     openSceneTarget(target ? getSessionSceneTabId(target) : requestedId, target ?? undefined);
   },
 
-  openSessionScene: (target) => openSceneTarget(getSessionSceneTabId(target), target),
+  openSessionScene: (target, options) => openSceneTarget(getSessionSceneTabId(target), target, options),
+
+  activateSessionScene: (target, options) => {
+    const id = getSessionSceneTabId(target);
+    const session = get().openTabs.find(tab => tab.id === id)?.session;
+    if (!session || session.sessionId !== target.sessionId) return;
+    const isCurrent = () => get().openTabs.find(tab => tab.id === id)?.session === session
+      && (options?.isCurrent?.() ?? true);
+    // Omit the creation target. Navigation can focus this tab, but cannot create
+    // or replace it after an async activation or settings-draft exit.
+    openSceneTarget(id, undefined, {
+      isCurrent,
+      onActivated: () => { if (isCurrent()) options?.onActivated?.(); },
+    });
+  },
+
+  openContentScene: (resourceId, focus = true) => {
+    if (!useContentResourceStore.getState().resources[resourceId]) return;
+    const id: SceneTabId = `content:${resourceId}`;
+    if (!get().openTabs.some(tab => tab.id === id)) {
+      set(state => ({ openTabs: orderPinnedTabsFirst([...state.openTabs,
+        { id, contentId: resourceId, lastUsed: Date.now() }]) }));
+    }
+    if (focus) get().activateScene(id);
+  },
 
   updateSessionScene: (target) => {
     const id = getSessionSceneTabId(target);
@@ -202,7 +248,12 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     const retainedActiveId = activeId && tabs.has(activeId) ? activeId : null;
     const mappedHistory = state.navHistory.map(id => remapped.get(id) ?? id);
     const navHistory = mappedHistory.filter(id => tabs.has(id));
+    const retiredPendingTab = state.pendingTabId !== null
+      && state.openTabs.some(tab => tab.id === state.pendingTabId)
+      && !remapped.has(state.pendingTabId);
+    if (retiredPendingTab) navigationRequest++;
     set({
+      ...(retiredPendingTab ? { pendingTabId: null } : {}),
       openTabs: nextTabs,
       activeTabId: retainedActiveId,
       navHistory,
@@ -219,6 +270,17 @@ export const useSceneStore = create<SceneState>((set, get) => ({
     get().openScene(id);
   },
 
+  togglePinScene: id => set(state => ({ openTabs: orderPinnedTabsFirst(state.openTabs.map(tab =>
+    tab.id === id ? { ...tab, pinned: !(tab.pinned ?? getSceneDefOrMiniapp(id)?.pinned) } : tab)) })),
+
+  reorderScene: (id, beforeId, placement = 'before') => set(state => {
+    const moved = state.openTabs.find(tab => tab.id === id);
+    if (!moved || id === beforeId || !state.openTabs.some(tab => tab.id === beforeId)) return state;
+    const tabs = state.openTabs.filter(tab => tab.id !== id);
+    tabs.splice(tabs.findIndex(tab => tab.id === beforeId) + (placement === 'after' ? 1 : 0), 0, moved);
+    return { openTabs: orderPinnedTabsFirst(tabs) };
+  }),
+
   closeScene: (id) => {
     const performClose = () => {
       const state = get();
@@ -226,6 +288,7 @@ export const useSceneStore = create<SceneState>((set, get) => ({
       if (!openTabs.some(tab => tab.id === id) || !isClosableScene(id)) return;
 
       const nextTabs = openTabs.filter(t => t.id !== id);
+      const contentId = openTabs.find(tab => tab.id === id)?.contentId;
       if (nextTabs.length === 0) {
         navigationRequest++;
         set({
@@ -234,12 +297,13 @@ export const useSceneStore = create<SceneState>((set, get) => ({
           navigationMotion: getInteractionMotion(),
           navigationSequence: state.navigationSequence + 1,
         });
+        if (contentId) useContentResourceStore.getState().remove(contentId);
         return;
       }
 
       const fallbackTabId = [...nextTabs].sort((a, b) => b.lastUsed - a.lastUsed)[0].id;
       const newActiveId = id === activeTabId ? fallbackTabId : activeTabId ?? fallbackTabId;
-      navigateToScene(newActiveId, () => {
+      return navigateToScene(newActiveId, () => {
         const current = get();
         set({
           openTabs: orderPinnedTabsFirst(current.openTabs.filter(tab => tab.id !== id)),
@@ -248,28 +312,45 @@ export const useSceneStore = create<SceneState>((set, get) => ({
           navigationSequence: current.navigationSequence + 1,
           ...removeFromHistory(current.navHistory, current.navCursor, id, newActiveId),
         });
-      });
+        if (contentId) useContentResourceStore.getState().remove(contentId);
+      }).then(() => undefined);
     };
 
+    const contentId = get().openTabs.find(tab => tab.id === id)?.contentId;
+    if (contentId) {
+      const pending = contentClosingRequests.get(id);
+      if (pending) return pending;
+      const scope = getActiveSurfaceScope();
+      const request = requestContentClose(contentId).then(async approved => {
+        if (approved && scope.isCurrent()) await performClose();
+      }).finally(() => { if (contentClosingRequests.get(id) === request) contentClosingRequests.delete(id); });
+      contentClosingRequests.set(id, request);
+      return request;
+    }
     if (id === 'settings') {
       const settingsWasActive = get().activeTabId === 'settings';
       const closedImmediately = requestAllSettingsDraftsExit(performClose);
       if (!closedImmediately && !settingsWasActive) get().openScene('settings');
       return;
     }
-    performClose();
+    return performClose();
   },
 
   goBack: () => navigateHistory(-1),
   goForward: () => navigateHistory(1),
 
-  resetForPeerSwitch: () => {
+  resetForPeerSwitch: (restoreContent = false) => {
     navigationRequest++;
     abandonSettingsDraftsForContextSwitch();
     useNavSceneStore.getState().closeNavScene();
     const state = get();
-    const tabs = buildDefaultTabs();
-    const activeTabId = tabs[0]?.id ?? null;
+    const contentTabs = state.openTabs.filter(tab => tab.contentId);
+    const origin = contentTabs[0]?.contentId
+      ? useContentResourceStore.getState().resources[contentTabs[0].contentId]?.scope.surfaceId : undefined;
+    if (origin) contentSurfaceTabs.set(origin, { tabs: contentTabs, activeTabId: state.activeTabId });
+    const saved = restoreContent ? contentSurfaceTabs.get(getActiveSurfaceId()) : undefined;
+    const tabs = saved?.tabs.filter(tab => tab.contentId && useContentResourceStore.getState().resources[tab.contentId]) ?? buildDefaultTabs();
+    const activeTabId = tabs.find(tab => tab.id === saved?.activeTabId)?.id ?? tabs[0]?.id ?? null;
     set({
       openTabs: tabs,
       activeTabId,
@@ -294,27 +375,31 @@ export function registerSessionSceneNavigation(adapter: SessionSceneNavigation):
 }
 
 /** Every navigation path, including history and close fallback, uses this gate. */
-function navigateToScene(id: SceneTabId | null, commit: () => void, session?: SessionSceneTarget): void {
+function navigateToScene(id: SceneTabId | null, commit: () => void, session?: SessionSceneTarget, canCommit?: () => boolean): Promise<boolean> {
+  if (canCommit && !canCommit()) return Promise.resolve(false);
   const hadPendingNavigation = useSceneStore.getState().pendingTabId !== null;
   const request = ++navigationRequest;
   const adapter = sessionNavigation;
   const target = session ?? useSceneStore.getState().openTabs.find(tab => tab.id === id)?.session;
-  const isCurrent = () => request === navigationRequest && adapter === sessionNavigation;
+  const ownsRequest = () => request === navigationRequest && adapter === sessionNavigation;
+  const isCurrent = () => ownsRequest() && (canCommit?.() ?? true);
   if (!target || !adapter || (!hadPendingNavigation && adapter.isActive(target))) {
     if (useSceneStore.getState().pendingTabId !== null) useSceneStore.setState({ pendingTabId: null });
     commit();
-    return;
+    return Promise.resolve(true);
   }
 
   useSceneStore.setState({ pendingTabId: id });
-  void adapter.activate(target, isCurrent).then(activated => {
-    if (activated && isCurrent()) commit();
+  return adapter.activate(target, isCurrent).then(activated => {
+    if (!activated || !isCurrent()) return false;
+    commit();
+    return true;
   }).finally(() => {
-    if (isCurrent()) useSceneStore.setState({ pendingTabId: null });
+    if (ownsRequest()) useSceneStore.setState({ pendingTabId: null });
   });
 }
 
-function openSceneTarget(id: SceneTabId, session?: SessionSceneTarget): void {
+function openSceneTarget(id: SceneTabId, session?: SessionSceneTarget, options?: SessionSceneOpenOptions): void {
   const get = useSceneStore.getState;
   const set = useSceneStore.setState;
   const performOpen = () => {
@@ -332,6 +417,7 @@ function openSceneTarget(id: SceneTabId, session?: SessionSceneTarget): void {
       if (navSceneId && (!navStore.showSceneNav || navStore.navSceneId !== navSceneId)) {
         navStore.openNavScene(navSceneId);
       }
+      options?.onActivated?.();
       return;
     }
 
@@ -357,6 +443,7 @@ function openSceneTarget(id: SceneTabId, session?: SessionSceneTarget): void {
         navigationSequence: state.navigationSequence + 1,
         ...histUpdate,
       });
+      options?.onActivated?.();
       return;
     }
 
@@ -368,13 +455,14 @@ function openSceneTarget(id: SceneTabId, session?: SessionSceneTarget): void {
       navigationSequence: state.navigationSequence + 1,
       ...histUpdate,
     });
+    options?.onActivated?.();
   };
 
   if (get().activeTabId === 'settings' && id !== 'settings') {
-    requestAllSettingsDraftsExit(() => navigateToScene(id, performOpen, session));
+    requestAllSettingsDraftsExit(() => navigateToScene(id, performOpen, session, options?.isCurrent));
     return;
   }
-  navigateToScene(id, performOpen, session);
+  navigateToScene(id, performOpen, session, options?.isCurrent);
 }
 
 function navigateHistory(direction: -1 | 1): void {
@@ -449,9 +537,33 @@ if (typeof window !== 'undefined') {
       } else if (!(navStore.navSceneId === 'file-viewer'
         && (isSessionSceneId(state.activeTabId) || state.activeTabId === 'terminal'
           || state.activeTabId === 'shell' || state.activeTabId === 'git'
-          || state.activeTabId === null))) {
+          || state.activeTabId?.startsWith('content:') || state.activeTabId === null))) {
         navStore.closeNavScene();
       }
     }
+  });
+}
+
+// Resource events update tabs even when their content view has not mounted.
+if (typeof window !== 'undefined') {
+  const reconcileTerminal = (event: Event) => {
+    const { sessionId, newName, surfaceId = getActiveSurfaceId() } = (event as CustomEvent<{ sessionId: string; newName?: string; surfaceId?: string }>).detail ?? {};
+    const store = useContentResourceStore.getState();
+    for (const resource of Object.values(store.resources)) {
+      if (resource.scope.surfaceId !== surfaceId || resource.target.kind !== 'terminal' || resource.target.sessionId !== sessionId) continue;
+      if (event.type === 'terminal-session-renamed' && newName) {
+        store.update(resource.id, { content: { ...resource.content, title: newName, data: { ...resource.content.data, sessionName: newName } } });
+      } else if (event.type === 'terminal-session-destroyed') {
+        store.update(resource.id, { content: { ...resource.content, metadata: { ...resource.content.metadata, terminalCloseBehavior: 'detach' } } });
+        if (useSceneStore.getState().openTabs.some(tab => tab.contentId === resource.id)) useSceneStore.getState().closeScene(`content:${resource.id}`);
+        else store.remove(resource.id);
+      }
+    }
+  };
+  window.addEventListener('terminal-session-renamed', reconcileTerminal);
+  window.addEventListener('terminal-session-destroyed', reconcileTerminal);
+  if (import.meta.hot) import.meta.hot.dispose(() => {
+    window.removeEventListener('terminal-session-renamed', reconcileTerminal);
+    window.removeEventListener('terminal-session-destroyed', reconcileTerminal);
   });
 }

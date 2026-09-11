@@ -3,6 +3,7 @@ package com.openbitfun.mobile.app.ui.preview
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -48,6 +49,7 @@ internal fun MobileDesignGallery(scenario: MobilePreviewScenario, dark: Boolean)
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
+                .navigationBarsPadding()
                 .background(MaterialTheme.colorScheme.background)
                 .testTag(MOBILE_DESIGN_GALLERY_TEST_TAG),
         ) {
@@ -86,7 +88,7 @@ internal fun MobileDesignGallery(scenario: MobilePreviewScenario, dark: Boolean)
                 } else {
                     ConnectionPhase.CONNECTED
                 },
-                model = ModelOption("preview-model", "OpenBitFun Preview", "Native model", true),
+                model = null,
                 modelOptions = emptyList(),
                 capabilities = ChatComposerCapabilities.RemoteChat,
                 placeholder = scenario.composerPlaceholder,
@@ -144,47 +146,12 @@ private fun PlatformLabel(scenario: MobilePreviewScenario) {
 
 @Composable
 private fun PreviewMessageBubble(message: MobilePreviewMessage) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        if (message.role == "user") Spacer(Modifier.weight(1f))
-        Text(
-            text = message.text,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier
-                .widthIn(max = MobileDesignGeometry.MessageBubbleMaxWidth)
-                .background(
-                    if (message.role == "user") MaterialTheme.colorScheme.surfaceVariant
-                    else MaterialTheme.colorScheme.surface,
-                    RoundedCornerShape(MobileDesignGeometry.MessageBubbleRadius),
-                )
-                .border(
-                    1.dp,
-                    MaterialTheme.colorScheme.outlineVariant,
-                    RoundedCornerShape(MobileDesignGeometry.MessageBubbleRadius),
-                )
-                .padding(
-                    horizontal = MobileDesignGeometry.MessageBubbleHorizontalPadding,
-                    vertical = MobileDesignGeometry.MessageBubbleVerticalPadding,
-                ),
-        )
-        if (message.role != "user") Spacer(Modifier.weight(1f))
+    if (message.role == "user") {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            com.openbitfun.mobile.app.ui.chat.message.ChatUserMessageBubble(message.text, emptyList(), Modifier)
+        }
+    } else {
+        Text(message.text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.fillMaxWidth())
     }
-}
-
-@Preview(name = "OpenBitFun Mobile · Compact", widthDp = 390, heightDp = 844, showBackground = true)
-@Composable
-private fun MobileDesignCompactPreview() {
-    MobileDesignGallery(MobilePreviewScenarios.ConnectedConversation, dark = false)
-}
-
-@Preview(name = "OpenBitFun Mobile · Dark", widthDp = 390, heightDp = 844, showBackground = true)
-@Composable
-private fun MobileDesignDarkPreview() {
-    MobileDesignGallery(MobilePreviewScenarios.StreamingDark, dark = true)
-}
-
-@Preview(name = "OpenBitFun Mobile · Reconnecting Wide", widthDp = 1024, heightDp = 768, showBackground = true)
-@Composable
-private fun MobileDesignReconnectingWidePreview() {
-    MobileDesignGallery(MobilePreviewScenarios.ReconnectingWide, dark = false)
 }

@@ -112,7 +112,7 @@
     opacity: 0;
     transition:
       grid-template-rows var(--openbitfun-motion-duration-normal) var(--openbitfun-motion-easing-standard),
-      opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
+      opacity var(--openbitfun-motion-duration-normal) var(--openbitfun-motion-easing-standard),
       visibility 0s linear var(--openbitfun-motion-duration-normal);
   }
 

@@ -6,7 +6,7 @@
 
   &__content {
     overflow: hidden;
-    background: var(--openbitfun-color-surface-tertiary);
+    background: var(--openbitfun-color-field-group-background);
     border-radius: var(--openbitfun-radius-lg);
   }
 
@@ -29,10 +29,10 @@
 
   &__preview-label {
     color: var(--openbitfun-color-content-primary);
-    font-family: var(--openbitfun-type-label-md-font-family);
-    font-size: var(--openbitfun-type-label-md-font-size);
-    font-weight: var(--openbitfun-type-label-md-font-weight);
-    line-height: var(--openbitfun-type-label-md-line-height);
+    font-family: var(--openbitfun-type-meta-font-family);
+    font-size: var(--openbitfun-type-meta-font-size);
+    font-weight: var(--openbitfun-type-meta-font-weight);
+    line-height: var(--openbitfun-type-meta-line-height);
   }
 
   &__preview-path {

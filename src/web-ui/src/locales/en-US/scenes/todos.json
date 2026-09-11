@@ -114,7 +114,7 @@
     "placeholders": {
       "name": "For example: Daily standup summary",
       "workspace": "Select a workspace",
-      "agentType": "For example: agentic or Cowork",
+      "agentType": "For example: Standard or Cowork",
       "anchor": "Leave blank to use the creation time",
       "timezone": "For example: Asia/Shanghai",
       "prompt": "What should the agent do when this Todo fires?"

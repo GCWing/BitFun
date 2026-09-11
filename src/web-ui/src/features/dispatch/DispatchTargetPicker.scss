@@ -47,10 +47,6 @@
       opacity: 0.8;
     }
 
-    &:active:not(:disabled) {
-      transform: scale(0.97);
-    }
-
     > span:not([data-overflow-content]) {
       min-width: 0;
       overflow: hidden;

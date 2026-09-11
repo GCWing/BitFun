@@ -198,13 +198,17 @@ mod tests {
                 .expect("builtin key");
         let builtin_layers = resolve_override_layers(
             &builtin_entry,
-            Some("agentic"),
+            Some("Standard"),
             Some(&overrides(
-                "agentic",
+                "Standard",
                 &builtin_key,
                 AgentSubagentOverrideState::Disabled,
             )),
-            &overrides("agentic", &builtin_key, AgentSubagentOverrideState::Enabled),
+            &overrides(
+                "Standard",
+                &builtin_key,
+                AgentSubagentOverrideState::Enabled,
+            ),
         );
         assert_eq!(builtin_layers.project_override, None);
         assert_eq!(
@@ -217,13 +221,13 @@ mod tests {
             .expect("user key");
         let user_layers = resolve_override_layers(
             &user_entry,
-            Some("agentic"),
+            Some("Standard"),
             Some(&overrides(
-                "agentic",
+                "Standard",
                 &user_key,
                 AgentSubagentOverrideState::Disabled,
             )),
-            &overrides("agentic", &user_key, AgentSubagentOverrideState::Enabled),
+            &overrides("Standard", &user_key, AgentSubagentOverrideState::Enabled),
         );
         assert_eq!(user_layers.project_override, None);
         assert_eq!(
@@ -239,13 +243,13 @@ mod tests {
             subagent_key_for(entry.subagent_source, entry.agent.as_ref()).expect("project key");
         let layers = resolve_override_layers(
             &entry,
-            Some("agentic"),
+            Some("Standard"),
             Some(&overrides(
-                "agentic",
+                "Standard",
                 &key,
                 AgentSubagentOverrideState::Disabled,
             )),
-            &overrides("agentic", &key, AgentSubagentOverrideState::Enabled),
+            &overrides("Standard", &key, AgentSubagentOverrideState::Enabled),
         );
 
         assert_eq!(

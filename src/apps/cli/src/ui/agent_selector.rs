@@ -381,7 +381,7 @@ mod tests {
     fn modes() -> Vec<AgentItem> {
         vec![
             AgentItem {
-                id: "agentic".to_string(),
+                id: "Standard".to_string(),
                 route_key: None,
                 description: "General purpose".to_string(),
             },
@@ -396,11 +396,11 @@ mod tests {
     #[test]
     fn chat_agent_entry_keeps_modes_direct_and_adds_management_rows() {
         let mut state = AgentSelectorState::new();
-        state.show(modes(), Some("agentic".to_string()), true, true);
+        state.show(modes(), Some("Standard".to_string()), true, true);
 
         assert!(matches!(
             state.confirm_selection(),
-            Some(AgentSelectorAction::SwitchMode(AgentItem { id, .. })) if id == "agentic"
+            Some(AgentSelectorAction::SwitchMode(AgentItem { id, .. })) if id == "Standard"
         ));
         state.move_down();
         state.move_down();
@@ -418,7 +418,7 @@ mod tests {
     #[test]
     fn startup_agent_entry_omits_session_scoped_external_sources() {
         let mut state = AgentSelectorState::new();
-        state.show(modes(), Some("agentic".to_string()), false, true);
+        state.show(modes(), Some("Standard".to_string()), false, true);
         state.move_down();
         state.move_down();
         assert!(matches!(
@@ -428,14 +428,14 @@ mod tests {
         state.move_down();
         assert!(matches!(
             state.confirm_selection(),
-            Some(AgentSelectorAction::SwitchMode(AgentItem { id, .. })) if id == "agentic"
+            Some(AgentSelectorAction::SwitchMode(AgentItem { id, .. })) if id == "Standard"
         ));
     }
 
     #[test]
     fn mode_only_entry_exposes_no_management_rows() {
         let mut state = AgentSelectorState::new();
-        state.show_modes_only(modes(), Some("agentic".to_string()), true);
+        state.show_modes_only(modes(), Some("Standard".to_string()), true);
 
         state.move_down();
         assert!(matches!(
@@ -445,14 +445,14 @@ mod tests {
         state.move_down();
         assert!(matches!(
             state.confirm_selection(),
-            Some(AgentSelectorAction::SwitchMode(AgentItem { id, .. })) if id == "agentic"
+            Some(AgentSelectorAction::SwitchMode(AgentItem { id, .. })) if id == "Standard"
         ));
     }
 
     #[test]
     fn mode_only_entry_renders_no_management_copy() {
         let mut state = AgentSelectorState::new();
-        state.show_modes_only(modes(), Some("agentic".to_string()), true);
+        state.show_modes_only(modes(), Some("Standard".to_string()), true);
         let mut terminal = Terminal::new(TestBackend::new(52, 12)).expect("test terminal");
 
         terminal
@@ -477,11 +477,11 @@ mod tests {
     #[test]
     fn processing_turn_keeps_management_available_and_defers_mode_guard_to_dispatch() {
         let mut state = AgentSelectorState::new();
-        state.show(modes(), Some("agentic".to_string()), true, false);
+        state.show(modes(), Some("Standard".to_string()), true, false);
 
         assert!(matches!(
             state.confirm_selection(),
-            Some(AgentSelectorAction::SwitchMode(AgentItem { id, .. })) if id == "agentic"
+            Some(AgentSelectorAction::SwitchMode(AgentItem { id, .. })) if id == "Standard"
         ));
         state.move_down();
         state.move_down();
@@ -494,7 +494,7 @@ mod tests {
     #[test]
     fn narrow_processing_popup_keeps_mode_unavailability_reason_visible() {
         let mut state = AgentSelectorState::new();
-        state.show(modes(), Some("agentic".to_string()), true, false);
+        state.show(modes(), Some("Standard".to_string()), true, false);
         let mut terminal = Terminal::new(TestBackend::new(32, 9)).expect("test terminal");
 
         terminal
@@ -523,14 +523,14 @@ mod tests {
     #[test]
     fn open_popup_refreshes_mode_availability_when_the_turn_ends() {
         let mut state = AgentSelectorState::new();
-        state.show(modes(), Some("agentic".to_string()), true, false);
+        state.show(modes(), Some("Standard".to_string()), true, false);
 
         state.set_mode_switch_allowed(true);
 
         assert!(state.allow_mode_switch);
         assert!(matches!(
             state.confirm_selection(),
-            Some(AgentSelectorAction::SwitchMode(AgentItem { id, .. })) if id == "agentic"
+            Some(AgentSelectorAction::SwitchMode(AgentItem { id, .. })) if id == "Standard"
         ));
     }
 
@@ -554,7 +554,7 @@ mod tests {
     #[test]
     fn too_small_fallback_disables_hidden_selection() {
         let mut state = AgentSelectorState::new();
-        state.show(modes(), Some("agentic".to_string()), true, true);
+        state.show(modes(), Some("Standard".to_string()), true, true);
         let mut terminal = Terminal::new(TestBackend::new(10, 3)).expect("test terminal");
         terminal
             .draw(|frame| state.render(frame, frame.area(), &Theme::dark_ansi16()))

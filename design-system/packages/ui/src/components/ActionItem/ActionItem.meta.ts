@@ -28,6 +28,8 @@ export const actionItemMeta = {
     "color.status.danger.surface",
     "control.height.sm",
     "type.label.md.fontSize",
+    "type.actionRow.lineHeight",
+    "color.action.neutral.surfaceHover",
     "type.label.selected.fontWeight",
     "type.meta.fontSize",
     "radius.base",

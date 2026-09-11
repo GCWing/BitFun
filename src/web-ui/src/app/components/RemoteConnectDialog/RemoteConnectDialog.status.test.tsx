@@ -13,6 +13,7 @@ import { setRemoteConnectDisclaimerAgreed } from './remoteConnectDisclaimerStora
 const boundary = vi.hoisted(() => ({
   backend: null as RemoteConnectStatus | null,
   hasWorkspace: true,
+  loggedIn: true,
   getStatus: vi.fn(),
   startConnection: vi.fn(),
   stopConnection: vi.fn(),
@@ -34,7 +35,7 @@ vi.mock('@/infrastructure/api/service-api/RemoteConnectAPI', async importOrigina
     stopBot: boundary.stopBot,
     getFormState: boundary.getFormState,
     setFormState: vi.fn().mockResolvedValue(undefined),
-    getLanNetworkInfo: vi.fn().mockResolvedValue(null),
+    getLanNetworkInfo: vi.fn().mockResolvedValue({ local_ip: '192.168.1.2', available_ips: [{ ip: '192.168.1.2', interface_name: 'en0' }] }),
     getDeviceInfo: vi.fn().mockResolvedValue({ device_id: 'desktop', device_name: 'Workstation', mac_address: '' }),
     accountGetCredentialHint: vi.fn().mockResolvedValue({ username: 'sora', relay_url: 'https://relay.example.test/remote/a' }),
   },
@@ -57,7 +58,7 @@ vi.mock('@/infrastructure/i18n/hooks/useI18n', () => ({
 }));
 vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({ useCurrentWorkspace: () => ({ hasWorkspace: boundary.hasWorkspace }) }));
 vi.mock('@/infrastructure/account/useAccountLoginState', () => ({
-  useAccountLoginState: () => ({ loggedIn: true, deviceName: 'Workstation' }),
+  useAccountLoginState: () => ({ loggedIn: boundary.loggedIn, deviceName: 'Workstation' }),
 }));
 vi.mock('@/infrastructure/appearance/runtime/AppearanceOverlayHost', () => ({ getAppearanceOverlayHost: () => document.body }));
 vi.mock('@/infrastructure/peer-device/peerDeviceContextState', () => ({ usePeerDeviceModeOptional: () => null }));
@@ -65,26 +66,22 @@ vi.mock('@/features/dispatch/dispatchJobStore', () => ({ useDispatchJobStore: (s
 vi.mock('@/shared/notification-system', () => ({ useNotification: () => ({ success: vi.fn(), warning: vi.fn(), error: vi.fn() }) }));
 vi.mock('@/infrastructure/confirm-dialog', () => ({ confirmWarning: vi.fn().mockResolvedValue(true) }));
 vi.mock('./AccountPanel', () => ({ AccountPanel: () => null }));
-vi.mock('@/features/relay-deploy', () => ({ RelayDeployWizard: () => null }));
 
-const relayA = 'https://relay.example.test/remote/a';
-const relayB = 'https://relay.example.test/remote/b';
+const relayA = 'https://remote.openbitfun.com/v/1.0.0';
 
 function status(overrides: Partial<RemoteConnectStatus> = {}): RemoteConnectStatus {
   return {
-    is_connected: false, pairing_state: 'idle', active_method: null,
-    peer_device_name: null, peer_user_id: null,
+    relay_connected: false, relay_url: null, active_method: null, clients: [],
     bot_connected: 'Weixin (desktop-bot)', bot_verbose_mode: false,
-    account_control_connected: false, account_control_relay_url: null,
     ...overrides,
   };
 }
 
 function invitation(relay = relayA): ConnectionResult {
   return {
-    method: { custom_server: { url: relay } },
+    method: relay === relayA ? 'openbitfun_server' : { lan: { ip: '192.168.1.2' } },
     qr_data: null, qr_svg: null,
-    qr_url: `https://mobile.example.test/#/pair?relay=${encodeURIComponent(relay)}`,
+    qr_url: `${relay}/#/pair?did=desktop`,
     bot_pairing_code: null, bot_link: null, pairing_state: 'waiting_for_scan',
   };
 }
@@ -129,16 +126,9 @@ async function clickText(key: string) {
 async function tick(ms = 2000) { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); }
 async function render(initialGroup?: 'network' | 'bot') { await act(async () => { root.render(<Harness initialGroup={initialGroup} />); }); }
 async function openNetwork() { await click(overviewNetwork()); }
-async function generateInvitation(relay = relayA) {
+async function generateInvitation() {
   await openNetwork();
-  await click(element('#remote-connect-network-tab-custom_server'));
-  if (relay !== relayA) {
-    const input = element('input[placeholder="https://relay.example.com:9700"]') as HTMLInputElement;
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, relay);
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-  }
+  await click(element('#remote-connect-network-tab-openbitfun_server'));
   await clickText('remoteConnect.showConnectionCode');
 }
 async function closeDialog() {
@@ -162,16 +152,19 @@ beforeEach(() => {
   });
   setRemoteConnectDisclaimerAgreed();
   boundary.hasWorkspace = true;
+  boundary.loggedIn = true;
   boundary.copyText.mockResolvedValue(true);
   boundary.backend = status();
   boundary.getStatus.mockImplementation(async () => ({ ...boundary.backend! }));
-  boundary.getFormState.mockResolvedValue({ custom_server_url: relayA });
-  boundary.startConnection.mockImplementation(async (_method: string, relay: string) => {
-    boundary.backend = { ...boundary.backend!, active_method: `CustomServer { url: "${relay}" }`, pairing_state: 'waiting_for_scan' };
-    return invitation(relay);
+  boundary.getFormState.mockResolvedValue({});
+  boundary.startConnection.mockImplementation(async (method: string) => {
+    const relay = method === 'lan' ? 'http://192.168.1.2:9700' : relayA;
+    const result = invitation(relay);
+    boundary.backend = status({ ...boundary.backend!, relay_connected: true, relay_url: relay, active_method: result.method });
+    return result;
   });
   boundary.stopConnection.mockImplementation(async () => {
-    boundary.backend = { ...boundary.backend!, is_connected: false, pairing_state: 'idle', active_method: null, peer_device_name: null, peer_user_id: null };
+    boundary.backend = status({ bot_connected: boundary.backend!.bot_connected });
   });
   boundary.stopBot.mockImplementation(async () => { boundary.backend = { ...boundary.backend!, bot_connected: null }; });
   remoteConnectStatusSource.invalidate();
@@ -190,349 +183,149 @@ afterEach(async () => {
 });
 
 describe('Remote Connect shared status through the real dialog and sidebar', () => {
-  it.each([
-    ['openbitfun_server', 'https://remote.openbitfun.com/relay'],
-    ['custom_server', relayA],
-  ] as const)('shows the same live clients and relay URL for %s', async (method, relay) => {
-    boundary.backend = status({
-      account_control_connected: true,
-      account_control_relay_url: relay,
-      account_control_clients: [
-        { id: 'phone', name: 'Safari · iOS' },
-        { id: 'browser', name: 'Chrome · Windows' },
-      ],
-      account_control_has_unidentified_clients: false,
-    });
-    await render('network');
-    const connections = element('[data-openbitfun-part="connections"]');
-    expect(connections.textContent).toContain('remoteConnect.clientCount:2');
-    expect(connections.querySelectorAll('li')).toHaveLength(2);
-    expect(connections.textContent).toContain('Safari · iOS');
-    expect(connections.textContent).toContain('Chrome · Windows');
-    expect(dialog().querySelectorAll('.openbitfun-remote-connect__network-card')).toHaveLength(1);
-    expect(connections.querySelectorAll('input[type="url"]')).toHaveLength(1);
-    const input = element('input[type="url"]') as HTMLInputElement;
-    expect(input.value).toBe(relay);
-    expect(input.readOnly).toBe(method === 'openbitfun_server');
-    await click(element('button[aria-label="remoteConnect.copyServerUrl"]'));
-    expect(boundary.copyText).toHaveBeenCalledWith(relay);
-    boundary.backend = { ...boundary.backend!, account_control_clients: [{ id: 'browser', name: 'Chrome · Windows' }] };
-    await tick();
-    expect(connections.textContent).toContain('remoteConnect.clientCount:1');
-    expect(connections.textContent).not.toContain('Safari · iOS');
-    boundary.backend = { ...boundary.backend!, account_control_connected: false, account_control_clients: [] };
-    await tick();
-    expect(element('[data-openbitfun-part="connections"]').textContent).toContain('remoteConnect.clientCount:0');
-    expect(element('[data-openbitfun-part="connections"]').querySelectorAll('li')).toHaveLength(0);
-  });
-
-  it('does not invent a total for old clients or mix account clients into another relay tab', async () => {
-    boundary.backend = status({ account_control_connected: true, account_control_relay_url: relayA });
-    await render('network');
-    expect(element('[data-openbitfun-part="connections"]').textContent).toContain('remoteConnect.clientDetailsUnavailable');
-    expect(dialog().textContent).not.toContain('remoteConnect.clientCount:');
-    await click(element('#remote-connect-network-tab-openbitfun_server'));
-    expect(element('[data-openbitfun-part="connections"]').textContent).toContain('remoteConnect.clientCount:0');
-    expect(element('[data-openbitfun-part="connections"]').querySelectorAll('li')).toHaveLength(0);
-  });
-
-  it('allows connection setup and shows live status without a selected workspace', async () => {
-    boundary.hasWorkspace = false;
-    await render();
-    expect((overviewNetwork() as HTMLButtonElement).disabled).toBe(false);
-    expect(overviewNetwork().textContent).toContain('remoteConnect.notConnected');
-    const bot = element('[data-openbitfun-part="overviewAction"][data-openbitfun-group="bot"]') as HTMLButtonElement;
-    expect(bot.disabled).toBe(false);
-    expect(bot.textContent).toContain('remoteConnect.stateConnected');
-    await click(bot);
-    expect(element('#remote-connect-bot-tabpanel')).toBeDefined();
-    await clickText('remoteConnect.backToOverview');
-    await generateInvitation();
-    expect(boundary.startConnection).toHaveBeenCalledOnce();
-    expect(cardStatus()).toBe('remoteConnect.stateWaiting');
-    boundary.backend = { ...boundary.backend!, account_control_connected: true, account_control_relay_url: relayA };
-    await tick();
-    await clickText('remoteConnect.backToOverview');
-    expect(overviewNetwork().textContent).toContain('remoteConnect.stateConnected');
-  });
-
-  it.each(['network', 'bot'] as const)('keeps the contextual %s destination open without a selected workspace', async group => {
-    boundary.hasWorkspace = false;
+  it.each([undefined, 'network', 'bot'] as const)('requires GitHub identity for the %s entry', async group => {
+    boundary.loggedIn = false;
     await render(group);
-    expect(element(`#remote-connect-${group}-tabpanel`)).toBeDefined();
-    expect(document.querySelector('[data-openbitfun-part="overviewAction"]')).toBeNull();
+    expect(document.querySelector('#remote-connect-access-title')).toBeNull();
+    expect(document.querySelector('#remote-connect-network-tabpanel')).toBeNull();
+    expect(document.querySelector('#remote-connect-bot-tabpanel')).toBeNull();
+    expect(boundary.startConnection).not.toHaveBeenCalled();
   });
 
-  it('keeps an active invitation when the selected workspace is cleared', async () => {
-    await render();
-    await generateInvitation();
-    boundary.hasWorkspace = false;
-    await render();
-    expect(cardStatus()).toBe('remoteConnect.stateWaiting');
-    expect(boundary.stopConnection).not.toHaveBeenCalled();
+  it('closes connection setup on account logout', async () => {
+    await render('network');
+    expect(element('#remote-connect-network-tabpanel')).toBeDefined();
+    boundary.loggedIn = false;
+    await render('network');
+    expect(document.querySelector('#remote-connect-network-tabpanel')).toBeNull();
   });
 
-  it('keeps QR, overview, close/reopen and sidebar connected, then permits another invitation', async () => {
-    await render();
-    expect(overviewNetwork().textContent).toContain('remoteConnect.notConnected');
-    expect(attachedMobile()).toBeNull();
-    expect(attachedBot()).not.toBeNull();
-    await generateInvitation();
-    expect(cardStatus()).toBe('remoteConnect.stateWaiting');
-    boundary.backend = { ...boundary.backend!, account_control_connected: true, account_control_relay_url: relayA };
-    await tick();
-    expect(cardStatus()).toBe('remoteConnect.stateConnected');
-    expect(attachedMobile()).not.toBeNull();
-    expect(attachedBot()).not.toBeNull();
-    expect(dialog().textContent).toContain('remoteConnect.cancelInvitation');
-    expect(dialog().textContent).toContain('remoteConnect.accountConnectedHint');
-    expect(dialog().textContent).not.toContain('remoteConnect.disconnect');
-    await clickText('remoteConnect.backToOverview');
-    expect(overviewNetwork().textContent).toContain('remoteConnect.stateConnected');
-    expect(boundary.stopConnection).toHaveBeenCalledOnce();
-    expect(boundary.stopBot).not.toHaveBeenCalled();
-    expect(boundary.backend!.account_control_connected).toBe(true);
-    await closeDialog();
-    expect(attachedMobile()).not.toBeNull();
-    await click(element('[data-testid="nav-footer-device-status"]'));
-    const devices = element('[data-testid="nav-device-status-connected-devices"]');
-    expect(devices.querySelector('[data-openbitfun-device-kind="mobile"] strong')?.textContent).toBe('remoteConnect.mobileBrowserTitle');
-    expect(devices.querySelector('[data-openbitfun-device-kind="message-app"] strong')?.textContent).toBe('remoteConnect.weixin');
-    expect(document.querySelector('[data-testid="nav-device-connection-service"]')).toBeNull();
-    await click(element('[data-testid="nav-footer-device-status"]'));
-    await click(element('[data-testid="reopen-remote-connect"]'));
-    expect(overviewNetwork().textContent).toContain('remoteConnect.stateConnected');
-    await openNetwork();
-    expect(cardStatus()).toBe('remoteConnect.stateConnected');
-    expect((element('input[type="url"]') as HTMLInputElement).value).toBe(relayA);
-    expect(dialog().textContent).not.toContain('remoteConnect.disconnect');
+  it.each([
+    ['openbitfun_server', relayA], ['lan', 'http://192.168.1.2:9700'],
+  ] as const)('uses identical connection, QR, presence and disconnect actions for %s', async (method, relay) => {
+    await render('network');
+    await click(element(`#remote-connect-network-tab-${method}`));
     await clickText('remoteConnect.showConnectionCode');
-    expect(boundary.startConnection).toHaveBeenCalledTimes(2);
-    expect(cardStatus()).toBe('remoteConnect.stateConnected');
-  });
-
-  it('propagates expiry and reconnect while pairing, on the overview, and after closing the dialog', async () => {
-    await render();
-    await generateInvitation();
-    for (const connected of [true, false, true]) {
-      boundary.backend = { ...boundary.backend!, account_control_connected: connected, account_control_relay_url: relayA };
-      await tick();
-      expect(cardStatus()).toBe(connected ? 'remoteConnect.stateConnected' : 'remoteConnect.stateWaiting');
-      expect(Boolean(attachedMobile())).toBe(connected);
-      expect(attachedBot()).not.toBeNull();
-    }
-    await clickText('remoteConnect.backToOverview');
-    boundary.backend = { ...boundary.backend!, account_control_connected: false };
     await tick();
-    expect(overviewNetwork().textContent).toContain('remoteConnect.notConnected');
-    boundary.backend = { ...boundary.backend!, account_control_connected: true };
-    await tick();
-    expect(overviewNetwork().textContent).toContain('remoteConnect.stateConnected');
-    await closeDialog();
-    boundary.backend = { ...boundary.backend!, account_control_connected: false };
-    await tick(15_000);
+    expect(boundary.startConnection).toHaveBeenCalledWith(method, method === 'lan' ? '192.168.1.2' : undefined);
+    expect(dialog().textContent).toContain(invitation(relay).qr_url);
+    expect(cardStatus()).toBe('remoteConnect.stateWaiting');
+    expect(element('[data-openbitfun-part="connections"]').textContent).not.toContain('remoteConnect.noConnectedClients');
     expect(attachedMobile()).toBeNull();
-    expect(attachedBot()).not.toBeNull();
-    boundary.backend = { ...boundary.backend!, account_control_connected: true };
-    await tick(15_000);
-    expect(attachedMobile()).not.toBeNull();
-  });
-
-  it('keeps configuration selectable beside an account connection and does not mark another relay path connected', async () => {
-    boundary.backend = status({ account_control_connected: true, account_control_relay_url: relayA });
-    await render();
-    await openNetwork();
-    await click(element('#remote-connect-network-tab-lan'));
-    await tick(4000);
-    expect(element('#remote-connect-network-tab-lan').getAttribute('aria-selected')).toBe('true');
-    await clickText('remoteConnect.backToOverview');
-    await generateInvitation(relayB);
-    expect(boundary.startConnection).toHaveBeenCalledWith('custom_server', relayB, undefined);
-    expect(cardStatus()).toBe('remoteConnect.stateWaiting');
-    await tick(4000);
-    expect(cardStatus()).toBe('remoteConnect.stateWaiting');
-    expect(element('#remote-connect-network-tab-custom_server').getAttribute('aria-selected')).toBe('true');
-    expect((element('#remote-connect-network-tab-lan') as HTMLButtonElement).disabled).toBe(true);
-    expect(attachedMobile()).not.toBeNull();
-    await clickText('remoteConnect.cancelAndBack');
-    expect(overviewNetwork().textContent).toContain('remoteConnect.stateConnected');
-    expect(boundary.backend!.account_control_relay_url).toBe(relayA);
-  });
-
-  it('keeps legacy room disconnect explicit and independent of a coexisting account route and WeChat', async () => {
-    boundary.backend = status({ is_connected: true, pairing_state: 'connected', active_method: 'OpenBitFunServer', peer_device_name: 'Phone' });
-    delete boundary.backend.account_control_connected;
-    delete boundary.backend.account_control_relay_url;
-    await render();
-    expect(overviewNetwork().textContent).toContain('remoteConnect.stateConnected');
-    expect(attachedMobile()).not.toBeNull();
-    await openNetwork();
-    await clickText('remoteConnect.backToOverview');
-    expect(boundary.stopConnection).not.toHaveBeenCalled();
-    boundary.backend = { ...boundary.backend!, account_control_connected: true, account_control_relay_url: relayA };
+    expect(dialog().textContent).not.toContain('remoteConnect.accountConnectedHint');
+    boundary.backend = { ...boundary.backend!, clients: [{ id: 'phone', name: 'Safari · iOS' }, { id: 'browser', name: 'Chrome' }] };
     await tick();
-    await openNetwork();
+    expect(element('[data-openbitfun-part="connections"]').querySelectorAll('li')).toHaveLength(2);
+    expect(cardStatus()).toBe('remoteConnect.stateConnected');
+    expect(dialog().textContent).toContain('remoteConnect.accountConnectedHint');
+    expect(attachedMobile()).not.toBeNull();
+    await click(element('button[aria-label="remoteConnect.copyUrl"]'));
+    expect(boundary.copyText).toHaveBeenCalledWith(invitation(relay).qr_url);
+    await clickText('remoteConnect.cancelInvitation');
+    expect(document.querySelector('[data-openbitfun-part="pairingCard"]')).toBeNull();
+    expect(boundary.stopConnection).not.toHaveBeenCalled();
+    expect(attachedMobile()).not.toBeNull();
     await clickText('remoteConnect.disconnect');
     expect(boundary.stopConnection).toHaveBeenCalledOnce();
     expect(boundary.stopBot).not.toHaveBeenCalled();
-    expect(boundary.backend!.account_control_connected).toBe(true);
-    expect(attachedMobile()).not.toBeNull();
-    await clickText('remoteConnect.backToOverview');
-    expect(overviewNetwork().textContent).toContain('remoteConnect.stateConnected');
+    expect(attachedMobile()).toBeNull();
+    expect(attachedBot()).not.toBeNull();
   });
 
-  it('does not override a selected method when account control appears during the initial status probes', async () => {
-    boundary.backend = status({ bot_connected: null });
-    await render();
-    await openNetwork();
-    await click(element('#remote-connect-network-tab-custom_server'));
-    await click(element('#remote-connect-network-tab-lan'));
-    boundary.backend = { ...boundary.backend!, account_control_connected: true, account_control_relay_url: relayA };
-    await tick(4000);
-    expect(element('#remote-connect-network-tab-lan').getAttribute('aria-selected')).toBe('true');
-    expect(attachedMobile()).not.toBeNull();
-    expect(boundary.startConnection).not.toHaveBeenCalled();
-  });
-
-  it('preserves a fresh QR across initial probes when no chat app is connected', async () => {
-    boundary.backend = status({ bot_connected: null });
+  it('retains the Relay route across overview navigation and closing the dialog', async () => {
     await render();
     await generateInvitation();
-    await tick(4000);
-    expect(cardStatus()).toBe('remoteConnect.stateWaiting');
-    expect(dialog().textContent).toContain(invitation().qr_url);
-    expect(dialog().querySelector('.openbitfun-remote-connect__qr-box svg')).not.toBeNull();
-    expect(boundary.startConnection).toHaveBeenCalledOnce();
-    expect(boundary.stopConnection).not.toHaveBeenCalled();
-  });
-
-  it('preserves an explicit method selection while the first dialog read refreshes a cached sidebar snapshot', async () => {
-    boundary.backend = status({ bot_connected: null });
-    await remoteConnectStatusSource.refresh();
-    const pending = deferred<RemoteConnectStatus>();
-    boundary.getStatus.mockReturnValueOnce(pending.promise);
-    await render();
-    await openNetwork();
-    await click(element('#remote-connect-network-tab-lan'));
-    boundary.backend = { ...boundary.backend!, account_control_connected: true, account_control_relay_url: relayA };
-    await act(async () => { pending.resolve(boundary.backend!); });
-    expect(element('#remote-connect-network-tab-lan').getAttribute('aria-selected')).toBe('true');
-    expect(attachedMobile()).not.toBeNull();
-  });
-
-  it('publishes a slow read to both surfaces and shows unavailable instead of waiting when a later read fails', async () => {
-    const pending = deferred<RemoteConnectStatus>();
-    boundary.getStatus.mockReturnValueOnce(pending.promise);
-    await render();
-    expect(overviewNetwork().textContent).toContain('remoteConnect.statusChecking');
-    await tick(4000);
-    expect(boundary.getStatus).toHaveBeenCalledOnce();
-    boundary.backend = status({ account_control_connected: true, account_control_relay_url: relayA });
-    await act(async () => { pending.resolve(boundary.backend!); });
+    boundary.backend = { ...boundary.backend!, clients: [{ id: 'phone', name: 'Safari' }] };
+    await tick();
+    await clickText('remoteConnect.backToOverview');
     expect(overviewNetwork().textContent).toContain('remoteConnect.stateConnected');
+    expect(boundary.stopConnection).not.toHaveBeenCalled();
+    await closeDialog();
     expect(attachedMobile()).not.toBeNull();
-    boundary.getStatus.mockRejectedValueOnce(new Error('transport temporarily unavailable'));
-    await tick();
-    expect(overviewNetwork().textContent).toContain('remoteConnect.statusUnavailable');
-    expect(overviewNetwork().textContent).not.toContain('remoteConnect.notConnected');
+    await click(element('[data-testid="reopen-remote-connect"]'));
     await openNetwork();
-    expect(cardStatus()).toBe('remoteConnect.statusUnavailable');
-    await tick();
+    await click(element('#remote-connect-network-tab-openbitfun_server'));
     expect(cardStatus()).toBe('remoteConnect.stateConnected');
-    expect(attachedMobile()).not.toBeNull();
+    await clickText('remoteConnect.showConnectionCode');
+    expect(boundary.startConnection).toHaveBeenCalledTimes(2);
   });
 
-  it('cleans up an invitation created after closing or unmounting without publishing it back into the UI', async () => {
-    for (const unmount of [false, true]) {
-      const pending = deferred<ConnectionResult>();
-      boundary.startConnection.mockReturnValueOnce(pending.promise);
-      await render();
-      await generateInvitation();
-      if (unmount) {
-        await act(async () => { root.unmount(); });
-        mounted = false;
-      } else await closeDialog();
-      const stopCount = boundary.stopConnection.mock.calls.length;
-      await act(async () => {
-        boundary.backend = status({ active_method: `CustomServer { url: "${relayA}" }`, pairing_state: 'waiting_for_scan' });
-        pending.resolve(invitation());
-      });
-      expect(boundary.stopConnection).toHaveBeenCalledTimes(stopCount + 1);
-      expect(boundary.backend!.pairing_state).toBe('idle');
-      expect(document.querySelector('[data-openbitfun-part="pairingCard"]')).toBeNull();
-      expect(attachedMobile()).toBeNull();
-      if (!unmount) await click(element('[data-testid="reopen-remote-connect"]'));
+  it('keeps an invitation through disconnect and reconnect while presence follows the live route', async () => {
+    await render();
+    await generateInvitation();
+    for (const connected of [true, false, true]) {
+      boundary.backend = { ...boundary.backend!, relay_connected: connected, clients: [{ id: 'phone', name: 'Safari' }] };
+      await tick();
+      expect(cardStatus()).toBe(connected ? 'remoteConnect.stateConnected' : 'remoteConnect.stateWaiting');
+      expect(dialog().textContent).toContain(invitation().qr_url);
+      expect(Boolean(attachedMobile())).toBe(connected);
     }
   });
 
-  it('keeps a bot read failure explicit without opening another login, and exposes retry in the sidebar', async () => {
+  it('allows account connection without a selected workspace', async () => {
+    boundary.hasWorkspace = false;
     await render();
-    await click(element('[data-openbitfun-part="overviewAction"][data-openbitfun-group="bot"]'));
-    expect(dialog().textContent).toContain('remoteConnect.disconnect');
-    boundary.getStatus.mockRejectedValue(new Error('status unavailable'));
+    expect((overviewNetwork() as HTMLButtonElement).disabled).toBe(false);
+    await generateInvitation();
     await tick();
-    expect(cardStatus()).toBe('remoteConnect.statusUnavailable');
-    expect(dialog().textContent).not.toContain('remoteConnect.botWeixinQrButton');
-    expect(dialog().textContent).not.toContain('remoteConnect.getPairingCode');
-    expect(dialog().querySelector('input')).toBeNull();
-    await clickText('remoteConnect.backToOverview');
-    expect(element('[data-openbitfun-part="overviewAction"][data-openbitfun-group="bot"]').textContent).toContain('remoteConnect.statusUnavailable');
-    await closeDialog();
-    await click(element('[data-testid="nav-footer-device-status"]'));
-    const notice = element('.openbitfun-device-overview__notice');
-    expect(notice.textContent).toBe('deviceOverview.statusUnavailable');
-    boundary.getStatus.mockImplementation(async () => ({ ...boundary.backend! }));
-    await click(notice);
-    expect(document.querySelector('.openbitfun-device-overview__notice')).toBeNull();
-    expect(attachedBot()).not.toBeNull();
-    expect(boundary.stopBot).not.toHaveBeenCalled();
+    expect(cardStatus()).toBe('remoteConnect.stateWaiting');
+  });
+
+  it('preserves a selected method when the initial status read finishes late', async () => {
+    const pending = deferred<RemoteConnectStatus>();
+    boundary.getStatus.mockReturnValueOnce(pending.promise);
+    await render('network');
+    await click(element('#remote-connect-network-tab-lan'));
+    boundary.backend = status({ relay_connected: true, relay_url: relayA, active_method: 'openbitfun_server' });
+    await act(async () => { pending.resolve(boundary.backend!); });
+    expect(element('#remote-connect-network-tab-lan').getAttribute('aria-selected')).toBe('true');
     expect(boundary.startConnection).not.toHaveBeenCalled();
   });
 
-  it('preserves an invitation during a failed read and restores its confirmed account state afterward', async () => {
+  it('reports failed reads without erasing a QR or claiming disconnection', async () => {
     await render();
     await generateInvitation();
-    boundary.backend = { ...boundary.backend!, account_control_connected: true, account_control_relay_url: relayA };
     await tick();
-    expect(cardStatus()).toBe('remoteConnect.stateConnected');
     boundary.getStatus.mockRejectedValueOnce(new Error('status unavailable'));
     await tick();
     expect(cardStatus()).toBe('remoteConnect.statusUnavailable');
     expect(dialog().textContent).toContain(invitation().qr_url);
-    expect(dialog().textContent).toContain('remoteConnect.cancelInvitation');
     await tick();
-    expect(cardStatus()).toBe('remoteConnect.stateConnected');
+    expect(cardStatus()).toBe('remoteConnect.stateWaiting');
     expect(boundary.stopConnection).not.toHaveBeenCalled();
   });
 
-  it('ignores connected replies begun before and during the actual Disconnect handler', async () => {
-    const connected = status({ is_connected: true, pairing_state: 'connected', active_method: 'OpenBitFunServer' });
-    boundary.backend = connected;
+  it('cleans up a connection that finishes after the dialog closes', async () => {
+    const pending = deferred<ConnectionResult>();
+    boundary.startConnection.mockReturnValueOnce(pending.promise);
     await render();
-    await openNetwork();
+    await generateInvitation();
+    await closeDialog();
+    await act(async () => {
+      boundary.backend = status({ relay_connected: true, relay_url: relayA, active_method: 'openbitfun_server' });
+      pending.resolve(invitation());
+    });
+    expect(boundary.stopConnection).toHaveBeenCalledOnce();
+    expect(boundary.backend!.relay_connected).toBe(false);
+    expect(document.querySelector('[data-openbitfun-part="pairingCard"]')).toBeNull();
+  });
+
+  it('fences stale connected replies when an explicit disconnect wins', async () => {
+    const connected = status({ relay_connected: true, relay_url: relayA, active_method: 'openbitfun_server', clients: [{ id: 'phone', name: 'Safari' }] });
+    boundary.backend = connected;
+    await render('network');
     const before = deferred<RemoteConnectStatus>();
     const during = deferred<RemoteConnectStatus>();
     boundary.getStatus.mockReturnValueOnce(before.promise).mockReturnValueOnce(during.promise);
     await tick();
     const stop = deferred<void>();
-    boundary.stopConnection.mockImplementationOnce(async () => {
-      await stop.promise;
-      boundary.backend = status();
-    });
+    boundary.stopConnection.mockImplementationOnce(async () => { await stop.promise; boundary.backend = status(); });
     await clickText('remoteConnect.disconnect');
     await tick();
     await act(async () => { stop.resolve(); });
-    expect(attachedMobile()).toBeNull();
-    expect(attachedBot()).not.toBeNull();
-    expect(dialog().textContent).toContain('remoteConnect.showConnectionCode');
-    await act(async () => {
-      during.resolve(connected);
-      before.resolve(connected);
-    });
+    await act(async () => { during.resolve(connected); before.resolve(connected); });
     expect(attachedMobile()).toBeNull();
     expect(dialog().textContent).not.toContain('remoteConnect.disconnect');
-    await clickText('remoteConnect.backToOverview');
-    expect(overviewNetwork().textContent).toContain('remoteConnect.notConnected');
     expect(boundary.stopConnection).toHaveBeenCalledOnce();
   });
 });

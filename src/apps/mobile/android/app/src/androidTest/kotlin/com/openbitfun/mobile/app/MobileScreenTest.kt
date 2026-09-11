@@ -26,7 +26,6 @@ import com.openbitfun.mobile.app.ui.chat.COMPOSER_INPUT_TEST_TAG
 import com.openbitfun.mobile.app.ui.chat.COMPOSER_SEND_TEST_TAG
 import com.openbitfun.mobile.app.ui.chat.CONVERSATION_BACK_TEST_TAG
 import com.openbitfun.mobile.app.ui.chat.CONVERSATION_LIST_TEST_TAG
-import com.openbitfun.mobile.app.ui.remote.CONNECTION_RETRY_TEST_TAG
 import com.openbitfun.mobile.app.ui.remote.CONNECT_MANUAL_TEST_TAG
 import com.openbitfun.mobile.app.ui.remote.CONNECT_PAIRING_CODE_TEST_TAG
 import com.openbitfun.mobile.app.ui.remote.CONNECT_SUBMIT_TEST_TAG
@@ -84,7 +83,7 @@ class MobileScreenTest {
         // the scanner, so both entry modes stay visible behind the closing drawer.
         waitForText("Choose how to connect")
         composeRule.onNodeWithText("Scan to connect").assertIsDisplayed()
-        composeRule.onNodeWithText("Sign in to OpenBitFun account").assertIsDisplayed()
+        composeRule.onNodeWithText("Sign in with GitHub").assertIsDisplayed()
         composeRule.onNodeWithTag(SIDEBAR_TEST_TAG).assertIsNotDisplayed()
     }
 
@@ -106,11 +105,11 @@ class MobileScreenTest {
         composeRule.onNodeWithTag(MENU_TEST_TAG).performClick()
         composeRule.onNodeWithTag(SIDEBAR_TEST_TAG).assertIsDisplayed()
 
-        val signedOut = composeRule.onAllNodesWithText("Sign in to OpenBitFun account")
+        val signedOut = composeRule.onAllNodesWithText("Sign in with GitHub")
             .fetchSemanticsNodes()
             .isNotEmpty()
         if (signedOut) {
-            composeRule.onNodeWithText("Sign in to OpenBitFun account").performClick()
+            composeRule.onNodeWithText("Sign in with GitHub").performClick()
         } else {
             // The signed-in exchange: settings first, and the profile row there
             // is what leads on to the account. The drawer is over the general
@@ -120,7 +119,7 @@ class MobileScreenTest {
             composeRule.onNodeWithTag(GENERAL_SETTINGS_PROFILE_TEST_TAG).performClick()
         }
 
-        waitForText(if (signedOut) "Sign in to OpenBitFun" else "Account")
+        waitForText(if (signedOut) "Sign in with GitHub" else "Account")
         composeRule.onNodeWithTag(SIDEBAR_TEST_TAG).assertIsNotDisplayed()
     }
 
@@ -446,7 +445,7 @@ class MobileScreenTest {
             waitForText("Connection error", timeoutMillis = 60_000)
 
             setRelayReachable(pairingUrl, reachable = true)
-            composeRule.onNodeWithTag(CONNECTION_RETRY_TEST_TAG).performScrollTo().performClick()
+            composeRule.onNodeWithText(InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.sidebar_device_retry)).performScrollTo().performClick()
             waitForText("Connected", timeoutMillis = 40_000)
         } finally {
             setRelayReachable(pairingUrl, reachable = true)

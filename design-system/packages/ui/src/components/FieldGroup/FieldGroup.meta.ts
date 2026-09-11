@@ -19,9 +19,8 @@ export const fieldGroupMeta = {
   ],
   states: ["subtle", "plain", "divided"],
   tokens: [
-    "color.surface.tertiary",
+    "color.field.groupBackground",
     "color.content.primary",
-    "color.content.muted",
     "color.border.subtle",
     "color.field.background",
     "color.field.backgroundHover",
@@ -30,6 +29,7 @@ export const fieldGroupMeta = {
     "layout.formSection.titleDescriptionGap",
     "type.heading.section.fontSize",
     "type.body.sm.fontSize",
+    "type.formDescription.lineHeight",
     "layout.fieldGroup.radius",
     "layout.fieldGroup.rowPaddingBlock",
     "layout.fieldGroup.rowPaddingInline",

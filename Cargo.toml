@@ -20,6 +20,7 @@ members = [
     "src/crates/adapters/ai-adapters",
     "src/crates/adapters/opencode-adapter",
     "src/crates/adapters/dsh-adapter",
+    "src/crates/adapters/pi-adapter",
     "src/crates/adapters/opencode-plugin-host",
     "src/crates/adapters/claude-code-adapter",
     "src/crates/adapters/codex-adapter",
@@ -60,7 +61,7 @@ resolver = "2"
 
 # Shared package metadata — single source of truth for version
 [workspace.package]
-version = "1.0.0" # x-release-please-version
+version = "1.0.0-beta" # x-release-please-version
 authors = ["OpenBitFun Team"]
 edition = "2021"
 
@@ -253,6 +254,7 @@ unic-langid = "0.9"
 x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 aes-gcm = "0.10"
 sha2 = "0.10"
+hkdf = "0.12"
 minisign-verify = "0.2"
 sha1 = "0.10"
 argon2 = "0.5"

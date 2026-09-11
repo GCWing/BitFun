@@ -40,7 +40,7 @@ describe('FlowChat transcript rhythm', () => {
   }
 
   it('treats collapsed ambient tool runs as text-like rows', () => {
-    const toolStyles = readSource('../FlowToolCard.scss');
+    const toolStyles = readSource('../../_item-rhythm.scss');
 
     expect(toolStyles).toContain(
       'margin: 0 0 var(--openbitfun-control-flow-chat-flow-item-gap) 0;',
@@ -55,7 +55,12 @@ describe('FlowChat transcript rhythm', () => {
       "> [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='root'][data-openbitfun-expanded-shell='false']",
     );
     expect(toolStyles).not.toContain('+ .task-with-subagent-wrapper');
-    expect(toolStyles).not.toContain('.task-with-subagent-wrapper:not(');
+    for (const owner of ['./ModelRoundItem.scss', './ExploreRegion.scss', '../subagent/SubagentProjectionView.scss']) {
+      expect(readSource(owner)).toContain('@include itemRhythm.apply');
+    }
+    for (const leaf of ['../FlowToolCard.scss', '../FlowTextBlock.scss', '../../tool-cards/ModelThinkingDisplay.scss']) {
+      expect(readSource(leaf)).not.toContain('margin: 0 0 var(--openbitfun-control-flow-chat-flow-item-gap) 0;');
+    }
   });
 
   it('gives every new user Turn one token-owned boundary gap', () => {
@@ -119,8 +124,7 @@ describe('FlowChat transcript rhythm', () => {
     expect(rendererStyles).not.toContain(
       '.task-with-subagent-wrapper:last-child:not(.task-with-subagent-wrapper--expanded)',
     );
-    expect(taskStyles).toMatch(
-      /\.task-with-subagent-wrapper\s*\{[\s\S]*?margin-block:\s*0;[\s\S]*?&\.task-with-subagent-wrapper--expanded\s*\{\s*margin-block:\s*var\(--openbitfun-space-1\) var\(--openbitfun-space-3\);/,
-    );
+    expect(taskStyles).toContain('margin-block: 0;');
+    expect(taskStyles).not.toMatch(/&\.task-with-subagent-wrapper--expanded\s*\{\s*margin-block:/);
   });
 });

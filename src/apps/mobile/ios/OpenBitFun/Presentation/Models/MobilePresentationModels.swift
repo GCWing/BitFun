@@ -54,6 +54,7 @@ struct MobileTimelineTool: Identifiable, Equatable {
     let question: String?
     let questions: [MobileTimelineQuestion]
     let actions: Set<String>
+    var foldIntoSummary: Bool = false
 }
 
 indirect enum MobileTimelineBlock: Identifiable, Equatable {
@@ -229,6 +230,8 @@ struct MobileWorkspaceGroup: Identifiable, Equatable {
     let selected: Bool
     let sessions: [ChatSession]
     var deviceKey: String? = nil
+    var directoryExpanded = false
+    var directoryStatus = "IDLE"
 }
 
 enum MobileSessionListSectionKind: Equatable {

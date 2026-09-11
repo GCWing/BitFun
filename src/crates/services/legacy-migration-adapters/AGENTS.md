@@ -8,6 +8,10 @@ Keep original source-read-only behavior, atomic domain writes, idempotent journa
 recovery, reference repair and target conflict rules. Share storage formats with
 config-contracts and services-core; do not copy private application schemas.
 
+Settings recovery runs on the fully merged configuration after target model
+conflicts are resolved. Use config-contracts normalization and include recovery
+diagnostics in the migration report; never mutate the legacy source to repair it.
+
 Focused verification:
 
 ```bash

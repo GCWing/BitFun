@@ -741,7 +741,7 @@ mod tests {
             PluginToolExecutionRoute {
                 session_id: "session-a".to_string(),
                 dialog_turn_id: "turn-a".to_string(),
-                agent: "agentic".to_string(),
+                agent: "Standard".to_string(),
                 tool_name: "plugin-tool".to_string(),
                 tool_call_id: Some("tool-call-a".to_string()),
                 generation_key: "generation-a".to_string(),
@@ -905,7 +905,7 @@ mod tests {
             )))
             .is_none());
         assert!(mux
-            .route_for(Some(&context(&workspace_text, "Agentic")))
+            .route_for(Some(&context(&workspace_text, "Standard")))
             .is_none());
 
         registry.clear_source_workspace(RuntimeHookSource::Plugin, &scope);
@@ -930,7 +930,7 @@ mod tests {
         mux.set_route(scope.clone(), route);
 
         let workspace_text = workspace.to_string_lossy();
-        let context = context(&workspace_text, "Agentic");
+        let context = context(&workspace_text, "Standard");
         assert!(mux.route_for(Some(&context)).is_some());
 
         registry.clear_source_workspace(RuntimeHookSource::Plugin, &scope);
@@ -955,7 +955,7 @@ mod tests {
         mux.set_route(scope.clone(), route);
 
         let workspace_text = workspace.to_string_lossy();
-        let mut remote = context(&workspace_text, "Agentic");
+        let mut remote = context(&workspace_text, "Standard");
         remote.workspace.as_mut().expect("workspace").backend =
             crate::agentic::workspace::WorkspaceBackend::Remote {
                 connection_id: "remote-a".to_string(),
@@ -1014,7 +1014,7 @@ mod tests {
             PluginToolExecutionRoute {
                 session_id: "session-a".to_string(),
                 dialog_turn_id: "turn-a".to_string(),
-                agent: "agentic".to_string(),
+                agent: "Standard".to_string(),
                 tool_name: "plugin-tool".to_string(),
                 tool_call_id: Some("tool-call-a".to_string()),
                 generation_key: "generation-a".to_string(),

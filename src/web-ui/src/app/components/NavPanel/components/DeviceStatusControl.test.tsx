@@ -8,7 +8,7 @@ import {
   type DeviceInterconnectionOverview,
   type DeviceInterconnectionOverviewInput,
 } from '../deviceInterconnectionOverview';
-import { getDeviceArtworkKind } from './DeviceArtwork';
+import { getDeviceArtworkKind } from './deviceArtworkKind';
 import DeviceStatusControl from './DeviceStatusControl';
 
 const state = vi.hoisted(() => ({
@@ -45,11 +45,10 @@ function overview(overrides: Partial<DeviceInterconnectionOverviewInput> = {}) {
     localDeviceName: 'Workstation',
     peer: null,
     remoteStatus: {
-      is_connected: false,
-      pairing_state: 'idle',
+      relay_connected: false,
+      relay_url: null,
       active_method: null,
-      peer_device_name: null,
-      peer_user_id: null,
+      clients: [],
       bot_connected: null,
       bot_verbose_mode: false,
     },
@@ -129,11 +128,10 @@ describe('device status card', () => {
 
   it('keeps connected controllers visible without the connection service card', () => {
     state.overview = overview({ remoteStatus: {
-      is_connected: true,
-      pairing_state: 'connected',
-      active_method: 'LAN',
-      peer_device_name: 'My phone',
-      peer_user_id: 'mobile-user',
+      relay_connected: true,
+      relay_url: 'http://192.168.1.2:9700',
+      active_method: 'lan',
+      clients: [{ id: 'mobile-user', name: 'My phone' }],
       bot_connected: null,
       bot_verbose_mode: false,
     } });

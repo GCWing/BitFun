@@ -10,6 +10,7 @@ This directory follows `src/web-ui/AGENTS.md`.
   Unsupported Markdown regions use source-backed embedded blocks; preserve their
   original Markdown when parsing and serializing. HTML rendering uses the shared
   sanitized Markdown renderer.
+- Markdown serialization uses the parser-matched remark extensions. Preserve link titles, code whitespace, and literal syntax; validate emitted inline ranges and use equivalent inline HTML only when Markdown delimiters cannot preserve them. Unsupported block conversions stay local to their source region.
 - Source-backed reference blocks share document-level definitions, numbering,
   and anchors. Preview context is transient and must not enter saved Markdown.
 - Rich text reuses the existing MarkdownRenderer typography and component styles.
@@ -32,7 +33,7 @@ This directory follows `src/web-ui/AGENTS.md`.
 Run from the repository root after Markdown editor changes:
 
 ```bash
-pnpm --dir src/web-ui run test:run src/tools/editor/components/MarkdownEditor.test.tsx src/tools/editor/meditor/components/MEditor.test.tsx src/tools/editor/meditor/utils/tiptapMarkdown.test.ts src/tools/editor/meditor/utils/embeddedSource.test.ts src/tools/editor/meditor/utils/markdownFrontmatter.test.ts src/tools/editor/meditor/components/Preview.test.tsx src/tools/editor/meditor/utils/loadLocalImages.test.ts src/infrastructure/markdown/rehypeSourceRange.test.ts src/infrastructure/markdown/MarkdownRenderer.test.tsx
+pnpm --dir src/web-ui run test:run src/tools/editor/components/MarkdownEditor.test.tsx src/tools/editor/meditor/components/MEditor.test.tsx src/tools/editor/meditor/utils/tiptapMarkdown.test.ts src/tools/editor/meditor/utils/tiptapMarkdown.roundtrip.test.ts src/tools/editor/meditor/utils/embeddedSource.test.ts src/tools/editor/meditor/utils/markdownFrontmatter.test.ts src/tools/editor/meditor/components/Preview.test.tsx src/tools/editor/meditor/utils/loadLocalImages.test.ts src/infrastructure/markdown/rehypeSourceRange.test.ts src/infrastructure/markdown/MarkdownRenderer.test.tsx
 ```
 
 For UI, types, and theme contracts, also follow the parent guide's `check:web`

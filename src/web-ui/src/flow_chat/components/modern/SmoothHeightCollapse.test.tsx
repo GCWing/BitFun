@@ -52,6 +52,7 @@ describe('SmoothHeightCollapse', () => {
     container.remove();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it('does not replay an opening animation when only animation mode changes', () => {
@@ -136,5 +137,19 @@ describe('SmoothHeightCollapse', () => {
     const expected = `${FLOWCHAT_COLLAPSE_DURATION_MS}ms, ${FLOWCHAT_COLLAPSE_DURATION_MS}ms, ${FLOWCHAT_COLLAPSE_DURATION_MS}ms`;
     expect(collapse?.style.transitionDuration).toBe(expected);
     expect(collapse?.classList.contains('smooth-height-collapse--closing')).toBe(true);
+  });
+
+  it('retains closing content for the full duration after a delayed animation frame', () => {
+    vi.useFakeTimers();
+    act(() => root.render(<SmoothHeightCollapse isOpen><div>content</div></SmoothHeightCollapse>));
+    act(() => root.render(<SmoothHeightCollapse isOpen={false}><div>content</div></SmoothHeightCollapse>));
+    act(() => vi.advanceTimersByTime(FLOWCHAT_COLLAPSE_DURATION_MS));
+    expect(container.textContent).toBe('content');
+    const startFrame = requestAnimationFrameSpy.mock.calls.at(-1)?.[0] as FrameRequestCallback;
+    act(() => startFrame(performance.now()));
+    act(() => vi.advanceTimersByTime(FLOWCHAT_COLLAPSE_DURATION_MS - 1));
+    expect(container.textContent).toBe('content');
+    act(() => vi.advanceTimersByTime(1));
+    expect(container.textContent).toBe('');
   });
 });

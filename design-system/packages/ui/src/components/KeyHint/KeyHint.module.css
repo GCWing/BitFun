@@ -11,16 +11,20 @@
     padding-inline: var(--openbitfun-space-1);
     border: 0;
     border-radius: var(--openbitfun-radius-xs);
-    color: var(--openbitfun-color-content-muted);
+    color: var(--openbitfun-color-key-hint-content);
     background: var(--openbitfun-color-key-hint-background);
     font-family: var(--openbitfun-type-micro-font-family);
     font-size: var(--openbitfun-type-micro-font-size);
     font-weight: var(--openbitfun-type-micro-font-weight);
     letter-spacing: var(--openbitfun-type-micro-letter-spacing);
-    line-height: var(--openbitfun-type-micro-line-height);
+    line-height: var(--openbitfun-type-modifier-leading-none-line-height);
     text-decoration: none;
     vertical-align: middle;
     white-space: nowrap;
+  }
+
+  .icon {
+    --openbitfun-opacity-icon-artwork: 1;
   }
 
   .icon,

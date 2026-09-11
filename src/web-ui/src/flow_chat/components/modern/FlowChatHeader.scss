@@ -396,9 +396,7 @@
 
   &__background-command-list-item-button {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
+    align-items: center;
     width: 100%;
     padding: var(--openbitfun-space-2);
     border: 0;
@@ -467,7 +465,7 @@
 
   &__background-command-menu {
     position: fixed;
-    z-index: 10000;
+    z-index: calc(var(--openbitfun-layer-popover) + 1);
 
     &--portal {
       top: auto;
@@ -492,18 +490,27 @@
       opacity: 0.82;
     }
 
-    span:not([data-overflow-content]) {
+    span:not([data-overflow-content]):not(.flowchat-header__background-command-icon) {
       min-width: 0;
       overflow: hidden;
     }
   }
 
-  &__background-command-list-meta {
-    width: 100%;
-    font-size: var(--openbitfun-type-flow-support-font-size);
-    color: var(--openbitfun-color-content-secondary);
-    white-space: nowrap;
-    overflow: hidden;
+  &__background-command-icon {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 auto;
+
+    &[data-running='true']::after {
+      content: '';
+      position: absolute;
+      right: -1px;
+      bottom: -1px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--openbitfun-color-status-success-emphasis);
+    }
   }
 
   // ==================== Actions ====================

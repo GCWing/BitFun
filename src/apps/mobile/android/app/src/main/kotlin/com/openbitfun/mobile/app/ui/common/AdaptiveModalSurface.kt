@@ -2,11 +2,20 @@ package com.openbitfun.mobile.app.ui.common
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.width
@@ -16,6 +25,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,9 +53,31 @@ internal fun AdaptiveModalSurface(
     visible: Boolean,
     placement: SettingsPlacement,
     onDismissRequest: () -> Unit,
+    edgeToEdgeContent: Boolean = false,
+    fitContent: Boolean = false,
     content: @Composable (Modifier) -> Unit,
 ) {
     if (!visible) return
+
+    if (fitContent) {
+        Dialog(onDismissRequest = onDismissRequest,
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+            SideEffect { window?.setDimAmount(0f) }
+            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.scrim)
+                .clickable(interactionSource = null, indication = null, onClick = onDismissRequest)
+                .safeDrawingPadding().imePadding().padding(MobileDesignGeometry.LoginSheetOuterMargin),
+                contentAlignment = Alignment.BottomCenter) {
+                Surface(modifier = Modifier.widthIn(max = MobileDesignGeometry.LoginSheetMaxWidth).fillMaxWidth()
+                    .clickable(interactionSource = null, indication = null, onClick = {}),
+                    shape = RoundedCornerShape(MobileDesignGeometry.SheetTopRadius),
+                    color = MaterialTheme.colorScheme.background) {
+                    content(Modifier.fillMaxWidth())
+                }
+            }
+        }
+        return
+    }
 
     if (placement.mode == SettingsPlacementMode.SIDE) {
         Dialog(
@@ -80,6 +114,8 @@ internal fun AdaptiveModalSurface(
         return
     }
 
+    val height = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
+    val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -89,8 +125,13 @@ internal fun AdaptiveModalSurface(
             topEnd = MobileDesignGeometry.SheetTopRadius,
         ),
         dragHandle = null,
+        contentWindowInsets = { if (edgeToEdgeContent) WindowInsets(0) else BottomSheetDefaults.windowInsets },
     ) {
-        val modifier = if (placement.mode == SettingsPlacementMode.FOLD_OPERATE && placement.height > 0) {
+        val modifier = if (fitContent) {
+            Modifier.fillMaxWidth().heightIn(max = (height - topInset - 8.dp).coerceAtLeast(0.dp))
+        } else if (edgeToEdgeContent && placement.mode != SettingsPlacementMode.FOLD_OPERATE) {
+            Modifier.fillMaxWidth().height((height - topInset - 8.dp).coerceAtLeast(0.dp))
+        } else if (placement.mode == SettingsPlacementMode.FOLD_OPERATE && placement.height > 0) {
             Modifier.fillMaxWidth().height(placement.height.dp)
         } else {
             Modifier.fillMaxWidth().fillMaxHeight(0.94f)

@@ -1,0 +1,28 @@
+// Composition owns inter-item space. Leaf views own only their content padding.
+// A model round retains its trailing gap across virtual rows; enclosed content
+// drops it so the enclosing section does not count the last gap twice.
+@mixin apply($enclosed: false) {
+  > :is(.flow-text-block, .flow-thinking-item, .flowchat-flow-item,
+    .task-with-subagent-wrapper, .subagent-projection-text--truncated) {
+    margin: 0 0 var(--openbitfun-control-flow-chat-flow-item-gap) 0;
+  }
+
+  // Consecutive collapsed ambient tools form a continuous run of 22px lines.
+  > .flowchat-flow-item:has(
+    > .flow-tool-card-wrapper[data-openbitfun-attention='ambient']
+      [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='root'][data-openbitfun-expanded-shell='false']
+  ):has(
+    + .flowchat-flow-item
+      > .flow-tool-card-wrapper[data-openbitfun-attention='ambient']
+        [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-part='root'][data-openbitfun-expanded-shell='false']
+  ) {
+    margin-bottom: 0;
+  }
+
+  @if $enclosed {
+    > :is(.flow-text-block, .flow-thinking-item, .flowchat-flow-item,
+      .task-with-subagent-wrapper, .subagent-projection-text--truncated):last-child {
+      margin-bottom: 0;
+    }
+  }
+}

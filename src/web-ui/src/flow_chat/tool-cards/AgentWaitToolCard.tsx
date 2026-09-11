@@ -2,31 +2,14 @@ import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { flowChatStore } from '../store/FlowChatStore';
-import type { Session, ToolCardProps, ToolCardDisplayContext } from '../types/flow-chat';
-import { isAcpFlowSession } from '../utils/acpSession';
+import type { ToolCardProps } from '../types/flow-chat';
+import { RUNNING_STATUSES, shouldShowAgentWaitSteeringHint } from './agentWaitSteeringHint';
 import { AgentWaitToolCard as AgentWaitToolCardView } from '@openbitfun/ui/flow-chat';
-
-const RUNNING_STATUSES = new Set(['pending', 'preparing', 'running', 'streaming', 'receiving']);
 
 interface AgentWaitResult {
   status?: string;
   results?: unknown[];
   pending_bg_task_ids?: string[];
-}
-
-export function shouldShowAgentWaitSteeringHint(
-  status: ToolCardProps['toolItem']['status'],
-  displayContext: ToolCardDisplayContext | undefined,
-  session: Session | null | undefined,
-): boolean {
-  if (!RUNNING_STATUSES.has(status) || displayContext === 'subagent-projection' || !session) {
-    return false;
-  }
-
-  return session.sessionKind !== 'subagent'
-    && !session.parentToolCallId
-    && !session.isHistorical
-    && !isAcpFlowSession(session);
 }
 
 export const AgentWaitToolCard: React.FC<ToolCardProps> = ({

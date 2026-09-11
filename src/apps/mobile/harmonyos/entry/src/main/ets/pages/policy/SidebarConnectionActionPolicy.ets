@@ -1,5 +1,17 @@
 /** Presentation rules for account-independent sidebar entry and navigation. */
+export type SidebarChatAction = 'assistant' | 'choose-harness' | 'code';
+
 export class SidebarConnectionActionPolicy {
+  /** Match mobile-web: assistant chat, supported harness chooser, or legacy code chat. */
+  static chatAction(workspaceKind: string, supportsHarnessProfiles: boolean): SidebarChatAction {
+    if (workspaceKind === 'assistant') return 'assistant';
+    return supportsHarnessProfiles ? 'choose-harness' : 'code';
+  }
+
+  static canCreateSession(connectionState: string, isBusy: boolean): boolean {
+    return connectionState === 'connected' && !isBusy;
+  }
+
   static shouldShowScan(connectionState: string): boolean {
     return connectionState !== 'connected';
   }

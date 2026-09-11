@@ -77,7 +77,6 @@
     }
 
     &:active:not(.is-inactive) {
-      transform: scale(0.96);
       background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 

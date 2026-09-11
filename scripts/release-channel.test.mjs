@@ -19,13 +19,21 @@ test('stable and beta channels resolve to isolated updater feeds', () => {
   const stable = resolveReleaseChannel('stable');
   const beta = resolveReleaseChannel('beta');
   assert.match(stable.primaryUpdaterEndpoint, /releases\/latest\/download/);
-  assert.match(beta.primaryUpdaterEndpoint, /releases\/download\/channel-beta/);
-  assert.equal(beta.fallbackUpdaterEndpoint, 'https://openbitfun.com/release/beta/latest.json');
+  assert.match(beta.primaryUpdaterEndpoint, /releases\/download\/channel-v1-beta/);
+  assert.equal(beta.fallbackUpdaterEndpoint, 'https://openbitfun.com/release/beta/latest-v1.json');
   assert.notEqual(beta.primaryUpdaterEndpoint, stable.primaryUpdaterEndpoint);
+  for (const config of [stable, beta]) {
+    assert.ok(config.primaryUpdaterEndpoint.endsWith('/latest-v1.json'));
+    assert.ok(config.fallbackUpdaterEndpoint.endsWith('/latest-v1.json'));
+  }
 });
 
 test('channel promotion follows SemVer including beta precedence', () => {
   assert.equal(compareReleaseVersions('1.0.0-beta.2', '1.0.0-beta.1'), 1);
+  assert.equal(compareReleaseVersions('1.0.0-beta', '0.2.19'), 1);
+  assert.equal(compareReleaseVersions('1.0.0-beta', '1.0.0-beta.4'), -1);
+  assert.equal(compareReleaseVersions('1.0.0', '1.0.0-beta'), 1);
+  assert.equal(compareReleaseVersions('1.0.0-beta', '1.0.0-beta'), 0);
   assert.equal(compareReleaseVersions('1.0.0', '1.0.0-beta.9'), 1);
   assert.equal(compareReleaseVersions('1.0.1-beta.1', '1.0.0'), 1);
   assert.equal(compareReleaseVersions('1.0.0', '1.0.1-beta.1'), -1);
@@ -34,6 +42,9 @@ test('channel promotion follows SemVer including beta precedence', () => {
 
 test('release versions must match their channel', () => {
   assert.equal(validateReleaseVersion('stable', '1.0.0'), '1.0.0');
+  assert.equal(validateReleaseVersion('stable', '1.0.0-beta'), '1.0.0-beta');
+  assert.throws(() => validateReleaseVersion('beta', '1.0.0-beta'));
+  assert.throws(() => validateReleaseVersion('stable', '1.1.0-beta'));
   assert.equal(validateReleaseVersion('beta', '1.0.0-beta.1'), '1.0.0-beta.1');
   assert.throws(() => validateReleaseVersion('stable', '1.0.0-beta.1'));
   assert.throws(() => validateReleaseVersion('beta', '1.0.0'));
@@ -168,3 +179,20 @@ function writeFixture(root, relative, content) {
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, content);
 }
+
+
+test('Desktop, CLI and SSH dispatch consume only the versioned stable feeds', () => {
+  const stable = resolveReleaseChannel('stable');
+  for (const file of [
+    'src/apps/desktop/src/api/system_api.rs',
+    'src/crates/services/services-integrations/src/remote_ssh/dispatch_ssh.rs',
+  ]) {
+    const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+    assert.ok(source.includes(stable.primaryUpdaterEndpoint), file);
+    assert.ok(source.includes(stable.fallbackUpdaterEndpoint), file);
+    assert.doesNotMatch(source, /https:[^"\s]+\/latest\.json/);
+  }
+  const cli = readFileSync(new URL('../src/apps/cli/src/self_update.rs', import.meta.url), 'utf8');
+  assert.ok(cli.includes('https://github.com/GCWing/OpenBitFun/releases/latest/download/linux-binaries-v1.json'));
+  assert.ok(cli.includes('https://openbitfun.com/release/linux-binaries-v1.json'));
+});

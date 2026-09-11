@@ -203,7 +203,7 @@ describe('ModelSelector external transport reuse', () => {
       workspacePath: '/tmp/miniapp-runtime',
       projectWorkspacePath: '/tmp/project',
       config: {
-        agentType: 'agentic',
+        agentType: 'Standard',
         modelName: 'model-a',
         reasoningPreset: 'medium',
       },
@@ -274,7 +274,7 @@ describe('ModelSelector external transport reuse', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           sessionId="miniapp-session"
           persistSharedModeDefault={false}
           reasoningTriggerPresentation="label"
@@ -368,7 +368,7 @@ describe('ModelSelector external transport reuse', () => {
       .mockResolvedValueOnce(updatedCatalog);
 
     await act(async () => {
-      root.render(<ModelSelector currentMode="agentic" sessionId="session-a" />);
+      root.render(<ModelSelector currentMode='Standard' sessionId="session-a" />);
       await Promise.resolve();
     });
     expect(catalogUpdated).toBeTypeOf('function');
@@ -401,7 +401,7 @@ describe('ModelSelector external transport reuse', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           externalSelection={{
             models: ['model-a', 'model-b'],
             defaultModelId: 'model-a',
@@ -438,7 +438,7 @@ describe('ModelSelector external transport reuse', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           externalSelection={{
             models: [],
             includeLocalCatalog: true,
@@ -473,7 +473,7 @@ describe('ModelSelector external transport reuse', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           externalSelection={{
             models: ['remote-only'],
             selectedModelId: 'remote-only',
@@ -525,7 +525,7 @@ describe('ModelSelector external transport reuse', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           externalSelection={{
             models: [],
             includeLocalCatalog: true,
@@ -555,7 +555,7 @@ describe('ModelSelector external transport reuse', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           externalSelection={{
             models: ['model-a'],
             selectedModelId: 'model-a',
@@ -578,7 +578,7 @@ describe('ModelSelector external transport reuse', () => {
     await act(async () => {
       root.render(
         <ModelSelector
-          currentMode="agentic"
+          currentMode='Standard'
           externalSelection={{
             models: ['model-a'],
             selectedModelId: 'model-a',
@@ -692,7 +692,7 @@ describe('ModelSelector external transport reuse', () => {
   });
   const renderTarget = async (selection: ExternalModelSelection) => {
     await act(async () => {
-      root.render(<ModelSelector currentMode="agentic" externalSelection={selection} reasoningTriggerPresentation="label" />);
+      root.render(<ModelSelector currentMode='Standard' externalSelection={selection} reasoningTriggerPresentation="label" />);
     });
   };
   const clickControl = async (testId: string) => {

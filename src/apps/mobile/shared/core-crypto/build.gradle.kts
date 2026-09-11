@@ -73,14 +73,14 @@ kotlin {
     }
 
     iosArm64 {
-        compilations.getByName("main").cinterops.create("openbitfunArgon2") {
+        compilations.getByName("main").cinterops.create("openBitFunArgon2") {
             defFile(argon2InteropDir.file("openbitfun_argon2.def"))
             includeDirs(sharedArgon2Dir, argon2InteropDir)
             extraOpts("-libraryPath", layout.buildDirectory.dir("native/argon2/iosArm64").get().asFile.absolutePath)
         }
     }
     iosSimulatorArm64 {
-        compilations.getByName("main").cinterops.create("openbitfunArgon2") {
+        compilations.getByName("main").cinterops.create("openBitFunArgon2") {
             defFile(argon2InteropDir.file("openbitfun_argon2_simulator.def"))
             includeDirs(sharedArgon2Dir, argon2InteropDir)
             extraOpts("-libraryPath", layout.buildDirectory.dir("native/argon2/iosSimulatorArm64").get().asFile.absolutePath)

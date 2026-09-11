@@ -45,7 +45,7 @@ test('formal and nightly releases gate publication on Linux binaries', () => {
     assert.match(workflow, /linux-release-assets\/\*\.tar\.gz\.sig/);
     assert.match(workflow, /linux-release-assets\/\*\.tar\.gz\.sha256\.sig/);
     assert.match(workflow, /\$\{(?:cli|archive)_url\}\.sha256\.sig/);
-    assert.match(workflow, /linux-binaries\.json/);
+    assert.match(workflow, /linux-binaries-v1\.json/);
   }
 
   assert.match(reusable, /ubuntu-24\.04-arm/);
@@ -109,7 +109,7 @@ test('exactly one workflow publishes the Linux CLI archives', () => {
 
 test('release asset names carry no SemVer build metadata', () => {
   // GitHub rewrites `+` in stored asset filenames, which would make every URL
-  // in linux-binaries.json a 404 on the nightly channel.
+  // in linux-binaries-v1.json a 404 on the nightly channel.
   const reusable = read('.github/workflows/linux-binaries.yml');
   const nightly = read('.github/workflows/nightly.yml');
 

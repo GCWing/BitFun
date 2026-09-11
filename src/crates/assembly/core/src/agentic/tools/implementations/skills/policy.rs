@@ -11,7 +11,7 @@ mod tests {
     #[test]
     fn builtin_defaults_follow_mode_policies() {
         assert_eq!(
-            resolve_builtin_default_enabled("ppt-design", "agentic"),
+            resolve_builtin_default_enabled("ppt-design", "Standard"),
             Some(false)
         );
         assert_eq!(
@@ -19,7 +19,7 @@ mod tests {
             Some(true)
         );
         assert_eq!(
-            resolve_builtin_default_enabled("agent-browser", "agentic"),
+            resolve_builtin_default_enabled("agent-browser", "Standard"),
             Some(false)
         );
         assert_eq!(
@@ -43,11 +43,11 @@ mod tests {
             Some(false)
         );
         assert_eq!(
-            resolve_builtin_default_enabled("agent-browser", "coding_shared"),
+            resolve_builtin_default_enabled("agent-browser", "Standard"),
             Some(false)
         );
         assert_eq!(
-            resolve_builtin_default_enabled("ppt-design", "coding_shared"),
+            resolve_builtin_default_enabled("ppt-design", "Standard"),
             Some(false)
         );
         assert_eq!(
@@ -55,12 +55,15 @@ mod tests {
             Some(false)
         );
         assert_eq!(
-            resolve_builtin_default_enabled("agent-browser", "Ultra"),
+            resolve_builtin_default_enabled("agent-browser", "Ultimate"),
             Some(true)
         );
-        assert_eq!(resolve_builtin_default_enabled("plan", "Ultra"), Some(true));
         assert_eq!(
-            resolve_builtin_default_enabled("find-skills", "Ultra"),
+            resolve_builtin_default_enabled("plan", "Ultimate"),
+            Some(true)
+        );
+        assert_eq!(
+            resolve_builtin_default_enabled("find-skills", "Ultimate"),
             Some(false)
         );
         assert_eq!(
@@ -71,7 +74,7 @@ mod tests {
             resolve_builtin_default_enabled("plan", "SwarmWorker"),
             Some(false)
         );
-        for mode_id in ["agentic", "Claw", "Creative", "Cowork", "DeepResearch"] {
+        for mode_id in ["Standard", "Claw", "Creative", "Cowork", "DeepResearch"] {
             assert_eq!(
                 resolve_builtin_default_enabled("openbitfun-canvas", mode_id),
                 Some(false),
@@ -82,6 +85,9 @@ mod tests {
 
     #[test]
     fn unknown_builtins_return_none() {
-        assert_eq!(resolve_builtin_default_enabled("not-real", "agentic"), None);
+        assert_eq!(
+            resolve_builtin_default_enabled("not-real", "Standard"),
+            None
+        );
     }
 }

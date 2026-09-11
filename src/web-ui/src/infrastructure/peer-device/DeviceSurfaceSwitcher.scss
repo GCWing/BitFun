@@ -82,12 +82,12 @@
   &__backdrop {
     position: fixed;
     inset: 0;
-    z-index: 9998;
+    z-index: calc(var(--openbitfun-layer-popover) - 1);
   }
 
   &__menu {
     position: fixed;
-    z-index: 9999;
+    z-index: var(--openbitfun-layer-popover);
   }
 
   &__item-metadata {

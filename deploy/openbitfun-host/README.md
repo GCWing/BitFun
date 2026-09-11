@@ -215,7 +215,12 @@ test "$code" = "404"'
 先用旧机 rsync 过来的目录（保留 0.2.14 起的多版本，供旧 Desktop / Dispatch），
 再跑一次 in-repo 同步补最新版。不要对空目录只 sync 一次就当完成。
 
-Windows 网页安装包文件名以 GitHub `latest.json` 的 `manual_installers` 为准
+1.X 发布前必须更新仓库内同步脚本。新桌面端清单是 `latest-v1.json`，CLI 清单是
+`linux-binaries-v1.json`；保留旧 `latest.json`、`linux-binaries.json` 和 `0.2.*`
+下载目录，避免给旧客户端推送 1.X 或破坏旧下载。GitHub Latest 中的旧清单由
+发布工作流从 v0.2.19 原样保留。完整规则见 [发布指南](../../docs/development/releasing.md)。
+
+Windows 网页安装包文件名以 GitHub `latest-v1.json` 的 `manual_installers` 为准
 （现在是 `OpenBitFun_${version}_windows-x86_64-installer.exe`）。不要再写死
 `openbitfun-installer.exe`。
 
@@ -237,9 +242,35 @@ python3 -c "import json; print(json.load(open(\"/srv/openbitfun-release/download
 ```
 
 `downloads.json` 的 `version` 必须等于
-`https://github.com/GCWing/OpenBitFun/releases/latest/download/latest.json` 的
+`https://github.com/GCWing/OpenBitFun/releases/latest/download/latest-v1.json` 的
 `version`。日志里若再出现 `Failed to download openbitfun-installer.exe`，说明跑到了
 旧脚本，停下来改 cron，不要手工改清单。
+
+稳定镜像跟随 GitHub `/releases/latest`，不按版本名是否包含 `beta` 分类。
+例如 `v1.0.0-beta` 是 `prerelease=false` 的 Latest，必须进入默认稳定镜像；
+`OPENBITFUN_RELEASE_CHANNEL=beta` 读取的是独立的 `channel-v1-beta`。
+
+#### 已有源站的 1.X 同步切换
+
+2026-09-11 的故障来自部署未对齐：root cron 仍执行
+`/root/repos/BitFun/scripts/openbitfun-release-sync.sh`，读取兼容旧客户端的
+`latest.json` 得到 0.2.19，随后因 Relay 仓库名称校验失败退出。只更新
+OpenBitFun checkout 不会修改已有 crontab。
+
+在仍运行的源站修复时，先备份当前 crontab、同步脚本与根清单，再核对：
+
+- cron 只执行 `/root/repos/OpenBitFun/scripts/openbitfun-release-sync.sh`，日志为
+  `/var/log/openbitfun-release-sync.log`。只替换该任务行，保留其它任务。
+- 实际执行的脚本读取 `latest-v1.json` 和 `linux-binaries-v1.json`，并校验
+  `ghcr.io/gcwing/openbitfun-relay-server`。不要放宽校验来兼容错配的新旧清单。
+- 脚本输出与 Nginx `/release/` alias 必须指向同一目录。当前 `lwb` 保留
+  `/srv/bitfun-release` 的历史文件，以 `/srv/openbitfun-release` 软链接指向它；
+  Nginx 仍使用原 alias。迁移到新机时复制真实文件到新的标准目录，不能只复制
+  指向旧路径的软链接。
+- 手动执行一次脚本，等日志出现 `sync complete`，再检查公网下载页、
+  `downloads.json`、`latest-v1.json`、`linux-binaries-v1.json` 及所有平台下载链接。
+  比较切换前后的旧清单 SHA-256，确认 `latest.json`、`linux-binaries.json`
+  保持不变，并验证旧版本下载链接仍可用。
 
 锁文件默认是 `/var/lock/openbitfun-release-sync.lock`，不要再指向
 `/root/repos/OpenBitFun-AutoUpdate/sync.lock`，也不要放进 `/srv/openbitfun-release`
@@ -546,7 +577,8 @@ docker exec openbitfun-relay /app/relay-admin --db /app/data/openbitfun_relay.db
 公网验收（从能解析 DNS 的机器）：
 
 - `https://openbitfun.com/download` 显示的版本 = `downloads.json`
-- `https://openbitfun.com/release/latest.json` 与 GitHub latest 同版本
+- `https://openbitfun.com/release/latest-v1.json` 与 GitHub latest 同版本
+- `https://openbitfun.com/release/latest.json` 和 `linux-binaries.json` 保持 0.2.X，不得指向 1.X
 - `https://remote.openbit.fun/relay/health`
 - `https://market.openbitfun.com/miniapp/api/v1/health`
 - `https://market.openbitfun.com/skin/`（按 Skin 手册）

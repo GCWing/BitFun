@@ -10,6 +10,7 @@ import { SheetCloseHeader } from './SheetCloseHeader';
 @ComponentV2
 export struct AccountProfilePanel {
   @Param accountUsername: string = '';
+  @Param accountAvatarUrl: string = '';
   @Param accountUserId: string = '';
   @Param fallbackUserId: string = '';
   @Param deviceId: string = '';
@@ -73,7 +74,7 @@ export struct AccountProfilePanel {
   private CompactIdentityCard() {
     this.EmbeddedSectionTitle(RemoteI18n.t('settings.account.section'))
     Row({ space: 14 }) {
-      DefaultAccountAvatar({ avatarSize: 46 })
+      DefaultAccountAvatar({ avatarSize: 46, avatarUrl: this.accountAvatarUrl })
       Column({ space: 4 }) {
         Text(this.isAccountAuthenticated() ? RemoteI18n.t('settings.account.current') :
           RemoteI18n.t('settings.account.currentIdentity'))
@@ -83,7 +84,7 @@ export struct AccountProfilePanel {
           .width('100%')
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.shortProfileIdentifier())
+        Text(this.isAccountAuthenticated() ? this.profileName() : this.shortProfileIdentifier())
           .fontSize(MobileDesignTypography.bodySmall.size)
           .fontColor(MUTED)
           .width('100%')
@@ -141,7 +142,7 @@ export struct AccountProfilePanel {
   @Builder
   private ProfileHero() {
     Column({ space: 10 }) {
-      DefaultAccountAvatar({ avatarSize: 70 })
+      DefaultAccountAvatar({ avatarSize: 70, avatarUrl: this.accountAvatarUrl })
       Text(this.profileName())
         .fontSize(MobileDesignTypography.headlineLarge.size)
         .fontWeight(FontWeight.Bold)
@@ -150,7 +151,7 @@ export struct AccountProfilePanel {
         .textAlign(TextAlign.Center)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
-      Text(this.profileIdentifier())
+      Text(this.isAccountAuthenticated() ? RemoteI18n.f('remote.settings.githubId', this.accountUserId) : this.profileIdentifier())
         .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontColor(MUTED)
         .width('88%')
@@ -445,7 +446,8 @@ export struct AccountProfilePanel {
   }
 
   private profileName(): string {
-    return this.accountUsername || RemoteI18n.t('remote.settings.openbitfunUser');
+    return this.accountUsername && this.accountUsername !== this.accountUserId ? `@${this.accountUsername}` :
+      RemoteI18n.t('remote.settings.githubAccount');
   }
 
   private profileIdentifier(): string {
@@ -472,7 +474,7 @@ export struct AccountProfilePanel {
     if (!this.isAccountAuthenticated()) {
       return RemoteI18n.t('remote.settings.accountNotSignedInBody');
     }
-    return RemoteI18n.f('remote.settings.accountSignedInBody', this.accountUsername || this.accountUserId);
+    return RemoteI18n.f('remote.settings.accountSignedInBody', this.profileName());
   }
 
   private isAccountAuthenticated(): boolean {

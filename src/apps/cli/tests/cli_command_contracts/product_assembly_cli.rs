@@ -172,16 +172,18 @@ fn remaining_cli_local_persistence_stays_behind_explicit_owner_boundaries() {
     assert!(
         ACCOUNT_RUNTIME.contains("pub struct AccountRuntime")
             && ACCOUNT_ADAPTER.contains("impl AccountRuntimeHost for CliAccountRoutingHost")
-            && ACCOUNT_ADAPTER.contains("impl AccountSessionBackupPort"),
+            && ACCOUNT_ADAPTER.contains("AccountRuntime::new(routing.clone())")
+            && !ACCOUNT_ADAPTER.contains("AccountSessionBackupPort"),
         "account state must live in the shared owner while CLI keeps narrow Host adapters"
     );
     assert!(
         STARTUP_PAGE.contains("self.account_runtime")
-            && STARTUP_PAGE.contains("login_with_credentials")
-            && STARTUP_PAGE.contains("finalize_login_after_sync_choice")
-            && STARTUP_PAGE.contains("start_auto_sync_background")
+            && STARTUP_PAGE.contains("account.advance_github_login(transaction_id).await")
+            && STARTUP_PAGE.contains("account.logout().await")
+            && !STARTUP_PAGE.contains("finalize_login_after_sync_choice")
+            && !STARTUP_PAGE.contains("start_auto_sync_background")
             && STARTUP_PAGE.contains("account_snapshot_projection"),
-        "startup account and settings-sync operations must call AccountRuntime directly"
+        "startup identity operations must call AccountRuntime directly without cloud-sync policy"
     );
     assert!(
         !CORE_RUNTIME_SERVICES.contains("pub fn persistence_manager"),
@@ -222,8 +224,8 @@ fn embedded_account_management_uses_the_account_owner_directly() {
         !CLI_MAIN.contains("surface_services")
             && CLI_MAIN.contains("runtime.account_runtime().clone()")
             && STARTUP_PAGE.contains("Option<Arc<AccountRuntime>>")
-            && STARTUP_PAGE.contains("login_with_credentials")
-            && STARTUP_PAGE.contains("finalize_login_after_sync_choice")
+            && STARTUP_PAGE.contains("account.advance_github_login(transaction_id).await")
+            && STARTUP_PAGE.contains("account.snapshot().await")
             && APP_SERVER_MANAGEMENT.contains("pub use owner::AppManagementService")
             && !CLI_MAIN.contains("mod tui_host")
             && !CLI_MAIN.contains("mod embedded_tui_backend"),

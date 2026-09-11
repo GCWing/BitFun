@@ -40,96 +40,7 @@ impl ChatMode {
             chat_view.show_login_form();
             return;
         };
-        chat_view.show_account_panel(info, snapshot.devices, snapshot.sync);
-    }
-
-    fn refresh_account_panel_live(&self, chat_view: &mut ChatView) -> bool {
-        if !chat_view.login_form_visible() {
-            return false;
-        }
-        let Ok(progress) = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                let account = self.account_runtime.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("Account management is unavailable for this TUI Host")
-                })?;
-                Ok::<_, anyhow::Error>(crate::account::settings_sync_progress(
-                    account.current_sync_progress().await,
-                ))
-            })
-        }) else {
-            return false;
-        };
-        let progress = progress;
-        let devices = if matches!(
-            progress.status,
-            SettingsSyncStatus::Syncing | SettingsSyncStatus::Done
-        ) {
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(async {
-                    let account = self.account_runtime.as_ref()?;
-                    Some(
-                        crate::account::account_snapshot_projection(account.snapshot().await)
-                            .devices,
-                    )
-                })
-            })
-        } else {
-            None
-        };
-        let syncing = progress.status == SettingsSyncStatus::Syncing;
-        chat_view.update_account_panel_progress(devices, progress);
-        syncing
-    }
-
-    fn start_sync_and_show_account(
-        &self,
-        is_first_login: bool,
-        chat_view: &mut ChatView,
-        chat_state: &mut ChatState,
-        rt_handle: &tokio::runtime::Handle,
-    ) {
-        let result = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                let account = self.account_runtime.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("Account management is unavailable for this TUI Host")
-                })?;
-                if !account.is_logged_in().await {
-                    anyhow::bail!("Account login must be finalized before settings sync starts")
-                }
-                if !account
-                    .start_auto_sync_background(
-                        format!("tui-account-{}", uuid::Uuid::new_v4()),
-                        is_first_login,
-                        std::path::PathBuf::from(self.agent.project_workspace_path_string()),
-                    )
-                    .await
-                {
-                    anyhow::bail!("Account settings sync is already in progress")
-                }
-                Ok::<(), anyhow::Error>(())
-            })
-        });
-        if let Err(error) = result {
-            chat_state.add_system_message(format!("Account settings sync failed: {error}"));
-            return;
-        }
-        if let Ok(snapshot) = tokio::task::block_in_place(|| {
-            rt_handle.block_on(async {
-                let account = self.account_runtime.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("Account management is unavailable for this TUI Host")
-                })?;
-                Ok::<_, anyhow::Error>(crate::account::account_snapshot_projection(
-                    account.snapshot().await,
-                ))
-            })
-        }) {
-            self.open_account_panel(chat_view, snapshot);
-        }
-        chat_state.add_system_message(if is_first_login {
-            "Sync started (use local / upload settings).".to_string()
-        } else {
-            "Sync started (use cloud / download settings).".to_string()
-        });
+        chat_view.show_account_panel(info, snapshot.devices);
     }
 
     fn handle_login_form_action(
@@ -140,172 +51,25 @@ impl ChatMode {
         rt_handle: &tokio::runtime::Handle,
     ) -> Result<Option<ChatExitReason>> {
         match action {
-            LoginFormAction::Submit(creds) => {
+            LoginFormAction::Submit(transaction_id) => {
                 let result = tokio::task::block_in_place(|| {
                     rt_handle.block_on(async {
                         let account = self.account_runtime.as_ref().ok_or_else(|| {
                             anyhow::anyhow!("Account management is unavailable for this TUI Host")
                         })?;
-                        let relay_url = creds.relay_url;
-                        let username = creds.username;
-                        let password = creds.password;
-                        let result = account
-                            .login_with_credentials(&relay_url, &username, &password)
-                            .await
-                            .map_err(|error| {
-                                crate::account::redact_login_error(
-                                    error,
-                                    [&relay_url, &username, &password],
-                                )
-                            })?;
-                        let status_message = crate::account::account_login_status_message(&result);
-                        Ok::<_, anyhow::Error>(
-                            openbitfun_product_domains::account::AccountLoginProjection {
-                                user_id: result.user_id,
-                                relay_url: result.relay_url,
-                                has_cloud_settings: result.has_cloud_settings,
-                                status_message,
-                            },
-                        )
+                        account.advance_github_login(transaction_id).await
                     })
                 });
+                use openbitfun_core::service::remote_connect::account_runtime::AccountLoginProgress;
                 match result {
-                    Ok(login) => {
-                        chat_state.add_system_message(login.status_message.clone());
-                        if login.has_cloud_settings {
-                            chat_view.show_sync_choice_panel(&login.user_id, &login.relay_url);
-                        } else {
-                            self.start_sync_and_show_account(
-                                true, chat_view, chat_state, rt_handle,
-                            );
-                        }
+                    Ok(AccountLoginProgress::Authorization(authorization)) => chat_view.login_form_set_authorization(authorization),
+                    Ok(AccountLoginProgress::Waiting) => chat_view.login_form_set_status("Waiting for GitHub authorization. Complete it in your browser, then press Enter."),
+                    Ok(AccountLoginProgress::Complete(login)) => {
+                        chat_state.add_system_message(crate::account::account_login_status_message(&login));
+                        self.open_login_or_account_panel(chat_view, chat_state, rt_handle);
                     }
-                    Err(e) => {
-                        chat_view.login_form_set_error(format!("Login failed: {e}"));
-                    }
+                    Err(error) => chat_view.login_form_set_error(format!("Login failed: {error}")),
                 }
-            }
-            LoginFormAction::SyncUseLocal => {
-                let result = tokio::task::block_in_place(|| {
-                    rt_handle.block_on(async {
-                        let account = self.account_runtime.as_ref().ok_or_else(|| {
-                            anyhow::anyhow!("Account management is unavailable for this TUI Host")
-                        })?;
-                        account.finalize_login_after_sync_choice().await?;
-                        if !account
-                            .start_auto_sync_background(
-                                format!("tui-account-{}", uuid::Uuid::new_v4()),
-                                true,
-                                std::path::PathBuf::from(
-                                    self.agent.project_workspace_path_string(),
-                                ),
-                            )
-                            .await
-                        {
-                            anyhow::bail!("Account settings sync is already in progress")
-                        }
-                        Ok::<_, anyhow::Error>(crate::account::account_snapshot_projection(
-                            account.snapshot().await,
-                        ))
-                    })
-                });
-                let snapshot = match result {
-                    Ok(snapshot) => snapshot,
-                    Err(error) => {
-                        chat_view.login_form_set_error(format!("Finalize login failed: {error}"));
-                        let _ = tokio::task::block_in_place(|| {
-                            rt_handle.block_on(async {
-                                let account = self.account_runtime.as_ref().ok_or_else(|| {
-                                    anyhow::anyhow!(
-                                        "Account management is unavailable for this TUI Host"
-                                    )
-                                })?;
-                                account.logout().await?;
-                                account
-                                    .mark_sync_cancelled(format!(
-                                        "tui-account-{}",
-                                        uuid::Uuid::new_v4()
-                                    ))
-                                    .await;
-                                Ok::<(), anyhow::Error>(())
-                            })
-                        });
-                        chat_view.show_login_form();
-                        return Ok(None);
-                    }
-                };
-                self.open_account_panel(chat_view, snapshot);
-                chat_state
-                    .add_system_message("Sync started (use local / upload settings).".to_string());
-            }
-            LoginFormAction::SyncUseCloud => {
-                let result = tokio::task::block_in_place(|| {
-                    rt_handle.block_on(async {
-                        let account = self.account_runtime.as_ref().ok_or_else(|| {
-                            anyhow::anyhow!("Account management is unavailable for this TUI Host")
-                        })?;
-                        account.finalize_login_after_sync_choice().await?;
-                        if !account
-                            .start_auto_sync_background(
-                                format!("tui-account-{}", uuid::Uuid::new_v4()),
-                                false,
-                                std::path::PathBuf::from(
-                                    self.agent.project_workspace_path_string(),
-                                ),
-                            )
-                            .await
-                        {
-                            anyhow::bail!("Account settings sync is already in progress")
-                        }
-                        Ok::<_, anyhow::Error>(crate::account::account_snapshot_projection(
-                            account.snapshot().await,
-                        ))
-                    })
-                });
-                let snapshot = match result {
-                    Ok(snapshot) => snapshot,
-                    Err(error) => {
-                        chat_view.login_form_set_error(format!("Finalize login failed: {error}"));
-                        let _ = tokio::task::block_in_place(|| {
-                            rt_handle.block_on(async {
-                                let account = self.account_runtime.as_ref().ok_or_else(|| {
-                                    anyhow::anyhow!(
-                                        "Account management is unavailable for this TUI Host"
-                                    )
-                                })?;
-                                account.logout().await?;
-                                account
-                                    .mark_sync_cancelled(format!(
-                                        "tui-account-{}",
-                                        uuid::Uuid::new_v4()
-                                    ))
-                                    .await;
-                                Ok::<(), anyhow::Error>(())
-                            })
-                        });
-                        chat_view.show_login_form();
-                        return Ok(None);
-                    }
-                };
-                self.open_account_panel(chat_view, snapshot);
-                chat_state.add_system_message(
-                    "Sync started (use cloud / download settings).".to_string(),
-                );
-            }
-            LoginFormAction::SyncCancel => {
-                let _ = tokio::task::block_in_place(|| {
-                    rt_handle.block_on(async {
-                        let account = self.account_runtime.as_ref().ok_or_else(|| {
-                            anyhow::anyhow!("Account management is unavailable for this TUI Host")
-                        })?;
-                        let progress = account
-                            .cancel_sync(format!("tui-account-{}", uuid::Uuid::new_v4()))
-                            .await?;
-                        Ok::<_, anyhow::Error>(crate::account::settings_sync_progress(progress))
-                    })
-                });
-                chat_view.show_login_form();
-                chat_state.add_system_message("Sync cancelled; logged out.".to_string());
             }
             LoginFormAction::Logout => {
                 match tokio::task::block_in_place(|| {
@@ -314,9 +78,6 @@ impl ChatMode {
                             anyhow::anyhow!("Account management is unavailable for this TUI Host")
                         })?;
                         account.logout().await?;
-                        account
-                            .mark_sync_cancelled(format!("tui-account-{}", uuid::Uuid::new_v4()))
-                            .await;
                         Ok::<_, anyhow::Error>(crate::account::account_snapshot_projection(
                             account.snapshot().await,
                         ))

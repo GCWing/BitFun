@@ -124,6 +124,8 @@ describe('ModelThinkingDisplay reasoning summary', () => {
     await act(async () => {
       root.render(<ModelThinkingDisplay thinkingItem={summaryItem(content)} />);
     });
+    const leadingIcon = container.querySelector('[data-openbitfun-part="leadingIcon"]');
+    const label = container.querySelector('[data-openbitfun-part="label"]');
 
     await act(async () => {
       (container.querySelector('[data-testid="chat-thinking-toggle"]') as HTMLElement).click();
@@ -134,6 +136,8 @@ describe('ModelThinkingDisplay reasoning summary', () => {
       .toBe('Thinking Summary');
     expect(container.querySelector('[data-testid="thinking-markdown"]')?.textContent)
       .toBe(content);
+    expect(container.querySelector('[data-openbitfun-part="leadingIcon"]')).toBe(leadingIcon);
+    expect(container.querySelector('[data-openbitfun-part="label"]')).toBe(label);
 
     await act(async () => {
       root.render(<ModelThinkingDisplay thinkingItem={summaryItem(
@@ -142,6 +146,7 @@ describe('ModelThinkingDisplay reasoning summary', () => {
     });
     expect(container.querySelector('[data-testid="chat-thinking-panel"]')
       ?.getAttribute('data-expanded')).toBe('true');
+    expect(container.querySelector('[data-openbitfun-part="leadingIcon"]')).toBe(leadingIcon);
   });
 });
 

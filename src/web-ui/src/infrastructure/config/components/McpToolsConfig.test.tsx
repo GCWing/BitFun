@@ -12,6 +12,7 @@ const loadJsonConfigMock = vi.hoisted(() => vi.fn());
 const saveJsonConfigMock = vi.hoisted(() => vi.fn());
 const initializeServersMock = vi.hoisted(() => vi.fn());
 const startServerMock = vi.hoisted(() => vi.fn());
+const restartServerMock = vi.hoisted(() => vi.fn());
 const startRemoteOAuthMock = vi.hoisted(() => vi.fn());
 const getRemoteOAuthSessionMock = vi.hoisted(() => vi.fn());
 const cancelRemoteOAuthMock = vi.hoisted(() => vi.fn());
@@ -54,6 +55,7 @@ vi.mock('../../api/service-api/MCPAPI', () => ({
     saveMCPJsonConfig: saveJsonConfigMock,
     initializeServers: initializeServersMock,
     startServer: startServerMock,
+    restartServer: restartServerMock,
     startRemoteOAuth: startRemoteOAuthMock,
     getRemoteOAuthSession: getRemoteOAuthSessionMock,
     cancelRemoteOAuth: cancelRemoteOAuthMock,
@@ -85,6 +87,7 @@ describe('McpToolsConfig remote behavior', () => {
     saveJsonConfigMock.mockReset().mockResolvedValue({ runtimeApplied: true });
     initializeServersMock.mockReset().mockResolvedValue(undefined);
     startServerMock.mockReset().mockResolvedValue(undefined);
+    restartServerMock.mockReset().mockResolvedValue(undefined);
     startRemoteOAuthMock.mockReset().mockResolvedValue({
       serverId: 'notion',
       status: 'awaitingBrowser',
@@ -105,6 +108,7 @@ describe('McpToolsConfig remote behavior', () => {
   afterEach(async () => {
     await act(async () => root.unmount());
     container.remove();
+    vi.useRealTimers();
   });
 
   it('does not call desktop MCP management APIs during a remote connection', async () => {
@@ -193,6 +197,89 @@ describe('McpToolsConfig remote behavior', () => {
     });
     expect(getServersMock).toHaveBeenCalledTimes(2);
     expect(container.textContent).not.toContain('section.serverList.loadFailed');
+  });
+
+  it.each(['Failed', 'Reconnecting'])('keeps %s server cards stable while polling and observes recovery', async (status) => {
+    vi.useFakeTimers();
+    peerState.active = false;
+    const server = {
+      id: 'auto-start',
+      name: 'Auto-start server',
+      status,
+      serverType: 'local',
+      transport: 'stdio',
+      enabled: true,
+      autoStart: true,
+      commandAvailable: true,
+      startSupported: true,
+    };
+    let resolveServers!: (servers: typeof server[]) => void;
+    getServersMock.mockImplementation(() => new Promise((resolve) => {
+      resolveServers = resolve;
+    }));
+
+    await act(async () => root.render(<McpToolsConfig />));
+    expect(container.textContent).toContain('loading');
+    await act(async () => resolveServers([server]));
+    const card = container.querySelector('[data-testid="mcp-server-item"]');
+    expect(card).not.toBeNull();
+    expect(card?.textContent).toContain(`status.${status.toLowerCase()}`);
+
+    await act(async () => { vi.advanceTimersByTime(1000); });
+    expect(getServersMock).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[data-testid="mcp-server-item"]')).toBe(card);
+    expect(container.textContent).not.toContain('loading');
+    expect(card?.textContent).toContain(`status.${status.toLowerCase()}`);
+
+    await act(async () => { vi.advanceTimersByTime(5000); });
+    expect(getServersMock).toHaveBeenCalledTimes(2);
+    await act(async () => resolveServers([{ ...server, status: 'Connected' }]));
+    expect(container.querySelector('[data-testid="mcp-server-item"]')).toBe(card);
+    expect(card?.textContent).toContain('status.connected');
+    expect(container.textContent).not.toContain('loading');
+    await act(async () => { vi.advanceTimersByTime(2000); });
+    expect(getServersMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains stale data and its warning until a background refresh succeeds', async () => {
+    vi.useFakeTimers();
+    peerState.active = false;
+    const server = {
+      id: 'auto-start',
+      name: 'Auto-start server',
+      status: 'Failed',
+      serverType: 'local',
+      transport: 'stdio',
+      enabled: true,
+      autoStart: true,
+      commandAvailable: true,
+      startSupported: true,
+    };
+    let resolveRefresh!: (servers: typeof server[]) => void;
+    getServersMock
+      .mockResolvedValueOnce([server])
+      .mockRejectedValueOnce(new Error('MCP status temporarily unavailable'))
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveRefresh = resolve;
+      }));
+
+    await act(async () => root.render(<McpToolsConfig />));
+    const card = container.querySelector('[data-testid="mcp-server-item"]');
+    expect(card).not.toBeNull();
+    await act(async () => { vi.advanceTimersByTime(1000); });
+    expect(container.textContent).toContain('external.status.stale');
+
+    const retry = container.querySelector<HTMLButtonElement>('[aria-label="actions.refresh"]');
+    expect(retry).not.toBeNull();
+    await act(async () => retry?.click());
+    expect(getServersMock).toHaveBeenCalledTimes(3);
+    expect(container.textContent).toContain('external.status.stale');
+    expect(container.textContent).not.toContain('loading');
+    expect(container.querySelector('[data-testid="mcp-server-item"]')).toBe(card);
+
+    await act(async () => resolveRefresh([{ ...server, status: 'Connected' }]));
+    expect(container.textContent).not.toContain('external.status.stale');
+    expect(card?.textContent).toContain('status.connected');
   });
 
   it('does not replace an unreadable MCP config with example JSON', async () => {
@@ -391,6 +478,94 @@ describe('McpToolsConfig remote behavior', () => {
     expect(notificationMocks.success).not.toHaveBeenCalled();
     expect(notificationMocks.error).not.toHaveBeenCalled();
     expect(getServersMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['start', 'restart'])('respects disabled OAuth when a failed remote server is asked to %s', async (action) => {
+    peerState.active = false;
+    getServersMock.mockResolvedValue([{
+      id: 'public-remote',
+      name: 'Public remote MCP',
+      status: 'Failed',
+      serverType: 'Remote',
+      transport: 'streamable-http',
+      enabled: true,
+      autoStart: false,
+      authConfigured: false,
+      oauthEnabled: false,
+      startSupported: true,
+    }]);
+    const actionMock = action === 'start' ? startServerMock : restartServerMock;
+    await act(async () => root.render(<McpToolsConfig />));
+    const button = container.querySelector<HTMLButtonElement>(`[data-testid="mcp-server-${action}"]`);
+    expect(button).not.toBeNull();
+    await act(async () => button?.click());
+
+    expect(actionMock).toHaveBeenCalledWith('public-remote');
+    expect(startRemoteOAuthMock).not.toHaveBeenCalled();
+    expect(getRemoteOAuthSessionMock).not.toHaveBeenCalled();
+    expect(openExternalMock).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-openbitfun-part="authEditor"]')).toBeNull();
+
+    // A genuine authentication error may offer manual credentials, but must
+    // still never start OAuth or render its controls when explicitly disabled.
+    actionMock.mockRejectedValueOnce(new Error('status code: 401 Unauthorized'));
+    await act(async () => button?.click());
+    expect(document.querySelector('[data-openbitfun-part="authEditor"]')).not.toBeNull();
+    expect(document.body.textContent).not.toContain('modal.remoteOAuthDescription');
+    expect(document.body.textContent).not.toContain('actions.startRemoteOAuth');
+    expect(startRemoteOAuthMock).not.toHaveBeenCalled();
+    expect(getRemoteOAuthSessionMock).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('retains the auth dialog through its exit and supports reopening (OAuth: %s)', async (oauthEnabled) => {
+    vi.useFakeTimers();
+    peerState.active = false;
+    getServersMock.mockResolvedValue([{
+      id: 'notion',
+      name: 'Notion',
+      status: 'Failed',
+      serverType: 'Remote',
+      transport: 'streamable-http',
+      url: 'https://mcp.notion.test/mcp',
+      enabled: true,
+      autoStart: false,
+      authConfigured: false,
+      oauthEnabled,
+      startSupported: true,
+    }]);
+    startServerMock.mockRejectedValue(new Error('status code: 401 Unauthorized'));
+    await act(async () => root.render(<McpToolsConfig />));
+    const start = container.querySelector<HTMLButtonElement>('[data-testid="mcp-server-start"]')!;
+    await act(async () => start.click());
+    const surface = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    const editor = surface.querySelector('[data-openbitfun-part="authEditor"]');
+    const contents = surface.textContent;
+    expect(editor).not.toBeNull();
+    if (oauthEnabled) {
+      expect(contents).toContain('modal.remoteOAuthRedirectUri');
+      expect(contents).toContain('modal.remoteOAuthStatus');
+    }
+
+    await act(async () => surface.querySelector<HTMLButtonElement>('[data-openbitfun-part="close"]')!.click());
+    expect(surface.dataset.state).toBe('exiting');
+    expect(surface.getAttribute('aria-hidden')).toBe('true');
+    expect(surface.querySelector('[data-openbitfun-part="authEditor"]')).toBe(editor);
+    expect(surface.textContent).toBe(contents);
+    expect(cancelRemoteOAuthMock).toHaveBeenCalledTimes(oauthEnabled ? 1 : 0);
+    // Retained status must not leave the server's start action disabled.
+    expect(start.disabled).toBe(false);
+    await act(async () => vi.advanceTimersByTime(90));
+    await act(async () => start.click());
+    expect(surface.dataset.state).toBe('open');
+    await act(async () => vi.advanceTimersByTime(180));
+    expect(document.querySelector('[role="dialog"]')).toBe(surface);
+
+    await act(async () => surface.querySelector<HTMLButtonElement>('[data-openbitfun-part="close"]')!.click());
+    await act(async () => vi.advanceTimersByTime(179));
+    expect(surface.isConnected).toBe(true);
+    expect(surface.textContent).toBe(contents);
+    await act(async () => vi.advanceTimersByTime(1));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it('starts OAuth directly for an unauthorized remote server without reporting a start failure', async () => {

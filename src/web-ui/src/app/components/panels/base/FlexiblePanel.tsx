@@ -6,6 +6,7 @@ import { MarkdownRenderer } from '@/infrastructure/markdown';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 import { globalEventBus } from '@/infrastructure/event-bus';
+import { useEditorDocument } from '@/tools/editor/services/EditorDocument';
 
 const log = createLogger('FlexiblePanel');
 
@@ -183,6 +184,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
   terminalResizeSuspended = false,
 }) => {
   const { t, formatDate } = useI18n('components');
+  const documentSession = useEditorDocument();
 
   // Use ref to save latest content, avoiding it in callback dependencies
   const contentRef = React.useRef(content);
@@ -200,12 +202,12 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
     if (!filePath || !onDirtyStateChange) return;
     
     import('@/tools/editor/services/MonacoModelManager').then(({ monacoModelManager }) => {
-      const metadata = monacoModelManager.getModelMetadata(filePath);
+      const metadata = monacoModelManager.getModelMetadata(documentSession?.modelKey ?? filePath);
       if (metadata !== undefined) {
         onDirtyStateChange(metadata.isDirty);
       }
     }).catch(() => {});
-  }, [content?.type, content?.data?.filePath, onDirtyStateChange]);
+  }, [content?.type, content?.data?.filePath, documentSession?.modelKey, onDirtyStateChange]);
 
   const handleClose = useCallback(async () => {
     if (onBeforeClose) {
@@ -317,7 +319,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         const markdownInitialContent = markdownEditorData.initialContent;
         const markdownFileName = markdownEditorData.fileName || content.title;
         const markdownWorkspacePath = markdownEditorData.workspacePath || workspacePath;
-        const markdownJumpToLine = markdownEditorData.jumpToLine;
+        const markdownJumpToLine = markdownEditorData.jumpToLine ?? markdownEditorData.jumpToRange?.start;
         const markdownJumpToColumn = markdownEditorData.jumpToColumn;
 
         return (
@@ -332,6 +334,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                   readOnly={markdownEditorData.readOnly || false}
                   jumpToLine={markdownJumpToLine}
                   jumpToColumn={markdownJumpToColumn}
+                  navigationToken={markdownEditorData.navigationToken}
                   isActiveTab={isActive}
                   onFileMissingFromDiskChange={onFileMissingFromDiskChange}
                   onContentChange={(_newContent, hasChanges) => {
@@ -374,6 +377,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
             {renderLazyEditor(
               <CodeEditor
                 filePath={fileViewerData.filePath || ''}
+                initialContent={fileViewerData.initialContent}
                 fileName={content.title}
                 readOnly={true}
                 showLineNumbers={true}
@@ -394,7 +398,9 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
           <div className="openbitfun-flexible-panel__image-viewer-container" data-openbitfun-component="flexible-panel" data-openbitfun-part="image">
             {renderLazyEditor(
               <ImageViewer
+                isActiveTab={isActive}
                 filePath={imageViewerData.filePath || ''}
+                imageSource={imageViewerData.imageSource}
                 fileName={content.title}
                 workspacePath={workspacePath}
                 className="openbitfun-flexible-panel__image-viewer"
@@ -411,6 +417,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
           <div className="openbitfun-flexible-panel__pdf-viewer-container" data-openbitfun-component="flexible-panel" data-openbitfun-part="pdf">
             {renderLazyEditor(
               <PdfViewer
+                isActiveTab={isActive}
                 filePath={pdfViewerData.filePath || ''}
                 fileName={content.title}
                 className="openbitfun-flexible-panel__pdf-viewer"
@@ -809,8 +816,10 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
               <TerminalTabPanel
                 key={sessionId}
                 sessionId={sessionId}
-                autoFocus={true}
-                resizeSuspended={terminalResizeSuspended}
+                autoFocus={isActive}
+                closeBehavior="detach"
+                onClose={() => onContentChange?.(null)}
+                resizeSuspended={!isActive || terminalResizeSuspended}
               />
             </div>
           </React.Suspense>
@@ -821,6 +830,7 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
         return (
           <React.Suspense fallback={<div className="openbitfun-flexible-panel__loading" data-openbitfun-component="flexible-panel" data-openbitfun-part="loading" data-openbitfun-state="loading">{t('flexiblePanel.loading.taskDetail')}</div>}>
             <BtwSessionPanel
+              isActive={isActive}
               childSessionId={content.data?.childSessionId}
               parentSessionId={content.data?.parentSessionId}
               workspacePath={content.data?.workspacePath || workspacePath}

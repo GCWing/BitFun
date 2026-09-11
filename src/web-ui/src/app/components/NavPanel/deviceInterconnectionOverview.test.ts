@@ -11,11 +11,10 @@ import {
 } from './deviceInterconnectionOverview';
 
 const disconnectedStatus: RemoteConnectStatus = {
-  is_connected: false,
-  pairing_state: 'idle',
+  relay_connected: false,
+  relay_url: null,
+  clients: [],
   active_method: null,
-  peer_device_name: null,
-  peer_user_id: null,
   bot_connected: null,
   bot_verbose_mode: false,
 };
@@ -63,11 +62,10 @@ describe('projectDeviceInterconnectionOverview', () => {
     const overview = projectDeviceInterconnectionOverview(baseInput({
       remoteStatus: {
         ...disconnectedStatus,
-        is_connected: true,
-        pairing_state: 'connected',
-        active_method: 'OpenBitFunServer',
-        peer_device_name: 'My iPhone',
-        peer_user_id: 'mobile-user',
+        relay_connected: true,
+        relay_url: 'https://remote.openbitfun.com/v/1.0.0',
+        active_method: 'openbitfun_server' as const,
+        clients: [{ id: 'mobile-user', name: 'My iPhone' }],
       },
     }));
 
@@ -190,11 +188,10 @@ describe('projectDeviceInterconnectionOverview', () => {
 describe('selectActivityFacts', () => {
   const connectedPhone = {
     ...disconnectedStatus,
-    is_connected: true,
-    pairing_state: 'connected' as const,
-    active_method: 'OpenBitFunServer',
-    peer_device_name: 'My iPhone',
-    peer_user_id: 'mobile-user',
+    relay_connected: true,
+        relay_url: 'https://remote.openbitfun.com/v/1.0.0',
+        active_method: 'openbitfun_server' as const,
+        clients: [{ id: 'mobile-user', name: 'My iPhone' }],
   };
 
   it('reports nothing beyond the local host when no device is attached', () => {
@@ -271,11 +268,10 @@ describe('selectAttachedGroups', () => {
     const overview = projectDeviceInterconnectionOverview(baseInput({
       remoteStatus: {
         ...disconnectedStatus,
-        is_connected: true,
-        pairing_state: 'connected',
-        active_method: 'OpenBitFunServer',
-        peer_device_name: 'My iPhone',
-        peer_user_id: 'mobile-user',
+        relay_connected: true,
+        relay_url: 'https://remote.openbitfun.com/v/1.0.0',
+        active_method: 'openbitfun_server' as const,
+        clients: [{ id: 'mobile-user', name: 'My iPhone' }],
         bot_connected: 'Weixin (family group)',
       },
       dispatchJobs: [
@@ -335,11 +331,10 @@ describe('device display names', () => {
       localDeviceName: 'Studio-Mac.local',
       remoteStatus: {
         ...disconnectedStatus,
-        is_connected: true,
-        pairing_state: 'connected',
-        active_method: 'OpenBitFunServer',
-        peer_device_name: 'Pixel.lan',
-        peer_user_id: 'mobile-user',
+        relay_connected: true,
+        relay_url: 'https://remote.openbitfun.com/v/1.0.0',
+        active_method: 'openbitfun_server' as const,
+        clients: [{ id: 'mobile-user', name: 'Pixel.lan' }],
       },
       dispatchJobs: [
         {

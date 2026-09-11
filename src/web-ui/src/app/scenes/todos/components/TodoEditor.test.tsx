@@ -20,7 +20,7 @@ vi.mock('@/infrastructure/i18n', () => ({
 
 vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
   agentAPI: {
-    getAvailableModes: vi.fn().mockResolvedValue([{ id: 'agentic', name: 'Agentic' }]),
+    getAvailableModes: vi.fn().mockResolvedValue([{ id: 'Standard', name: 'Agentic' }]),
   },
 }));
 

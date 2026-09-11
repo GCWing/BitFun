@@ -233,7 +233,7 @@ mod tests {
             session_id: "session-1".to_string(),
             timestamp: index as u64,
             kind: DialogTurnKind::UserDialog,
-            agent_type: Some("agentic".to_string()),
+            agent_type: Some("Standard".to_string()),
             user_message: UserMessageData {
                 id: format!("message-{index}"),
                 content: prompt.to_string(),

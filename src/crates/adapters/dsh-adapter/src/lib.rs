@@ -6,6 +6,8 @@
 //! adapter. The adapter does not execute Cordis plugins, install npm packages,
 //! or depend on a user-local `dsh` CLI.
 
+mod hook_source;
 mod source_adapter;
+pub use hook_source::{DshHookProvider, DshHookProviderOptions};
 
 pub use source_adapter::load_dsh_package_adapter;

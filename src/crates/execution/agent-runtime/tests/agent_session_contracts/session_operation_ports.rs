@@ -36,7 +36,7 @@ impl AgentSubmissionPort for FakeSubmissionPort {
     }
 
     async fn resolve_session_agent_type(&self, _session_id: &str) -> PortResult<Option<String>> {
-        Ok(Some("agentic".to_string()))
+        Ok(Some("Standard".to_string()))
     }
 }
 
@@ -58,7 +58,7 @@ impl AgentSessionForkPort for RecordingSessionOperations {
         Ok(AgentSessionForkResult {
             session_id: "session-2".to_string(),
             session_name: "Main (fork)".to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
         })
     }
 
@@ -74,7 +74,7 @@ impl AgentSessionForkPort for RecordingSessionOperations {
         Ok(AgentSessionForkResult {
             session_id: "session-2".to_string(),
             session_name: "Main (fork)".to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
         })
     }
 }

@@ -25,9 +25,9 @@ use crate::agentic::execution::conditional_instructions::{
     build_conditional_instruction_reminder, successful_workspace_read_paths,
 };
 use crate::agentic::execution::types::FinishReason;
+use crate::agentic::image_analysis::image_processing::process_image_contexts_in_workspace;
 use crate::agentic::image_analysis::{
-    build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
-    ImageLimits,
+    build_multimodal_message_with_images, ImageContextData, ImageLimits,
 };
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{
@@ -40,6 +40,7 @@ use crate::agentic::session::{
     INTERRUPTED_TURN_RESOLVED_MODEL_ID_METADATA_KEY,
 };
 use crate::agentic::skill_agent_snapshot::build_skill_agent_tool_listing_sections_from_snapshot;
+use crate::agentic::tools::framework::ToolUseContext;
 use crate::agentic::tools::implementations::{SkillTool, TaskTool};
 use crate::agentic::tools::product_runtime::{
     collect_product_loaded_deferred_tool_specs, GetToolSpecTool,
@@ -75,7 +76,6 @@ use openbitfun_core_types::{ModelRequestContext, SessionModelBindingPolicy};
 use openbitfun_runtime_ports::{resolve_permission_mode, PermissionMode, PermissionModeLayers};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -573,6 +573,7 @@ struct CompressionModelSummaryInput<'a> {
     prepended_prompt_reminders: &'a PrependedPromptReminders,
     tool_definitions: &'a Option<Vec<ToolDefinition>>,
     workspace: Option<&'a WorkspaceBinding>,
+    workspace_services: Option<&'a crate::agentic::workspace::WorkspaceServices>,
     dialog_turn_id: &'a str,
     runtime_messages: &'a [Message],
     ai_client: Arc<crate::infrastructure::ai::AIClient>,
@@ -1999,11 +2000,8 @@ impl ExecutionEngine {
         let mut final_ai_messages = Self::build_ai_messages_for_send(
             input.messages,
             &input.ai_client.config.format,
-            input
-                .context
-                .workspace
-                .as_ref()
-                .map(|workspace| workspace.root_path()),
+            input.context.workspace.as_ref(),
+            input.context.workspace_services.as_ref(),
             &input.context.dialog_turn_id,
             input.primary_model_facts.supports_image_inputs,
             input.prepended_reminders,
@@ -2068,7 +2066,8 @@ impl ExecutionEngine {
     async fn build_ai_messages_for_send(
         messages: &[Message],
         provider: &str,
-        workspace_path: Option<&Path>,
+        workspace: Option<&WorkspaceBinding>,
+        workspace_services: Option<&crate::agentic::workspace::WorkspaceServices>,
         current_turn_id: &str,
         attach_images: bool,
         prepended_reminders: &[&str],
@@ -2077,6 +2076,8 @@ impl ExecutionEngine {
         const MAX_IMAGE_BEARING_MESSAGE_ROUNDS: usize = 2;
 
         let limits = ImageLimits::for_provider(provider);
+        let image_context =
+            ToolUseContext::for_tool_listing(workspace.cloned(), workspace_services.cloned());
 
         let trimmed_reminders = prepended_reminders
             .iter()
@@ -2116,7 +2117,10 @@ impl ExecutionEngine {
                     if !attach_images {
                         // Primary model is text-only (or images are disabled). Convert to text-only
                         // placeholder so providers that don't support image inputs won't error.
-                        result.push(AIMessage::from(msg));
+                        let mut text_message = msg.clone();
+                        text_message.content =
+                            MessageContent::Text(Self::render_multimodal_as_text(text, images));
+                        result.push(AIMessage::from(&text_message));
                         continue;
                     }
 
@@ -2145,10 +2149,10 @@ impl ExecutionEngine {
                         prompt
                     };
 
-                    match process_image_contexts_for_provider(
+                    match process_image_contexts_in_workspace(
                         &filtered_images,
                         provider,
-                        workspace_path,
+                        &image_context,
                     )
                     .await
                     {
@@ -2183,7 +2187,11 @@ impl ExecutionEngine {
                                     "Failed to rebuild multimodal payload, falling back to text-only message: message_id={}, provider={}, turn_id={:?}, current_turn_id={}, error={}",
                                     msg.id, provider, msg.metadata.turn_id, current_turn_id, err
                                 );
-                                result.push(AIMessage::from(msg));
+                                let mut unavailable = msg.clone();
+                                unavailable.content = MessageContent::Text(format!(
+                                    "{text}\n\n[Image pixels from this older message are unavailable. Ask for a new attachment if the current task requires inspecting them.]"
+                                ));
+                                result.push(AIMessage::from(&unavailable));
                             } else {
                                 return Err(err);
                             }
@@ -2270,7 +2278,11 @@ impl ExecutionEngine {
         }
         content.push_str("]\n");
 
-        content.push_str("Note: the primary model cannot inspect image pixels directly. If an image path is available, use analyze_image to inspect it, or use a user-provided image skill with that path.\n");
+        if images.iter().any(|image| image.image_path.is_some()) {
+            content.push_str("The primary model cannot inspect image pixels directly. Use analyze_image with the exact attached path and the user's question before answering about image content. The configured image understanding model reads the pixels; do not ask the user to describe an attached image instead.\n");
+        } else {
+            content.push_str("Image pixels from this older message are unavailable. If the task requires them, ask the user to attach the image again.\n");
+        }
 
         content
     }
@@ -2280,6 +2292,7 @@ impl ExecutionEngine {
         runtime_messages: &[Message],
         dialog_turn_id: &str,
         workspace: Option<&WorkspaceBinding>,
+        workspace_services: Option<&crate::agentic::workspace::WorkspaceServices>,
         provider: &str,
         attach_images: bool,
         prepended_prompt_reminders: &PrependedPromptReminders,
@@ -2288,7 +2301,8 @@ impl ExecutionEngine {
         let mut compression_messages = Self::build_ai_messages_for_send(
             runtime_messages,
             provider,
-            workspace.map(|workspace| workspace.root_path()),
+            workspace,
+            workspace_services,
             dialog_turn_id,
             attach_images,
             &prepended_reminders,
@@ -2399,6 +2413,7 @@ impl ExecutionEngine {
                 input.runtime_messages,
                 input.dialog_turn_id,
                 input.workspace,
+                input.workspace_services,
                 &input.ai_client.config.format,
                 input.primary_supports_image_understanding,
                 input.prepended_prompt_reminders,
@@ -2438,6 +2453,7 @@ impl ExecutionEngine {
         prepended_prompt_reminders: &PrependedPromptReminders,
         primary_supports_image_understanding: bool,
         workspace: Option<&WorkspaceBinding>,
+        workspace_services: Option<&crate::agentic::workspace::WorkspaceServices>,
         trace_config: Option<ModelExchangeTraceConfig>,
     ) -> OpenBitFunResult<Option<crate::agentic::session::CompressionResult>> {
         let max_initial_recent = context_window.saturating_div(2).max(1);
@@ -2480,6 +2496,7 @@ impl ExecutionEngine {
                     runtime_messages: &plan.summary_request_messages,
                     dialog_turn_id,
                     workspace,
+                    workspace_services,
                     tool_definitions,
                     prepended_prompt_reminders,
                     primary_supports_image_understanding,
@@ -2800,6 +2817,7 @@ impl ExecutionEngine {
         primary_supports_image_understanding: bool,
         compression_contract_limit: usize,
         workspace: Option<&WorkspaceBinding>,
+        workspace_services: Option<&crate::agentic::workspace::WorkspaceServices>,
     ) -> OpenBitFunResult<Option<(usize, Vec<Message>)>> {
         let mut session = self
             .session_manager
@@ -2879,6 +2897,7 @@ impl ExecutionEngine {
                     prepended_prompt_reminders,
                     primary_supports_image_understanding,
                     workspace,
+                    workspace_services,
                     trace_config,
                 )
                 .await;
@@ -3162,6 +3181,7 @@ impl ExecutionEngine {
                     &scaffold.prepended_prompt_reminders,
                     scaffold.primary_supports_image_understanding,
                     context.workspace.as_ref(),
+                    context.workspace_services.as_ref(),
                     trace_config,
                 )
                 .await?;
@@ -3845,22 +3865,39 @@ impl ExecutionEngine {
         let compression_trigger_budget =
             Self::compression_trigger_budget(context_window, ai_client.config.max_tokens);
 
-        // If the primary model is text-only, do not send image payloads to the provider.
-        // Instead, keep a text-only placeholder (including `image_id`).
-        if !primary_supports_image_understanding {
-            for msg in messages.iter_mut() {
-                let MessageContent::Multimodal { text, images } = &msg.content else {
+        // Project images at the provider boundary on every round. Keep the
+        // canonical pixels and paths so steering, retries, and model switches
+        // retain the same attachments.
+
+        let attachment_context = ToolUseContext::for_tool_listing(
+            context.workspace.clone(),
+            context.workspace_services.clone(),
+        );
+        // Older turn metadata may still hold inline pixels even when its context
+        // snapshot predates durable attachments. Inline pixels also supersede
+        // old temporary/controller paths, which may no longer exist. Recover
+        // them without changing the record shape or requiring manual migration.
+        for message in &mut messages {
+            if let MessageContent::Multimodal { images, .. } = &mut message.content {
+                if !images.iter().any(|image| image.data_url.is_some()) {
                     continue;
-                };
-
-                let original_text = text.clone();
-                let original_images = images.clone();
-
-                // Replace multimodal messages with text-only versions to avoid provider errors.
-                let next_text = Self::render_multimodal_as_text(&original_text, &original_images);
-
-                msg.content = MessageContent::Text(next_text);
-                msg.metadata.tokens = None;
+                }
+                if let Err(error) =
+                    crate::agentic::image_analysis::attachments::prepare_inline_image_attachments(
+                        images,
+                        &attachment_context,
+                    )
+                    .await
+                {
+                    if message.metadata.turn_id.as_deref() == Some(context.dialog_turn_id.as_str())
+                    {
+                        return Err(error);
+                    }
+                    warn!(
+                        "Unable to recover historical image attachment: message_id={}, error={}",
+                        message.id, error
+                    );
+                }
             }
         }
 
@@ -4039,6 +4076,7 @@ impl ExecutionEngine {
                         primary_supports_image_understanding,
                         context_profile_policy.compression_contract_limit,
                         context.workspace.as_ref(),
+                        context.workspace_services.as_ref(),
                     )
                     .await
                 {
@@ -4218,13 +4256,26 @@ impl ExecutionEngine {
                 messages.len()
             );
 
+            if !primary_supports_image_understanding
+                && messages.iter().any(|message| {
+                    message.metadata.turn_id.as_deref() == Some(context.dialog_turn_id.as_str())
+                        && matches!(&message.content, MessageContent::Multimodal { images, .. } if !images.is_empty())
+                })
+            {
+                if !available_tools.iter().any(|name| name == "analyze_image") {
+                    return Err(OpenBitFunError::validation(
+                        "This agent cannot analyze image attachments with the selected text-only model. Enable analyze_image for this agent or select a multimodal model.",
+                    ));
+                }
+                // Includes images accepted as steering after the turn began.
+                crate::agentic::image_analysis::resolve_vision_model_from_global_config().await?;
+            }
+
             let ai_messages = Self::build_ai_messages_for_send(
                 &messages,
                 &ai_client.config.format,
-                context
-                    .workspace
-                    .as_ref()
-                    .map(|workspace| workspace.root_path()),
+                context.workspace.as_ref(),
+                context.workspace_services.as_ref(),
                 &context.dialog_turn_id,
                 primary_supports_image_understanding,
                 &send_prepended_reminders,
@@ -4278,6 +4329,7 @@ impl ExecutionEngine {
                             primary_supports_image_understanding,
                             context_profile_policy.compression_contract_limit,
                             context.workspace.as_ref(),
+                            context.workspace_services.as_ref(),
                         )
                         .await
                     {
@@ -4668,21 +4720,14 @@ impl ExecutionEngine {
                                 InternalReminderKind::GoalObjectiveUpdated
                             }
                         };
-                        // Attachments rebuild into the same multimodal user
-                        // message a turn-boundary submission would have
-                        // produced; a bad payload degrades to text rather than
-                        // dropping the user's steering message entirely.
-                        let images = match agent_dialog_turn_image_contexts(&injection.attachments)
-                        {
-                            Ok(images) => images.unwrap_or_default(),
-                            Err(error) => {
-                                warn!(
-                                    "Dropping unusable steering attachments, injecting text only: session_id={}, steering_id={}, error={}",
-                                    context.session_id, injection_id, error
-                                );
-                                Vec::new()
-                            }
-                        };
+                        // Use the same durable input path as turn-boundary messages.
+                        // A malformed image must not silently become a text-only turn.
+                        let mut images = agent_dialog_turn_image_contexts(&injection.attachments)
+                            .map_err(|error| OpenBitFunError::validation(error.to_string()))?
+                            .unwrap_or_default();
+                        crate::agentic::image_analysis::attachments::prepare_inline_image_attachments(
+                            &mut images, &attachment_context,
+                        ).await?;
                         let user_msg = if images.is_empty() {
                             Message::internal_reminder(reminder_kind, wrapped)
                         } else {
@@ -5292,6 +5337,67 @@ mod tests {
     use std::time::Duration;
 
     #[tokio::test]
+    async fn image_inputs_keep_pixels_for_native_models_and_tool_paths_for_text_models() {
+        let mut image = crate::agentic::image_analysis::attachments::test_image();
+        image.image_path =
+            Some("openbitfun://runtime/current/attachments/images/example.png".into());
+        let messages = vec![
+            Message::user_multimodal("Read this screenshot".into(), vec![image.clone()])
+                .with_turn_id("turn".into()),
+            Message::internal_reminder_multimodal(
+                crate::agentic::core::InternalReminderKind::UserSteering,
+                "Also check the second image",
+                vec![image.clone()],
+            )
+            .with_turn_id("turn".into()),
+        ];
+        for provider in ["openai", "anthropic", "responses", "gemini"] {
+            let native = ExecutionEngine::build_ai_messages_for_send(
+                &messages,
+                provider,
+                None,
+                None,
+                "turn",
+                true,
+                &[],
+            )
+            .await
+            .unwrap();
+            assert_eq!(native.len(), 2);
+            for message in native {
+                let parts: serde_json::Value =
+                    serde_json::from_str(message.content.as_deref().unwrap()).unwrap();
+                assert!(
+                    parts.as_array().unwrap().iter().any(|part| {
+                        matches!(part["type"].as_str(), Some("image") | Some("image_url"))
+                            || part.get("inline_data").is_some()
+                    }),
+                    "{provider}: {parts}"
+                );
+            }
+        }
+        let text_only = ExecutionEngine::build_ai_messages_for_send(
+            &messages,
+            "openai",
+            None,
+            None,
+            "turn",
+            false,
+            &[],
+        )
+        .await
+        .unwrap();
+        assert_eq!(text_only.len(), 2);
+        for message in text_only {
+            let text = message.content.unwrap();
+            assert!(text.contains("analyze_image"));
+            assert!(text.contains(image.image_path.as_deref().unwrap()));
+            assert!(!text.contains("base64"));
+        }
+        assert!(messages.iter().all(|message| matches!(&message.content, crate::agentic::core::MessageContent::Multimodal { images, .. } if images[0].data_url.is_some())));
+    }
+
+    #[tokio::test]
     async fn compression_cancellation_before_preparation_does_not_start_work() {
         let token = tokio_util::sync::CancellationToken::new();
         token.cancel();
@@ -5885,7 +5991,7 @@ mod tests {
             session_id: "session".to_string(),
             dialog_turn_id: "turn".to_string(),
             turn_index: 0,
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             workspace: Some(workspace),
             context: HashMap::new(),
             subagent_parent_info: None,
@@ -6468,7 +6574,7 @@ mod tests {
             session_id: "session".to_string(),
             dialog_turn_id: "turn".to_string(),
             turn_index: 0,
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             workspace: None,
             context: HashMap::new(),
             subagent_parent_info: None,

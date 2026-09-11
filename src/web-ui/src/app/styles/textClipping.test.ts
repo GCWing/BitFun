@@ -85,6 +85,7 @@ describe('Truncated product text line boxes', () => {
     expect(required).toBeCloseTo(1.172, 3);
     expect(systemTokens.lineHeight.tight.$value).toBe(1.2);
     expect(systemTokens.lineHeight.tight.$value).toBeGreaterThanOrEqual(required);
+    expect(systemTokens.lineHeight.compact.$value).toBeGreaterThanOrEqual(required);
     expect(systemTokens.lineHeight.base.$value).toBeGreaterThanOrEqual(required);
   });
 
@@ -101,8 +102,10 @@ describe('Truncated product text line boxes', () => {
     ['scenes/skills/SkillsScene.scss', '.skills-card__desc'],
   ])('%s gives %s a font-relative, descender-safe line height', (filename, selector) => {
     const lineHeight = selector === '.skills-card__name'
-      ? 'var(--openbitfun-type-label-md-line-height)'
-      : 'var(--openbitfun-type-body-sm-line-height)';
+      ? 'var(--openbitfun-type-label-sm-line-height)'
+      : selector === '.skills-card__desc'
+        ? 'var(--openbitfun-type-meta-line-height)'
+        : 'var(--openbitfun-type-body-sm-line-height)';
     expect(compiledRules(filename)(selector)['line-height']).toBe(lineHeight);
   });
 

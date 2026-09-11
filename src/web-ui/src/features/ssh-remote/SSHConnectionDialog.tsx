@@ -1494,36 +1494,34 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
               </DialogBody>
       </Dialog>
 
-      {open && credentialsPrompt && (
-        <SSHAuthPromptDialog
-          open
-          targetDescription={`${credentialsPrompt.username}@${credentialsPrompt.host}:${credentialsPrompt.port}`}
-          defaultAuthMethod={
-            credentialsPrompt.authType.type === 'PrivateKey'
-              ? 'privateKey'
-              : credentialsPrompt.authType.type === 'Agent'
-                ? 'agent'
-                : credentialsPrompt.authType.type === 'KeyboardInteractive'
-                  ? 'keyboardInteractive'
-                  : 'password'
-          }
-          defaultKeyPath={
-            credentialsPrompt.authType.type === 'PrivateKey'
-              ? credentialsPrompt.authType.keyPath
-              : '~/.ssh/id_rsa'
-          }
-          defaultCertificatePath={
-            credentialsPrompt.authType.type === 'PrivateKey'
-              ? credentialsPrompt.authType.certificatePath
-              : undefined
-          }
-          initialUsername={credentialsPrompt.username}
-          lockUsername
-          onSubmit={handleCredentialsPromptSubmit}
-          onCancel={handleCredentialsPromptCancel}
-          isConnecting={isConnecting}
-        />
-      )}
+      <SSHAuthPromptDialog
+        open={open && credentialsPrompt !== null}
+        targetDescription={credentialsPrompt ? `${credentialsPrompt.username}@${credentialsPrompt.host}:${credentialsPrompt.port}` : ''}
+        defaultAuthMethod={
+          credentialsPrompt?.authType.type === 'PrivateKey'
+            ? 'privateKey'
+            : credentialsPrompt?.authType.type === 'Agent'
+              ? 'agent'
+              : credentialsPrompt?.authType.type === 'KeyboardInteractive'
+                ? 'keyboardInteractive'
+                : 'password'
+        }
+        defaultKeyPath={
+          credentialsPrompt?.authType.type === 'PrivateKey'
+            ? credentialsPrompt.authType.keyPath
+            : '~/.ssh/id_rsa'
+        }
+        defaultCertificatePath={
+          credentialsPrompt?.authType.type === 'PrivateKey'
+            ? credentialsPrompt.authType.certificatePath
+            : undefined
+        }
+        initialUsername={credentialsPrompt?.username ?? ''}
+        lockUsername
+        onSubmit={handleCredentialsPromptSubmit}
+        onCancel={handleCredentialsPromptCancel}
+        isConnecting={isConnecting}
+      />
     </>
   );
 };

@@ -1,3 +1,5 @@
+import { useGitHubAccountProfile } from '../hooks/useGitHubAccountProfile';
+import AccountAvatar from '../components/AccountAvatar';
 import React, { useEffect, useLayoutEffect, useRef, useCallback, useMemo, useState } from 'react';
 import {
   MobileButton,
@@ -30,7 +32,7 @@ import { useTheme } from '../theme';
 import logoMarkDark from '../assets/openbitfun-mark-dark.png';
 import logoMarkLight from '../assets/openbitfun-mark-light.png';
 import {
-  isDelegatedIdentityChangedError,
+  isAccountIdentityChangedError,
   type RelayHttpClient,
 } from '../services/RelayHttpClient';
 
@@ -59,70 +61,19 @@ type CompactDevice = {
   device_id: string;
   device_name: string;
   online: boolean;
-  /** The QR room is a valid control target even when no account device id was delegated. */
-  room_route?: boolean;
 };
 
-const COMPACT_PAIRED_ROOM_DEVICE_ID = '__openbitfun_paired_room__';
 
 function compactSelectedDeviceIdForClient(client?: RelayHttpClient): string | null {
   if (!client) return null;
-  return client.pairedDeviceId
-    ?? (client.isPaired ? COMPACT_PAIRED_ROOM_DEVICE_ID : null);
+  return client.targetDeviceId
+    ?? null;
 }
 
 type CompactWorkspaceLoadStatus = 'idle' | 'loading' | 'ready' | 'failed';
 
 function compactWorkspaceKey(workspace: RecentWorkspaceEntry): string {
   return workspaceIdentityKey(workspace);
-}
-
-function mergeCompactWorkspaces(
-  recent: RecentWorkspaceEntry[],
-  currentWorkspace: {
-    path?: string;
-    project_name?: string;
-    workspace_kind?: 'normal' | 'assistant' | 'remote';
-    remote_connection_id?: string;
-    remote_ssh_host?: string;
-  } | null,
-  sessions: SessionInfo[],
-): RecentWorkspaceEntry[] {
-  const merged: RecentWorkspaceEntry[] = [];
-  const seen = new Set<string>();
-  const append = (workspace: RecentWorkspaceEntry) => {
-    if (!workspace.path) return;
-    const key = compactWorkspaceKey(workspace);
-    if (seen.has(key)) return;
-    seen.add(key);
-    merged.push(workspace);
-  };
-
-  if (currentWorkspace?.path) {
-    append({
-      path: currentWorkspace.path,
-      name: currentWorkspace.project_name || currentWorkspace.path.split('/').filter(Boolean).pop() || currentWorkspace.path,
-      last_opened: '',
-      workspace_kind: currentWorkspace.workspace_kind,
-      remote_connection_id: currentWorkspace.remote_connection_id,
-      remote_ssh_host: currentWorkspace.remote_ssh_host,
-    });
-  }
-  recent.forEach(append);
-  sessions.forEach((session) => {
-    if (!session.workspace_path) return;
-    if (!session.workspace_identity && merged.some((workspace) => (
-      workspace.path === session.workspace_path
-    ))) return;
-    append({
-      path: session.workspace_path,
-      name: session.workspace_name || session.workspace_path.split('/').filter(Boolean).pop() || session.workspace_path,
-      last_opened: session.updated_at,
-      remote_connection_id: session.workspace_identity?.remote_connection_id,
-      remote_ssh_host: session.workspace_identity?.remote_ssh_host,
-    });
-  });
-  return merged;
 }
 
 type SessionListTargetOwner = {
@@ -172,22 +123,20 @@ function formatTime(
 
 function agentLabel(agentType: string, t: (key: string) => string): string {
   switch (agentType) {
-    case 'minimal':
+    case 'Minimal':
       return t('sessions.harnessMinimal');
-    case 'Ultra':
-    case 'ultra':
-    case 'ultimate':
+    case 'Ultimate':
       return t('sessions.harnessUltimate');
     case 'code':
       return t('sessions.agentCode');
-    case 'agentic':
+    case 'Standard':
       return t('sessions.harnessStandard');
     case 'cowork':
     case 'Cowork':
       return t('sessions.agentCowork');
     case 'claw':
     case 'Claw':
-      return t('shared.agents.claw');
+      return t('shared.agents.Claw');
     default:
       return agentType || t('sessions.agentDefault');
   }
@@ -328,12 +277,14 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
     setCurrentAssistant,
     setPairedDisplayMode,
     authenticatedUserId,
-    authenticatedUserLabel,
     connectionHealth,
     controlTarget,
     setControlTarget,
     resetForDeviceSwitch,
   } = useMobileStore();
+  const githubProfile = useGitHubAccountProfile(authenticatedUserId);
+  const authenticatedUserLabel = authenticatedUserId
+    ? githubProfile ? `@${githubProfile.login}` : t('settings.githubAccount') : null;
   const { isDark, toggleTheme } = useTheme();
   const logoMark = isDark ? logoMarkLight : logoMarkDark;
   const [creating, setCreating] = useState(false);
@@ -359,6 +310,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
     remote_ssh_host?: string;
   }>>([]);
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
+  const [workspaceCatalogSource, setWorkspaceCatalogSource] = useState<'opened' | 'recent' | null>(null);
 
   // Search, rename & delete state
   const [searchQuery, setSearchQuery] = useState('');
@@ -399,8 +351,8 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
   const controlTargetEpoch = useControlTargetEpoch(sessionMgr);
   const cacheScope = useMemo(() => createRemoteCacheScope(
     authenticatedUserId,
-    controlTarget?.deviceId ?? client?.pairedDeviceId,
-  ), [authenticatedUserId, client?.pairedDeviceId, controlTarget?.deviceId]);
+    controlTarget?.deviceId ?? client?.targetDeviceId,
+  ), [authenticatedUserId, client?.targetDeviceId, controlTarget?.deviceId]);
   const liveDataSeqRef = useRef(0);
   const sessionListOwnerRef = useRef({
     sessionMgr,
@@ -565,6 +517,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
   const offsetRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const listRequestSeqRef = useRef(0);
+  const workspaceCatalogRequestSeqRef = useRef(0);
   const initLoadedPathRef = useRef<string | undefined>(undefined);
   const touchStartY = useRef(0);
   const isPulling = useRef(false);
@@ -598,6 +551,8 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
       setDeleting(false);
       setAssistantList([]);
       setWorkspaceList([]);
+      setWorkspaceCatalogSource(null);
+      workspaceCatalogRequestSeqRef.current += 1;
       setShowAssistantPicker(false);
       setShowWorkspacePicker(false);
       setMenuSession(null);
@@ -663,6 +618,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
         offsetRef.current = cached.sessions.length;
       }
       setWorkspaceList(cached.workspaces);
+      setWorkspaceCatalogSource(cached.workspaceCatalogSource ?? 'recent');
 
       const cachedByWorkspace: Record<string, SessionInfo[]> = {};
       const cachedStatuses: Record<string, CompactWorkspaceLoadStatus> = {};
@@ -758,25 +714,30 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
   const loadWorkspaceList = useCallback(async () => {
     const targetEpoch = captureSessionListEpoch();
     if (targetEpoch === null) return;
+    const requestSeq = ++workspaceCatalogRequestSeqRef.current;
     try {
-      const workspaces = await sessionMgr.listRecentWorkspaces();
-      if (!isSessionListCurrent(targetEpoch)) return;
+      const catalog = compact
+        ? await sessionMgr.listWorkspaceCatalog()
+        : { workspaces: await sessionMgr.listRecentWorkspaces(), source: 'recent' as const };
+      if (!isSessionListCurrent(targetEpoch) || requestSeq !== workspaceCatalogRequestSeqRef.current) return;
       liveDataSeqRef.current += 1;
-      setWorkspaceList(workspaces);
-      remoteCache.saveWorkspaceCatalog(cacheScope, workspaces);
+      setWorkspaceList(catalog.workspaces);
+      setWorkspaceCatalogSource(catalog.source);
+      remoteCache.saveWorkspaceCatalog(cacheScope, catalog.workspaces, catalog.source);
     } catch (e: any) {
-      if (isSessionListCurrent(targetEpoch) && !isRemoteControlTargetChangedError(e)) {
+      if (requestSeq === workspaceCatalogRequestSeqRef.current
+        && isSessionListCurrent(targetEpoch) && !isRemoteControlTargetChangedError(e)) {
         setError(e.message);
       }
     }
-  }, [cacheScope, captureSessionListEpoch, isSessionListCurrent, sessionMgr, setError]);
+  }, [cacheScope, captureSessionListEpoch, compact, isSessionListCurrent, sessionMgr, setError]);
 
   const loadCompactDirectory = useCallback(async () => {
     if (!compact) return;
     setCompactDirectoryLoading(true);
     try {
       const tasks: Promise<unknown>[] = [loadWorkspaceList()];
-      if (client?.hasDelegatedIdentity) {
+      if (client?.hasAccountIdentity) {
         tasks.push(client.listDevices().then((list) => {
           setCompactDevices(list.filter((device) => (
             device.device_id !== client.controllerDeviceId
@@ -794,15 +755,18 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
   const loadCompactWorkspaceCatalog = useCallback(async (expectedTargetEpoch: number) => {
     if (!compact || !client) return;
     setCompactDirectoryLoading(true);
+    const requestSeq = ++workspaceCatalogRequestSeqRef.current;
     try {
-      const workspaces = await sessionMgr.listRecentWorkspaces();
-      if (client.controlTargetEpoch !== expectedTargetEpoch) return;
+      const catalog = await sessionMgr.listWorkspaceCatalog();
+      if (client.controlTargetEpoch !== expectedTargetEpoch || requestSeq !== workspaceCatalogRequestSeqRef.current) return;
       liveDataSeqRef.current += 1;
-      setWorkspaceList(workspaces);
-      remoteCache.saveWorkspaceCatalog(cacheScope, workspaces);
+      setWorkspaceList(catalog.workspaces);
+      setWorkspaceCatalogSource(catalog.source);
+      remoteCache.saveWorkspaceCatalog(cacheScope, catalog.workspaces, catalog.source);
     } catch (error: unknown) {
       if (
         client.controlTargetEpoch === expectedTargetEpoch
+        && requestSeq === workspaceCatalogRequestSeqRef.current
         && !isRemoteControlTargetChangedError(error)
       ) {
         setError(String((error as { message?: string })?.message || error));
@@ -822,15 +786,12 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
   const handleSelectCompactDevice = useCallback(async (device: CompactDevice) => {
     if (!client || !device.online || compactSwitchingDeviceId) return;
     setCompactSelectedDeviceId(device.device_id);
-    if (device.room_route) {
+
+    if (client.targetDeviceId === device.device_id) {
       await loadCompactWorkspaceCatalog(client.controlTargetEpoch);
       return;
     }
-    if (client.pairedDeviceId === device.device_id) {
-      await loadCompactWorkspaceCatalog(client.controlTargetEpoch);
-      return;
-    }
-    const accountEpoch = client.delegatedAccountEpoch;
+    const accountEpoch = client.accountEpoch;
     const targetEpoch = client.controlTargetEpoch;
     setCompactSwitchingDeviceId(device.device_id);
     setError(null);
@@ -845,24 +806,23 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
         { retryable: true },
       );
       if (
-        client.delegatedAccountEpoch !== accountEpoch
+        client.accountEpoch !== accountEpoch
         || client.controlTargetEpoch !== targetEpoch
       ) return;
       if (ping.resp === 'host_invoke_result' && ping.ok === false) {
         throw new Error(ping.error || t('devices.switchFailed'));
       }
-      client.setPairedDeviceId(device.device_id);
+      client.setTargetDeviceId(device.device_id);
       const switchedTargetEpoch = client.controlTargetEpoch;
       resetForDeviceSwitch();
       setControlTarget({
         deviceId: device.device_id,
         deviceName: device.device_name || null,
-        isHome: device.device_id === client.homeDeviceId,
       });
       onControlTargetChanged?.();
       await loadCompactWorkspaceCatalog(switchedTargetEpoch);
     } catch (error: unknown) {
-      if (isDelegatedIdentityChangedError(error)) return;
+      if (isAccountIdentityChangedError(error)) return;
       const message = String((error as { message?: string })?.message || error);
       setError(message || t('devices.switchFailed'));
     } finally {
@@ -1332,9 +1292,19 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
   }, [cacheScope, captureSessionListEpoch, currentAssistant?.path, displayMode, isSessionListCurrent, searchQuery, sessionMgr, setCurrentWorkspace, setSessions]);
 
   useEffect(() => {
-    const poll = setInterval(refreshData, 10000);
-    return () => clearInterval(poll);
-  }, [refreshData]);
+    const poll = setInterval(() => {
+      void refreshData();
+      if (compact) void loadWorkspaceList();
+    }, 10000);
+    const refreshDirectory = () => {
+      if (compact && document.visibilityState === 'visible') void loadWorkspaceList();
+    };
+    document.addEventListener('visibilitychange', refreshDirectory);
+    return () => {
+      clearInterval(poll);
+      document.removeEventListener('visibilitychange', refreshDirectory);
+    };
+  }, [compact, loadWorkspaceList, refreshData]);
 
   useEffect(() => {
     const workspacePath = displayMode === 'assistant' ? currentAssistant?.path : currentWorkspace?.path;
@@ -1573,20 +1543,19 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
     const visibleSessions = sessions.filter((session) => (
       query.length === 0 || (session.name || '').toLocaleLowerCase().includes(query)
     ));
-    const compactWorkspaces = mergeCompactWorkspaces(workspaceList, currentWorkspace, sessions);
-    const activeDeviceId = client?.pairedDeviceId
-      ?? (client?.isPaired ? COMPACT_PAIRED_ROOM_DEVICE_ID : null);
+    const compactWorkspaces = workspaceList;
+    const activeDeviceId = client?.targetDeviceId
+      ?? null;
     const projectedCompactDevices = !activeDeviceId || compactDevices.some((device) => (
       device.device_id === activeDeviceId
     ))
       ? compactDevices
       : [{
           device_id: activeDeviceId,
-          device_name: client?.pairedDeviceId
-            ? controlTarget?.deviceName || client.pairedDeviceId
+          device_name: client?.targetDeviceId
+            ? controlTarget?.deviceName || client.targetDeviceId
             : t('devices.pairedDesktopName'),
           online: connectionHealth !== 'unreachable',
-          room_route: !client?.pairedDeviceId,
         }, ...compactDevices];
 
     return (
@@ -1674,6 +1643,9 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
                 <MobileIconButton appearance="plain" size="sm" aria-label={t('workspace.selectWorkspace')} onClick={onOpenWorkspace} icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>} />
               </div>
               <div className="harmony-sidebar__rows">
+                {workspaceCatalogSource === 'recent' && (
+                  <MobileBanner tone="info">{t('sessions.legacyWorkspaceCatalog')}</MobileBanner>
+                )}
                 {compactDirectoryLoading && compactWorkspaces.length === 0 && (
                   <MobileStatus className="harmony-sidebar__empty" loading title={t('common.loading')} />
                 )}
@@ -1829,6 +1801,8 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
 
         <CompactSettingsSheet
           accountLabel={authenticatedUserLabel}
+          accountUserId={authenticatedUserId}
+          accountAvatarUrl={githubProfile?.avatarUrl}
           devices={projectedCompactDevices}
           isDark={isDark}
           onClose={() => setCompactSettingsOpen(false)}
@@ -1877,8 +1851,9 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
             {authenticatedUserLabel && (
               <span className="session-list__header-account-name">
                 <span className={`session-list__health-dot session-list__health-dot--${connectionHealth}`} title={(() => { switch (connectionHealth) { case 'connected': return t('sessions.connectionConnected'); case 'checking': return t('sessions.connectionChecking'); case 'unreachable': return t('sessions.connectionUnreachable'); default: return t('sessions.connectionUnpaired'); } })()} />
-                {authenticatedUserLabel}
-                {controlTarget && !controlTarget.isHome && controlTarget.deviceName && (
+                <AccountAvatar url={githubProfile?.avatarUrl} />
+                <span title={t('settings.githubId', { id: authenticatedUserId || '' })}>{authenticatedUserLabel}</span>
+                {controlTarget && controlTarget.deviceName && (
                   <span className="session-list__header-target" title={t('devices.controllingDevice', { name: controlTarget.deviceName })}>
                     {controlTarget.deviceName}
                   </span>
@@ -1891,7 +1866,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
           {onOpenDevices && (
             <MobileIconButton
               appearance="plain"
-              className={`session-list__devices-btn ${controlTarget && !controlTarget.isHome ? 'is-remote' : ''}`}
+              className={`session-list__devices-btn ${controlTarget ? 'is-remote' : ''}`}
               onClick={onOpenDevices}
               title={t('devices.title')} aria-label={t('devices.title')} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />

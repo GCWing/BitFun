@@ -91,6 +91,7 @@ cargo test -p openbitfun-services-core --no-default-features --features diff --l
 cargo test -p openbitfun-services-core --no-default-features --features workspace-text-runtime --lib workspace_text::tests::
 cargo test -p openbitfun-services-core --no-default-features --features workspace-runtime --lib workspace::tests::
 cargo test -p openbitfun-services-core --no-default-features --features local-storage --test session_contracts session_metadata_contracts::
+cargo test -p openbitfun-services-core --no-default-features --features local-storage --lib session::metadata
 cargo test -p openbitfun-services-core --no-default-features --features local-storage --test session_write_lock_contracts
 cargo test -p openbitfun-services-core --no-default-features --features memory-store --lib memory_store::tests::
 cargo test -p openbitfun-services-core --no-default-features --features token-usage-statistics --lib token_usage::

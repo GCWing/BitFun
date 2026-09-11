@@ -34,7 +34,10 @@ describe('destroyTerminalSession', () => {
 
     expect(mocks.closeSession).toHaveBeenCalledWith('terminal-1');
     expect(destroyed).toHaveBeenCalledOnce();
-    expect((destroyed.mock.calls[0][0] as CustomEvent).detail).toEqual({ sessionId: 'terminal-1' });
+    expect((destroyed.mock.calls[0][0] as CustomEvent).detail).toEqual({
+      sessionId: 'terminal-1',
+      surfaceId: 'local',
+    });
 
     window.removeEventListener('terminal-session-destroyed', destroyed);
   });

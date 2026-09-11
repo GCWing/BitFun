@@ -59,8 +59,7 @@
       width 140ms ease,
       height 140ms ease,
       background-color 140ms ease,
-      opacity 140ms ease,
-      transform 100ms ease;
+      opacity 140ms ease;
   }
 
   // Hover previews a target without changing the actual current step. Only
@@ -89,10 +88,6 @@
     width: 19px;
     background: var(--openbitfun-color-content-primary);
     opacity: 1;
-  }
-
-  &__item:active &__bar {
-    transform: translateY(-50%) scaleX(0.92);
   }
 
   &__tooltip-content {

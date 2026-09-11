@@ -338,7 +338,7 @@ async fn rollback_config_option(
     {
         apply_backend_config_effects(app, state, &applied.changed_path, &applied.effective_value)
             .await?;
-        crate::api::remote_connect_api::notify_settings_changed();
+
         if option_requires_presentation_commit(option) {
             synchronize_required_effect(
                 capability_id,
@@ -457,9 +457,7 @@ async fn configure_option_transaction(
     } else {
         return Err("Product-control option has no executable handler".to_string());
     };
-    if notify_settings {
-        crate::api::remote_connect_api::notify_settings_changed();
-    }
+    if notify_settings {}
 
     let presentation_sync = if option_requires_presentation_commit(option) {
         match synchronize_required_effect(
@@ -667,7 +665,7 @@ async fn rollback_legacy_config_transaction(
         apply_legacy_config_mutation(&state.config_service, path, previous_value).await?;
     apply_backend_config_effects(app, state, path, &rolled_back.effective_value).await?;
     apply_binding_backend_effects(app, state, &rolled_back.controlled_bindings).await?;
-    crate::api::remote_connect_api::notify_settings_changed();
+
     synchronize_legacy_bindings(app, state, &rolled_back.controlled_bindings, "rollback")
         .await
         .map(|_| ())
@@ -721,7 +719,6 @@ pub(crate) async fn set_config_from_gui(
     if let Err(error) = backend_effect_result {
         return Err(failed_legacy_transaction(app, &state, path, previous_value, error).await);
     }
-    crate::api::remote_connect_api::notify_settings_changed();
 
     let presentation_sync = match synchronize_legacy_bindings(
         app,
@@ -848,7 +845,7 @@ async fn select_companion(
         .set_config("app.ai_experience", &experience)
         .await
         .map_err(|error| error.to_string())?;
-    crate::api::remote_connect_api::notify_settings_changed();
+
     companion_state(state).await
 }
 
@@ -974,7 +971,7 @@ async fn execute_desktop_provider_operation(
                     .await
                     .map_err(|error| error.to_string())?;
             }
-            crate::api::remote_connect_api::notify_settings_changed();
+
             let state_value = companion_state(&state).await?;
             let presentation_sync = emit_applied(
                 "setting.application.pet",

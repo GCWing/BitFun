@@ -97,8 +97,8 @@ vi.mock('./SessionFilesBadge', () => ({
 }));
 
 vi.mock('./SessionTreePopover', () => ({
-  SessionTreePopover: ({ embedded }: { embedded?: boolean }) => embedded
-    ? <div data-testid="flowchat-header-session-tree-content" />
+  SessionTreePopover: ({ embedded, activeOnly }: { embedded?: boolean; activeOnly?: boolean }) => embedded
+    ? <div data-testid="flowchat-header-session-tree-content" data-active-only={activeOnly} />
     : null,
 }));
 
@@ -439,10 +439,16 @@ describe('FlowChatHeader', () => {
     expect(items[2]?.querySelector('svg')).toBeNull();
     expect(panel?.querySelector('[data-testid="flowchat-header-session-tree-content"]')).not.toBeNull();
     expect(panel?.querySelector('[data-testid="flowchat-header-background-empty"]')?.textContent)
-      .toBe('flowChatHeader.backgroundTerminalEmpty');
+      .toBe('flowChatHeader.backgroundCommandEmpty');
     expect(panel?.querySelector('[data-testid="flowchat-header-pull-requests-empty"]')?.textContent)
       .toBe('flowChatHeader.pullRequestEmpty');
     expect(panel?.querySelector('[data-testid="flowchat-header-session-overview-back"]')).toBeNull();
+    const activeSwitch = panel?.querySelector<HTMLInputElement>('[aria-label="flowChatHeader.agentTreeActiveOnly"]');
+    expect(activeSwitch?.checked).toBe(true);
+    expect(panel?.querySelector('[data-testid="flowchat-header-session-tree-content"]')?.getAttribute('data-active-only')).toBe('true');
+    await act(async () => activeSwitch?.click());
+    expect(activeSwitch?.checked).toBe(false);
+    expect(panel?.querySelector('[data-testid="flowchat-header-session-tree-content"]')?.getAttribute('data-active-only')).toBe('false');
   });
 
   it('shows the empty background terminal state without navigating', async () => {
@@ -462,7 +468,7 @@ describe('FlowChatHeader', () => {
     );
 
     const panel = document.querySelector<HTMLElement>('.flowchat-header__session-overview-panel');
-    expect(commandSection?.textContent).toContain('flowChatHeader.backgroundTerminalEmpty');
+    expect(commandSection?.textContent).toContain('flowChatHeader.backgroundCommandEmpty');
     expect(panel?.parentElement?.getAttribute('data-openbitfun-overlay-host')).toBe('true');
     expect(panel?.style.visibility).toBe('visible');
     expect(panel?.hasAttribute('data-openbitfun-view')).toBe(false);

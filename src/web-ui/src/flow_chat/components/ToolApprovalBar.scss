@@ -108,12 +108,6 @@
   background: color-mix(in srgb, var(--openbitfun-color-status-danger-emphasis) 16%, transparent);
 }
 
-.tool-approval-bar__instruction-submit:active:not(:disabled),
-.tool-approval-bar__icon-button:active:not(:disabled),
-.tool-approval-bar__auto-execute-button:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
 .tool-approval-bar__instruction-submit:focus-visible,
 .tool-approval-bar__icon-button:focus-visible,
 .tool-approval-bar__auto-execute-button:focus-visible {

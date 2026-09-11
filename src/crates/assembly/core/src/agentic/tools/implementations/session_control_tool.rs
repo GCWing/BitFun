@@ -294,8 +294,8 @@ Actions:
 Arguments:
 - "workspace": Absolute workspace path. Required for create and list. Ignored for cancel, delete, and rename.
 - "session_name": Used by create (defaults to "New Session") and required as the new title for rename.
-- "agent_type": Only used by create. Defaults to "agentic".
-  - "agentic": Coding-focused agent for implementation, debugging, and code changes.
+- "agent_type": Only used by create. Defaults to "Standard".
+  - "Standard": Coding-focused agent for implementation, debugging, and code changes.
   - "Cowork": Collaborative agent for office-style work such as research, documentation, presentations, etc.
   - "DeepResearch": Research agent for systematic investigation and evidence-driven reports.
 - "session_id": Required for cancel, delete, and rename."#
@@ -334,7 +334,7 @@ Arguments:
                 },
                 "agent_type": {
                     "type": "string",
-                    "enum": ["agentic", "Cowork", "DeepResearch"],
+                    "enum": ["Standard", "Cowork", "DeepResearch"],
                     "description": "Optional agent type when creating a session. Defaults to agentic."
                 }
             },

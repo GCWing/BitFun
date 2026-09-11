@@ -1,0 +1,153 @@
+@layer openbitfun.components {
+  .root {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    box-sizing: border-box;
+    container-type: size;
+    inline-size: 100%;
+    block-size: 100%;
+    min-inline-size: 0;
+    min-block-size: 0;
+    overflow: hidden;
+    border-radius: calc(var(--openbitfun-space-8) + var(--openbitfun-space-1));
+    background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 80%, transparent);
+    color: var(--openbitfun-color-content-on-dark);
+    font-family: var(--openbitfun-type-body-lg-font-family);
+    font-size: var(--openbitfun-type-body-lg-font-size);
+    font-weight: var(--openbitfun-type-body-lg-font-weight);
+    line-height: var(--openbitfun-type-body-lg-line-height);
+    letter-spacing: var(--openbitfun-type-body-lg-letter-spacing);
+  }
+
+  .header {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--openbitfun-space-3);
+    padding: var(--openbitfun-space-5) var(--openbitfun-space-6) 0;
+  }
+
+  .title {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    margin: 0;
+    color: inherit;
+    font-family: var(--openbitfun-type-heading-panel-font-family);
+    font-size: var(--openbitfun-type-heading-panel-font-size);
+    font-weight: var(--openbitfun-type-heading-panel-font-weight);
+    line-height: var(--openbitfun-type-heading-panel-line-height);
+    letter-spacing: var(--openbitfun-type-heading-panel-letter-spacing);
+  }
+
+  .root .back,
+  .root .close {
+    inline-size: 40px;
+    block-size: 40px;
+    flex: 0 0 40px;
+    border: 0;
+    color: inherit;
+  }
+
+  .root .back {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+  }
+
+  .root .close {
+    background: transparent;
+    opacity: 0.5;
+  }
+
+  .visualizer {
+    flex: 0 1 44cqh;
+    min-block-size: 120px;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .conversation {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-block-size: 0;
+    gap: calc(var(--openbitfun-space-8) + var(--openbitfun-space-1));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--openbitfun-space-2) var(--openbitfun-space-6) var(--openbitfun-space-2) var(--openbitfun-space-10);
+    color: inherit;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .user {
+    align-self: flex-end;
+    inline-size: fit-content;
+    max-inline-size: 100%;
+    box-sizing: border-box;
+    padding: var(--openbitfun-space-3);
+    border-radius: var(--openbitfun-radius-lg);
+    background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 30%, transparent);
+    line-height: var(--openbitfun-type-modifier-leading-tight-line-height);
+  }
+
+  .assistant { align-self: stretch; }
+
+  .status {
+    color: inherit;
+  }
+
+  .controls {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: var(--openbitfun-space-3);
+    padding: var(--openbitfun-space-6) var(--openbitfun-space-6) clamp(var(--openbitfun-space-5), 7.4cqh, 54px);
+  }
+
+  .root .control {
+    inline-size: 74px;
+    block-size: 74px;
+    flex: 0 0 74px;
+    border: 0;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 20%, transparent);
+    color: inherit;
+  }
+
+  .root .control [data-openbitfun-part="icon"] { inline-size: 28px; block-size: 28px; }
+  .root :is(.back, .close) [data-openbitfun-part="icon"] { inline-size: 20px; block-size: 20px; }
+  .root :is(.control, .back, .close)::before { content: none; }
+
+  .root :is(.control, .back, .close):hover:not(:disabled) {
+    background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 30%, transparent);
+    color: inherit;
+    opacity: 1;
+  }
+
+  .root :is(.control, .back, .close):active:not(:disabled) {
+    background: color-mix(in srgb, var(--openbitfun-color-content-on-dark) 40%, transparent);
+  }
+
+  .root :is(.control, .back, .close):focus-visible {
+    outline: var(--openbitfun-focus-width) solid currentColor;
+    outline-offset: var(--openbitfun-focus-offset);
+  }
+
+  @container (height < 520px) {
+    .controls { padding-block: var(--openbitfun-space-3); }
+    .root .control { inline-size: 56px; block-size: 56px; flex-basis: 56px; }
+    .conversation { gap: var(--openbitfun-space-5); }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .root { background: var(--openbitfun-color-content-on-light); }
+  }
+
+  @media (forced-colors: active) {
+    .root { background: Canvas; color: CanvasText; }
+    .user { border: 1px solid CanvasText; }
+    .root :is(.control, .back, .close) { border: 1px solid ButtonText; color: ButtonText; opacity: 1; }
+  }
+}

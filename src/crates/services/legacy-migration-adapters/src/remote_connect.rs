@@ -13,9 +13,9 @@ use openbitfun_product_domains::legacy_migration::{
 };
 use openbitfun_services_integrations::remote_persistence as owner;
 use owner::{
-    AccountHintRecord, AccountSessionRecord, AccountSyncStateRecord, BotChatStateRecord,
-    BotConfigRecord, BotPersistenceRecord, LegacyAccountSessionKeyDomains, MachineBinding,
-    RemoteConnectFormStateRecord, SavedBotConnectionRecord, SettingsCursorRecord,
+    AccountHintRecord, AccountSessionRecord, BotChatStateRecord, BotConfigRecord,
+    BotPersistenceRecord, LegacyAccountSessionKeyDomains, MachineBinding,
+    RemoteConnectFormStateRecord, SavedBotConnectionRecord,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -84,8 +84,6 @@ struct RemoteConnectState {
     device: Option<owner::DeviceIdentityRecord>,
     account_session_present: bool,
     account_hint: Option<AccountHintRecord>,
-    sync_states: BTreeMap<String, AccountSyncStateRecord>,
-    settings_cursors: BTreeMap<String, SettingsCursorRecord>,
     bot: Option<BotPersistenceRecord>,
     bot_source_kind: BotSourceKind,
     bot_unresolved: bool,
@@ -127,7 +125,7 @@ impl LegacyDomainAdapter for RemoteConnectAdapter {
                 logical_bytes: total_bytes(&roots.legacy_home_root, source.files.keys())?,
                 source_schema: Some(SOURCE_SCHEMA.to_string()),
                 migratable: !source.bot_unresolved || source.files.len() > 1,
-                detail: "Legacy Remote Connect identity, account, sync, and bot stores were inspected without exposing credentials.".to_string(),
+                detail: "Legacy Remote Connect identity, account, and bot stores were inspected without exposing credentials.".to_string(),
             },
             conflicts: preview.conflicts,
             target_schema: Some(TARGET_SCHEMA.to_string()),
@@ -363,13 +361,15 @@ fn preview(source: &RemoteConnectState, target: &RemoteConnectState) -> Preview 
     let mut skipped = source.omitted.len() as u64;
     let mut conflicts = Vec::new();
     if source.device.is_some() {
-        if target.device.is_some() {
+        if let Some(target_device) = &target.device {
             skipped += 1;
-            conflicts.push(target_wins(
-                "device_identity_target_wins",
-                "legacy device identity",
-                "current device identity",
-            ));
+            if source.device.as_ref() != Some(target_device) {
+                conflicts.push(target_wins(
+                    "device_identity_target_wins",
+                    "legacy device identity",
+                    "current device identity",
+                ));
+            }
         } else {
             imported += 1;
         }
@@ -506,28 +506,10 @@ fn apply_merge(
     } else {
         None
     };
-    let effective_session = if target.account_session_present {
-        target_session.as_ref()
-    } else if let Some(session) = &source_session {
-        owner::write_current_account_session(target_root, &binding, session)
-            .map_err(owner_error)?;
-        Some(session)
-    } else {
-        None
-    };
-    if let (Some(source_session), Some(effective_session)) =
-        (source_session.as_ref(), effective_session)
-    {
-        if same_account(source_session, effective_session) {
-            merge_account_sync(context, source_session, target, outcome)?;
-        } else {
-            outcome.skipped = outcome
-                .skipped
-                .saturating_add(source.sync_states.len() as u64);
-            outcome.warnings.push(warning(
-                "account_sync_different_account_skipped",
-                "Legacy account sync cursors were not applied to a different current account.",
-            ));
+    if !target.account_session_present {
+        if let Some(session) = &source_session {
+            owner::write_current_account_session(target_root, &binding, session)
+                .map_err(owner_error)?;
         }
     }
 
@@ -556,74 +538,6 @@ fn apply_merge(
         ));
     }
     Ok(())
-}
-
-fn merge_account_sync(
-    context: &DomainContext<'_>,
-    session: &AccountSessionRecord,
-    target: &RemoteConnectState,
-    outcome: &mut RemoteConnectOutcome,
-) -> LegacyMigrationResult<()> {
-    let Some(component) = owner::safe_account_file_component(&session.user_id) else {
-        outcome.warnings.push(warning(
-            "account_sync_invalid_user_id",
-            "Account sync cursors were skipped because their safe owner filename could not be resolved.",
-        ));
-        return Ok(());
-    };
-    let state_name = format!("{component}.json");
-    let settings_name = format!("{component}.settings.json");
-    let source_root = context.roots.legacy_home_root.join("account_sync");
-    let target_root = context.roots.target_home_root.join("account_sync");
-    if let Some(source_state) = strict_sync_state(
-        &source_root.join(&state_name),
-        &context.roots.legacy_home_root,
-    )? {
-        let merged = merge_sync_state(
-            source_state,
-            target
-                .sync_states
-                .get(&state_name)
-                .cloned()
-                .unwrap_or_default(),
-        );
-        owner::write_account_sync_state(&target_root.join(&state_name), &merged)
-            .map_err(owner_error)?;
-        outcome.imported = outcome.imported.saturating_add(1);
-    }
-    if let Some(source_cursor) = strict_settings_cursor(
-        &source_root.join(&settings_name),
-        &context.roots.legacy_home_root,
-    )? {
-        let merged = choose_settings_cursor(
-            source_cursor,
-            target.settings_cursors.get(&settings_name).cloned(),
-        );
-        owner::write_settings_cursor(&target_root.join(&settings_name), &merged)
-            .map_err(owner_error)?;
-        outcome.imported = outcome.imported.saturating_add(1);
-    }
-    Ok(())
-}
-
-fn merge_sync_state(
-    source: AccountSyncStateRecord,
-    mut target: AccountSyncStateRecord,
-) -> AccountSyncStateRecord {
-    target.last_session_since = target.last_session_since.max(source.last_session_since);
-    for (session_id, hash) in source.uploaded_hashes {
-        target.uploaded_hashes.entry(session_id).or_insert(hash);
-    }
-    target
-}
-
-fn choose_settings_cursor(
-    source: SettingsCursorRecord,
-    target: Option<SettingsCursorRecord>,
-) -> SettingsCursorRecord {
-    target
-        .filter(|cursor| cursor.version >= source.version)
-        .unwrap_or(source)
 }
 
 fn same_account(left: &AccountSessionRecord, right: &AccountSessionRecord) -> bool {
@@ -733,7 +647,6 @@ fn merge_form_state(
     source: &RemoteConnectFormStateRecord,
     target: &mut RemoteConnectFormStateRecord,
 ) {
-    fill_empty(&mut target.custom_server_url, &source.custom_server_url);
     fill_empty(&mut target.telegram_bot_token, &source.telegram_bot_token);
     fill_empty(&mut target.feishu_app_id, &source.feishu_app_id);
     fill_empty(&mut target.feishu_app_secret, &source.feishu_app_secret);
@@ -822,49 +735,6 @@ fn read_state(root: &Path, legacy: bool) -> LegacyMigrationResult<RemoteConnectS
         }
     }
     state.account_session_present = state.files.contains_key("account_session.enc");
-
-    let sync_root = root.join("account_sync");
-    if existing_directory(root, &sync_root)? {
-        let paths = owner::account_sync_paths(&sync_root).map_err(owner_error)?;
-        if paths.len() > MAX_REMOTE_FILES {
-            return Err(LegacyMigrationError::ResourceLimit(
-                "account sync file count exceeds the migration limit".to_string(),
-            ));
-        }
-        for path in paths {
-            if !source_file_exists(root, &path, MAX_JSON_BYTES, legacy, &mut state.omitted)? {
-                continue;
-            }
-            let name = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .ok_or_else(|| {
-                    LegacyMigrationError::InvalidRequest(
-                        "account sync filename is not UTF-8".to_string(),
-                    )
-                })?
-                .to_string();
-            record_file(root, &path, &mut state.files)?;
-            if name.ends_with(".settings.json") {
-                if let Some(value) = source_optional(
-                    owner::read_settings_cursor(&path).map_err(owner_error),
-                    legacy,
-                    &format!("account_sync/{name}"),
-                    &mut state.omitted,
-                )? {
-                    state.settings_cursors.insert(name, value);
-                }
-            } else if let Some(value) = source_optional(
-                owner::read_account_sync_state(&path).map_err(owner_error),
-                legacy,
-                &format!("account_sync/{name}"),
-                &mut state.omitted,
-            )? {
-                state.sync_states.insert(name, value);
-            }
-            record_file(root, &path, &mut state.files)?;
-        }
-    }
 
     let canonical = root.join("remote_connect_persistence.json");
     let backup = root.join("remote_connect_persistence.json.bak");
@@ -961,26 +831,6 @@ fn active_weixin_ids(bot: &BotPersistenceRecord) -> LegacyMigrationResult<BTreeS
     Ok(ids)
 }
 
-fn strict_sync_state(
-    path: &Path,
-    root: &Path,
-) -> LegacyMigrationResult<Option<AccountSyncStateRecord>> {
-    if !existing_regular(root, path, MAX_JSON_BYTES)? {
-        return Ok(None);
-    }
-    owner::read_account_sync_state(path).map_err(owner_error)
-}
-
-fn strict_settings_cursor(
-    path: &Path,
-    root: &Path,
-) -> LegacyMigrationResult<Option<SettingsCursorRecord>> {
-    if !existing_regular(root, path, MAX_JSON_BYTES)? {
-        return Ok(None);
-    }
-    owner::read_settings_cursor(path).map_err(owner_error)
-}
-
 fn target_candidates(source: &RemoteConnectState, target: &RemoteConnectState) -> BTreeSet<String> {
     let mut paths = target.files.keys().cloned().collect::<BTreeSet<_>>();
     paths.extend([
@@ -990,13 +840,6 @@ fn target_candidates(source: &RemoteConnectState, target: &RemoteConnectState) -
         "account_session.key".to_string(),
         "remote_connect_persistence.json".to_string(),
     ]);
-    for name in source
-        .sync_states
-        .keys()
-        .chain(source.settings_cursors.keys())
-    {
-        paths.insert(format!("account_sync/{name}"));
-    }
     for account_id in source.weixin_sync.keys().chain(source.weixin_tokens.keys()) {
         paths.insert(format!("weixin/{account_id}_get_updates_buf.txt"));
         paths.insert(format!("weixin/{account_id}_context_tokens.json"));
@@ -1144,8 +987,6 @@ fn source_entity_count(state: &RemoteConnectState) -> u64 {
     u64::from(state.device.is_some())
         + u64::from(state.account_session_present)
         + u64::from(state.account_hint.is_some())
-        + state.sync_states.len() as u64
-        + state.settings_cursors.len() as u64
         + state
             .bot
             .as_ref()
@@ -1354,6 +1195,32 @@ mod tests {
     }
 
     #[test]
+    fn identical_device_identity_is_a_duplicate_without_a_conflict() {
+        let device = owner::DeviceIdentityRecord {
+            device_id: "11111111111111111111111111111111".into(),
+            device_name: "device".into(),
+            mac_address: "02:00:00:00:00:11".into(),
+        };
+        let source = RemoteConnectState {
+            device: Some(device.clone()),
+            ..Default::default()
+        };
+        let mut target = RemoteConnectState {
+            device: Some(device),
+            ..Default::default()
+        };
+        let duplicate = preview(&source, &target);
+        assert_eq!(duplicate.imported, 0);
+        assert_eq!(duplicate.skipped, 1);
+        assert!(duplicate.conflicts.is_empty());
+        target.device.as_mut().unwrap().device_name = "different".into();
+        assert_eq!(
+            preview(&source, &target).conflicts[0].code,
+            "device_identity_target_wins"
+        );
+    }
+
+    #[test]
     fn remote_connect_merge_preserves_target_identity_and_remote_bot_context() {
         let temp = test_tempdir("merge");
         let roots = fixture_roots(temp.path());
@@ -1537,41 +1404,6 @@ mod tests {
         assert_eq!(bot.connections.len(), 1);
     }
 
-    #[test]
-    fn account_sync_merge_keeps_target_hashes_and_whole_version_pairs() {
-        let source = AccountSyncStateRecord {
-            last_session_since: 9,
-            uploaded_hashes: std::collections::HashMap::from([
-                ("shared".to_string(), "source-hash".to_string()),
-                ("source-only".to_string(), "source-only-hash".to_string()),
-            ]),
-        };
-        let target = AccountSyncStateRecord {
-            last_session_since: 7,
-            uploaded_hashes: std::collections::HashMap::from([(
-                "shared".to_string(),
-                "target-hash".to_string(),
-            )]),
-        };
-        let merged = merge_sync_state(source, target);
-        assert_eq!(merged.last_session_since, 9);
-        assert_eq!(merged.uploaded_hashes["shared"], "target-hash");
-        assert_eq!(merged.uploaded_hashes["source-only"], "source-only-hash");
-
-        let selected = choose_settings_cursor(
-            SettingsCursorRecord {
-                version: 4,
-                hash: "source-pair".to_string(),
-            },
-            Some(SettingsCursorRecord {
-                version: 6,
-                hash: "target-pair".to_string(),
-            }),
-        );
-        assert_eq!(selected.version, 6);
-        assert_eq!(selected.hash, "target-pair");
-    }
-
     struct CrashOnce {
         point: CrashPoint,
         fired: AtomicBool,
@@ -1590,6 +1422,7 @@ mod tests {
     ) -> BotPersistenceRecord {
         BotPersistenceRecord {
             connections: vec![SavedBotConnectionRecord {
+                account_user_id: String::new(),
                 bot_type: "telegram".to_string(),
                 chat_id: "chat-1".to_string(),
                 config: BotConfigRecord::Telegram {

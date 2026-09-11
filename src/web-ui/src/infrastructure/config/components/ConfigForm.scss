@@ -63,7 +63,7 @@ $config-input-height: 32px;
   font-weight: var(--openbitfun-type-support-font-weight);
   color: var(--openbitfun-color-content-secondary);
   margin-top: var(--openbitfun-space-1);
-  line-height: var(--openbitfun-type-modifier-leading-support-line-height);
+  line-height: var(--openbitfun-type-field-helper-line-height);
   letter-spacing: var(--openbitfun-type-support-letter-spacing);
   overflow-wrap: break-word;
 }
@@ -414,7 +414,7 @@ $config-input-height: 32px;
   font-weight: var(--openbitfun-type-body-sm-font-weight);
   color: var(--openbitfun-color-content-primary);
   margin: 0 0 var(--openbitfun-space-5) 0;
-  line-height: var(--openbitfun-type-body-sm-line-height);
+  line-height: var(--openbitfun-type-form-description-line-height);
   letter-spacing: var(--openbitfun-type-body-sm-letter-spacing);
   overflow-wrap: break-word;
 }
@@ -631,7 +631,7 @@ $config-input-height: 32px;
   opacity: 0;
   transition:
     grid-template-rows 180ms var(--openbitfun-motion-easing-standard),
-    opacity 120ms ease;
+    opacity 180ms var(--openbitfun-motion-easing-standard);
 
   &[data-open='true'] {
     grid-template-rows: 1fr;

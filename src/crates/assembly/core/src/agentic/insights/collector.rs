@@ -1078,7 +1078,7 @@ mod tests {
             turn_id.to_string(),
             turn_index,
             "session-1".to_string(),
-            Some("Agentic".to_string()),
+            Some("Standard".to_string()),
             UserMessageData {
                 id: format!("user-{turn_id}"),
                 content: format!("message-{turn_id}"),
@@ -1219,7 +1219,7 @@ mod tests {
         let mut parent = SessionMetadata::new(
             "parent".to_string(),
             "Parent".to_string(),
-            "Agentic".to_string(),
+            "Standard".to_string(),
             "model".to_string(),
         );
         parent.last_active_at = 1_000;

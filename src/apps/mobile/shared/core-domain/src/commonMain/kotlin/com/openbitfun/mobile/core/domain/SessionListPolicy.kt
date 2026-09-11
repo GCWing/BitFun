@@ -10,7 +10,7 @@ package com.openbitfun.mobile.core.domain
 public object SessionAgentTypes {
     public fun isCode(agentType: String): Boolean {
         val normalized = agentType.lowercase()
-        return normalized == "code" || normalized == "agentic"
+        return normalized in setOf("code", "agentic", "minimal", "ultra")
     }
 
     public fun isCowork(agentType: String): Boolean = agentType.lowercase() == "cowork"

@@ -2,7 +2,7 @@ package com.openbitfun.mobile.app.platform
 
 import android.content.Context
 import android.os.Build
-import com.openbitfun.mobile.core.feature.pairing.DeviceIdentity
+import com.openbitfun.mobile.core.feature.account.MobileDeviceIdentity
 import java.util.UUID
 
 private const val PREFS = "openbitfun_install"
@@ -21,13 +21,13 @@ internal val LEGACY_MOBILE_DEVICE_NAMES: Set<String> = setOf(
  * random id per install gives it that without carrying a device fingerprint off
  * the phone. Clearing app data intentionally produces a new device.
  */
-internal fun Context.deviceIdentity(): DeviceIdentity {
+internal fun Context.deviceIdentity(): MobileDeviceIdentity {
     val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     val existing = prefs.getString(KEY_INSTALL_ID, null)
     val installId = existing ?: "android-${UUID.randomUUID()}".also {
         prefs.edit().putString(KEY_INSTALL_ID, it).apply()
     }
-    return DeviceIdentity(
+    return MobileDeviceIdentity(
         installId = installId,
         displayName = Build.MODEL.ifBlank { "Android" },
     )

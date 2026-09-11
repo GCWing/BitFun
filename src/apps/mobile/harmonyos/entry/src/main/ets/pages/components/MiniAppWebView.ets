@@ -14,7 +14,7 @@ class MiniAppNativeBridge {
 export struct MiniAppWebView {
   @Param document: string = '';
   @Param revision: number = 0;
-  @Param request: (raw: string) => Promise<string> = async (_raw: string): Promise<string> => '';
+  @Param request: (raw: string, revision: number) => Promise<string> = async (_raw: string, _revision: number): Promise<string> => '';
   private controller: webview.WebviewController = new webview.WebviewController();
   private active: boolean = true;
   private bridge: MiniAppNativeBridge = new MiniAppNativeBridge((raw: string): void => {
@@ -22,8 +22,9 @@ export struct MiniAppWebView {
   });
 
   private async reply(raw: string): Promise<void> {
+    if (!this.active) return;
     const revision = this.revision;
-    const response = await this.request(raw);
+    const response = await this.request(raw, revision);
     if (!this.active || revision !== this.revision || !response) return;
     try {
       await this.controller.runJavaScript(`window.__miniappReply(JSON.parse(${JSON.stringify(response)}))`);
@@ -38,6 +39,8 @@ export struct MiniAppWebView {
     // A nonempty initial src can overwrite loadData after controller attachment.
     Web({ src: '', controller: this.controller })
       .javaScriptAccess(true)
+      .darkMode(WebDarkMode.Auto)
+      .forceDarkAccess(false)
       .domStorageAccess(false)
       .fileAccess(false)
       .javaScriptProxy({ object: this.bridge, name: 'miniappNative', methodList: ['request'], controller: this.controller })

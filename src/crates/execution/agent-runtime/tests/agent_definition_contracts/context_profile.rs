@@ -5,7 +5,7 @@ use openbitfun_agent_runtime::context_profile::{
 #[test]
 fn context_profile_maps_long_running_agents_to_long_task_profile() {
     for agent_type in [
-        "agentic",
+        "Standard",
         "DeepReview",
         "DeepResearch",
         "ComputerUse",

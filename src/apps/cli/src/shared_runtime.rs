@@ -1480,7 +1480,7 @@ mod tests {
             &self,
             _session_id: &str,
         ) -> PortResult<Option<String>> {
-            Ok(Some("agentic".to_string()))
+            Ok(Some("Standard".to_string()))
         }
     }
 
@@ -1701,7 +1701,7 @@ mod tests {
             project_path: None,
             project_id: "project-1".to_string(),
             session_id: session_id.to_string(),
-            agent_id: "agentic".to_string(),
+            agent_id: "Standard".to_string(),
             action: "run command".to_string(),
             resources: Vec::new(),
             save_resources: Vec::new(),

@@ -7,11 +7,9 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Keyboard, Square } from 'lucide-react';
-import { OverflowText, Icon, IconButton, Menu, MenuItem, SearchField, Tooltip } from '@openbitfun/ui';
-import {
-  SceneChromeContribution,
-  useSceneChromeContext,
-} from '@/app/components/SceneTopBar/SceneChrome';
+import { OverflowText, Icon, IconButton, Menu, MenuItem, SearchField, Switch, Tooltip } from '@openbitfun/ui';
+import { SceneChromeContribution } from '@/app/components/SceneTopBar/SceneChrome';
+import { useSceneChromeContext } from '@/app/components/SceneTopBar/sceneChromeContext';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
 import { SessionTreePopover, type SessionTreeSelection } from './SessionTreePopover';
@@ -74,6 +72,7 @@ export interface FlowChatHeaderProps {
   hasActiveSessionTreeDescendants?: boolean;
   /** Cancel one running session from the active Agent tree without cancelling descendants. */
   onCancelSessionTreeSession?: (selection: SessionTreeSelection) => Promise<boolean>;
+  onDeleteSessionTreeSession?: (selection: SessionTreeSelection) => Promise<boolean>;
   /** Long-running background commands launched by the active parent session. */
   backgroundCommands?: FlowChatHeaderCommandSummary[];
   /** Open a read-only output panel for a background command. */
@@ -103,6 +102,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   onOpenSessionTreeSession,
   hasActiveSessionTreeDescendants = false,
   onCancelSessionTreeSession,
+  onDeleteSessionTreeSession,
   backgroundCommands = [],
   onOpenBackgroundCommandOutput,
   onRequestBackgroundCommandInput,
@@ -116,6 +116,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
   const sceneChrome = useSceneChromeContext();
   const isSceneChromeActive = sceneChrome?.activeSceneId === 'session';
   const [isSessionOverviewOpen, setIsSessionOverviewOpen] = useState(false);
+  const [activeAgentsOnly, setActiveAgentsOnly] = useState(true);
   const [isBackgroundCommandSectionMenuOpen, setIsBackgroundCommandSectionMenuOpen] = useState(false);
   const [openBackgroundCommandMenuId, setOpenBackgroundCommandMenuId] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -547,7 +548,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
       ? t('flowChatHeader.sessionOverviewBackgroundFinished', {
           count: backgroundCommandCount,
         })
-      : t('flowChatHeader.backgroundTerminalEmpty');
+      : t('flowChatHeader.backgroundCommandEmpty');
   let pullRequestOverviewSummary: string;
   switch (pullRequestOverview.status) {
     case 'loading':
@@ -761,6 +762,13 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                         <span className="flowchat-header__session-overview-section-status" aria-hidden="true" />
                       ) : null}
                     </span>
+                    <Tooltip content={t('flowChatHeader.agentTreeActiveOnly')}>
+                      <Switch
+                        checked={activeAgentsOnly}
+                        aria-label={t('flowChatHeader.agentTreeActiveOnly')}
+                        onChange={(event) => setActiveAgentsOnly(event.currentTarget.checked)}
+                      />
+                    </Tooltip>
                   </div>
                   {sessionId ? (
                     <SessionTreePopover
@@ -769,7 +777,9 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                       onSelectSession={onOpenSessionTreeSession}
                       hasActiveDescendants={hasActiveSessionTreeDescendants}
                       onCancelSession={onCancelSessionTreeSession}
+                      onDeleteSession={onDeleteSessionTreeSession}
                       embedded
+                      activeOnly={activeAgentsOnly}
                       open={isSessionOverviewOpen}
                       onRequestClose={() => closeSessionOverview(false)}
                       t={t}
@@ -797,9 +807,6 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                   >
                     <span className="flowchat-header__session-overview-section-title">
                       <OverflowText>{t('flowChatHeader.backgroundCommandOverview')}</OverflowText>
-                      {runningBackgroundCommandCount > 0 ? (
-                        <span className="flowchat-header__session-overview-section-status" aria-hidden="true" />
-                      ) : null}
                     </span>
                     <span className="flowchat-header__session-overview-section-count" aria-hidden="true">
                       {backgroundCommandCount}
@@ -861,19 +868,20 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                             type="button"
                             className="flowchat-header__background-command-list-item-button flowchat-header__background-command-open-button"
                             onClick={() => handleCommandSelect(command)}
+                            aria-label={`${command.title}, ${t(command.status === 'running'
+                              ? 'flowChatHeader.backgroundCommandStatusRunning'
+                              : 'flowChatHeader.backgroundCommandStatusFinished')}`}
                           >
                             <span className="flowchat-header__background-command-list-title">
-                              <Icon name="terminal" size="xs" aria-hidden="true" />
+                              <span
+                                className="flowchat-header__background-command-icon"
+                                data-running={command.status === 'running' ? 'true' : undefined}
+                                aria-hidden="true"
+                              >
+                                <Icon name="terminal" size="xs" />
+                              </span>
                               <OverflowText>{command.title}</OverflowText>
                             </span>
-                            <OverflowText className="flowchat-header__background-command-list-meta">
-                              {[
-                                t('flowChatHeader.backgroundCommandSession', { id: command.execSessionId }),
-                                command.status === 'running'
-                                  ? t('flowChatHeader.backgroundCommandStatusRunning')
-                                  : t('flowChatHeader.backgroundCommandStatusFinished'),
-                              ].filter(Boolean).join(' · ')}
-                            </OverflowText>
                           </button>
                           {renderBackgroundCommandActions(command)}
                         </div>
@@ -887,7 +895,7 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
                       data-openbitfun-state="empty"
                       data-testid="flowchat-header-background-empty"
                     >
-                      {t('flowChatHeader.backgroundTerminalEmpty')}
+                      {t('flowChatHeader.backgroundCommandEmpty')}
                     </div>
                   )}
                 </div>

@@ -13,6 +13,7 @@ import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { worktreeAPI } from '@/infrastructure/api/service-api/WorktreeAPI';
 import { createLogger } from '@/shared/utils/logger';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import type { FlowChatContext, SessionConfig, DialogTurn } from '../../services/flow-chat-manager/types';
@@ -38,9 +39,10 @@ import {
   sessionProjectWorkspacePath,
 } from '../../utils/sessionWorkspace';
 import { sessionWorktreeMaterializationPlan } from '../../utils/sessionWorktree';
-import { cleanupSaveState } from '../../services/flow-chat-manager/PersistenceModule';
+import { cleanupSaveState, updateSessionMetadata } from '../../services/flow-chat-manager/PersistenceModule';
 import { cleanupSessionBuffers } from '../../services/flow-chat-manager/TextChunkModule';
 import { applyGeneratingTitlePlaceholder } from '../shared';
+import { initializeSessionTitleMetadata } from '../../services/sessionTitleMetadata';
 
 const log = createLogger('LocalSessionDriver');
 
@@ -112,6 +114,11 @@ export const localSessionDriver: SessionDriver = {
       executionTarget: response.executionTarget,
     };
 
+    const createdTitleDescriptor = await initializeSessionTitleMetadata(
+      response.sessionId, titleDescriptor, effectiveProjectWorkspacePath,
+      surfaceScope, remoteConnectionId, remoteSshHost,
+    );
+
     context.flowChatStore.createSession(
       response.sessionId,
       resolvedConfig,
@@ -122,7 +129,7 @@ export const localSessionDriver: SessionDriver = {
       effectiveWorkspacePath,
       remoteConnectionId,
       remoteSshHost,
-      titleDescriptor,
+      createdTitleDescriptor,
     );
 
     return response.sessionId;
@@ -184,6 +191,7 @@ export const localSessionDriver: SessionDriver = {
     sessionId: string,
     title: string,
   ): Promise<string> {
+    const scope = getActiveSurfaceScope();
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) {
       throw new Error(`Session does not exist: ${sessionId}`);
@@ -196,7 +204,10 @@ export const localSessionDriver: SessionDriver = {
       remoteSshHost: session.remoteSshHost,
     });
 
+    scope.assertCurrent('rename session title');
     await context.flowChatStore.updateSessionTitle(sessionId, updatedTitle, 'generated');
+    scope.assertCurrent('persist renamed session title identity');
+    await updateSessionMetadata(context, sessionId, ['titleMetadata']);
     return updatedTitle;
   },
 
@@ -502,6 +513,13 @@ export const localSessionDriver: SessionDriver = {
           throw error;
         }
       }
+    }
+
+    if (isFirstMessage) {
+      // Release the default title's display slot after the host accepts the
+      // first turn, without waiting for asynchronous AI title generation.
+      await updateSessionMetadata(context, sessionId, ['titleMetadata']);
+      surfaceScope.assertCurrent('release submitted session title slot');
     }
 
     const sessionStateMachine = stateMachineManager.get(sessionId);

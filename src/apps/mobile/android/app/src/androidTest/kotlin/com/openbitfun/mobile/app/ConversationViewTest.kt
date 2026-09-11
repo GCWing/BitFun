@@ -378,6 +378,7 @@ class ConversationViewTest {
         typing = false,
         pending = false,
         showRetry = false,
+        error = null,
     )
 
     private fun string(resource: Int): String =

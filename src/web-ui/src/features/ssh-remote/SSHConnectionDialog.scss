@@ -84,10 +84,6 @@
       background: var(--openbitfun-color-action-quiet-hover);
     }
 
-    &:active {
-      transform: scale(0.99);
-    }
-
     &--config {
       .ssh-connection-dialog__saved-icon {
         background: var(--openbitfun-color-status-success-surface);

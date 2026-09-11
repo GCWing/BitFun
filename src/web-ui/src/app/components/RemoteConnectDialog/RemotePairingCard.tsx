@@ -1,4 +1,4 @@
-import { OverflowText, Icon, IconButton, StatusPill } from '@openbitfun/ui';
+import { Icon, IconButton, StatusPill } from '@openbitfun/ui';
 import { QRCodeSVG } from 'qrcode.react';
 import { useI18n } from '@/infrastructure/i18n';
 
@@ -65,7 +65,7 @@ export function RemotePairingCard({ qrUrl, pairingCode, owner, connected = false
               {t('remoteConnect.workspaceAddress')}
             </span>
             <div className="openbitfun-remote-connect__pairing-url-row">
-              <OverflowText title={qrUrl}>{qrUrl}</OverflowText>
+              <span className="openbitfun-remote-connect__pairing-url">{qrUrl}</span>
               <IconButton
                 aria-label={t('remoteConnect.copyUrl')}
                 title={t('remoteConnect.copyUrl')}
@@ -75,14 +75,7 @@ export function RemotePairingCard({ qrUrl, pairingCode, owner, connected = false
                 variant="quiet"
               />
             </div>
-            <div className="openbitfun-remote-connect__pairing-instruction">
-              <Icon name="browser" size="lg" aria-hidden="true" />
-              <p>{t('remoteConnect.scanHint')}</p>
-            </div>
-            <div className="openbitfun-remote-connect__pairing-instruction">
-              <Icon name="link" size="lg" aria-hidden="true" />
-              <p>{t('remoteConnect.mobileBrowserDescription')}</p>
-            </div>
+            <p className="openbitfun-remote-connect__pairing-instruction">{t('remoteConnect.scanHint')}</p>
           </>
         ) : owner === 'bot' && pairingCode ? (
           <p className="openbitfun-remote-connect__hint">{t('remoteConnect.botHint')}</p>

@@ -50,8 +50,8 @@ describe('acpSessionRef', () => {
     expect(
       acpSessionRef({
         sessionId: 's1',
-        config: { agentType: 'agentic' },
-        mode: 'agentic',
+        config: { agentType: 'Standard' },
+        mode: 'Standard',
       } as never),
     ).toBeNull();
   });

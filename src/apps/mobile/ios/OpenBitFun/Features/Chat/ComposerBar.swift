@@ -1,6 +1,5 @@
-import AVFoundation
+import OpenBitFunMobileCore
 import PhotosUI
-import Speech
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -16,6 +15,7 @@ private enum ComposerPrimaryAction {
 struct ComposerBar: View {
     @ObservedObject var model: MobileAppModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
     @FocusState private var focused: Bool
     @StateObject private var speech = SpeechInputController()
     @State private var pickerItems: [PhotosPickerItem] = []
@@ -39,20 +39,18 @@ struct ComposerBar: View {
     }
 
     private var canSend: Bool {
-        hasContent && !model.busy && !model.isSending &&
-            (model.surface == .local || model.connectionPhase != .disconnected)
+        hasContent && model.remoteSendSessionID != nil
     }
 
     private var primaryActionKind: ComposerPrimaryAction {
         if speech.isListening { return .stopListening }
-        if model.isSending, model.surface == .local { return .stopTurn }
-        if hasContent { return canSend ? .send : .sendBlocked }
         if model.isSending { return .stopTurn }
+        if hasContent { return canSend ? .send : .sendBlocked }
         return model.busy ? .voiceBlocked : .voice
     }
 
     private var showsSupplementalVoice: Bool {
-        hasContent && !speech.isListening
+        hasContent && !speech.isListening && !model.isSending
     }
 
     var body: some View {
@@ -97,6 +95,10 @@ struct ComposerBar: View {
         .background(OpenBitFunTheme.page)
         .animation(.easeOut(duration: 0.22), value: expanded)
         .animation(.easeOut(duration: 0.18), value: model.composerImages.count)
+        .onDisappear { speech.stop() }
+        .onChange(of: scenePhase) { if $0 != .active { speech.stop() } }
+        .onChange(of: model.selectedSessionID) { _ in speech.stop() }
+        .onChange(of: model.remoteTargetEpoch) { _ in speech.stop() }
         .onAppear {
             if model.composerModelPickerPreview {
                 modelSelectorOpen = true
@@ -231,7 +233,6 @@ struct ComposerBar: View {
             .onSubmit {
                 if canSend { model.send() }
             }
-            .onChange(of: model.draft) { _ in model.syncDraftToCore() }
             if showsSupplementalVoice, !expanded {
                 supplementalVoiceAction
             }
@@ -502,29 +503,29 @@ struct ComposerBar: View {
     }
 
     private func startVoiceInput() {
-        let existing = model.draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        let existing = model.draft
         speech.start(
             localeIdentifier: model.appLanguage == .simplifiedChinese ? "zh-CN" : "en-US",
             onPartial: { transcript in
-                model.draft = [existing, transcript]
-                    .filter { !$0.isEmpty }
-                    .joined(separator: existing.isEmpty ? "" : " ")
-                model.syncDraftToCore()
+                model.draft = VoiceDraftPolicy.shared.merge(base: existing, transcript: transcript)
             },
             onFailure: { message in model.showToast(model.localized(message)) }
         )
     }
 
     private func importPickedImages(_ items: [PhotosPickerItem]) async {
+        let sessionID = model.selectedSessionID
+        let deviceKey = model.remoteExpectedDeviceKey
         for item in items {
-            guard let data = try? await item.loadTransferable(type: Data.self) else {
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let prepared = await Task.detached(priority: .userInitiated, operation: {
+                      MobileAppModel.prepareComposerImage(data)
+                  }).value else {
                 model.showToast(model.localized("无法读取所选图片"))
                 continue
             }
-            let mimeType = item.supportedContentTypes
-                .compactMap(\.preferredMIMEType)
-                .first ?? "image/jpeg"
-            model.addComposerImage(data: data, mimeType: mimeType)
+            guard model.selectedSessionID == sessionID, model.remoteExpectedDeviceKey == deviceKey else { break }
+            model.addComposerImage(data: prepared, mimeType: "image/jpeg")
         }
         pickerItems = []
     }
@@ -549,105 +550,5 @@ private struct ListeningWave: View {
         }
         .frame(width: 18, height: 22)
         .accessibilityHidden(true)
-    }
-}
-
-final class SpeechInputController: ObservableObject {
-    @Published private(set) var isListening = false
-
-    private var recognizer: SFSpeechRecognizer?
-    private let audioEngine = AVAudioEngine()
-    private var request: SFSpeechAudioBufferRecognitionRequest?
-    private var recognitionTask: SFSpeechRecognitionTask?
-    private var tapInstalled = false
-
-    func start(
-        localeIdentifier: String,
-        onPartial: @escaping (String) -> Void,
-        onFailure: @escaping (String) -> Void
-    ) {
-        recognizer = SFSpeechRecognizer(locale: Locale(identifier: localeIdentifier))
-        SFSpeechRecognizer.requestAuthorization { [weak self] speechStatus in
-            guard speechStatus == .authorized else {
-                DispatchQueue.main.async { onFailure("请在系统设置中允许语音识别") }
-                return
-            }
-            AVAudioSession.sharedInstance().requestRecordPermission { granted in
-                guard granted else {
-                    DispatchQueue.main.async { onFailure("请在系统设置中允许麦克风访问") }
-                    return
-                }
-                DispatchQueue.main.async {
-                    self?.beginRecognition(onPartial: onPartial, onFailure: onFailure)
-                }
-            }
-        }
-    }
-
-    func stop() {
-        recognitionTask?.finish()
-        finishRecognition()
-    }
-
-    private func beginRecognition(
-        onPartial: @escaping (String) -> Void,
-        onFailure: @escaping (String) -> Void
-    ) {
-        guard let recognizer, recognizer.isAvailable else {
-            onFailure("当前设备暂时无法使用语音识别")
-            return
-        }
-
-        finishRecognition()
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
-
-            let request = SFSpeechAudioBufferRecognitionRequest()
-            request.shouldReportPartialResults = true
-            self.request = request
-
-            let input = audioEngine.inputNode
-            let format = input.outputFormat(forBus: 0)
-            input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
-                request.append(buffer)
-            }
-            tapInstalled = true
-            audioEngine.prepare()
-            try audioEngine.start()
-            isListening = true
-
-            recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-                DispatchQueue.main.async {
-                    if let text = result?.bestTranscription.formattedString, !text.isEmpty {
-                        onPartial(text)
-                    }
-                    if result?.isFinal == true || error != nil {
-                        if error != nil && result == nil { onFailure("语音识别已中断，请重试") }
-                        self?.finishRecognition()
-                    }
-                }
-            }
-        } catch {
-            finishRecognition()
-            onFailure("无法启动语音输入，请检查麦克风")
-        }
-    }
-
-    private func finishRecognition() {
-        if audioEngine.isRunning {
-            audioEngine.stop()
-        }
-        if tapInstalled {
-            audioEngine.inputNode.removeTap(onBus: 0)
-            tapInstalled = false
-        }
-        request?.endAudio()
-        request = nil
-        recognitionTask?.cancel()
-        recognitionTask = nil
-        isListening = false
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }

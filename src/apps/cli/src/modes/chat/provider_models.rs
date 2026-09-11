@@ -67,9 +67,7 @@ impl ChatMode {
                 chat_view.set_status(Some(format!("Model added: {}", result.name)));
                 chat_state.current_model_name = format!("{} / {}", result.model_name, result.name);
                 tracing::info!("Added new AI model: {} ({})", model_id, result.model_name);
-                if let Some(account) = &self.account_runtime {
-                    account.notify_local_settings_changed();
-                }
+                if let Some(account) = &self.account_runtime {}
             }
             Err(error) => {
                 tracing::error!("Failed to add AI model: {error}");
@@ -159,9 +157,7 @@ impl ChatMode {
                 chat_view.set_status(Some(format!("Model updated: {}", result.name)));
                 chat_state.current_model_name = format!("{} / {}", result.model_name, result.name);
                 tracing::info!("Updated AI model: {model_id}");
-                if let Some(account) = &self.account_runtime {
-                    account.notify_local_settings_changed();
-                }
+                if let Some(account) = &self.account_runtime {}
             }
             Err(error) => {
                 tracing::error!("Failed to update AI model: {error}");

@@ -17,19 +17,19 @@ struct RemoteHomeView: View {
             .overlay(RoundedRectangle(cornerRadius: 24).stroke(OpenBitFunTheme.line, lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 24))
             Text(model.localized("连接桌面端"))
-                .font(.system(size: 18, weight: .bold))
+                .font(MobileDesignTypography.headlineSmall.font)
                 .foregroundStyle(OpenBitFunTheme.ink)
             Text(model.localized("扫描桌面端显示的二维码，开始远程处理任务。"))
-                .font(.system(size: 13))
+                .font(MobileDesignTypography.bodySmall.font)
                 .foregroundStyle(OpenBitFunTheme.muted)
                 .multilineTextAlignment(.center)
                 .lineSpacing(7)
                 .padding(.horizontal, 20)
             Button(model.localized("连接")) { model.connectRemote() }
-                .font(.system(size: 15, weight: .medium))
+                .font(MobileDesignTypography.titleSmall.font)
                 .foregroundStyle(OpenBitFunTheme.contentOnAction)
                 .frame(width: 136, height: 44)
-                .background(OpenBitFunTheme.accent)
+                .background(MobileDesignColors.primaryAction)
                 .clipShape(Capsule())
             Spacer()
         }
@@ -59,7 +59,31 @@ struct RemoteConnectedHomeView: View {
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .frame(maxWidth: 280)
-            Button(action: model.createRemoteSessionFromHome) {
+            Group {
+                if model.selectedRemoteWorkspaceKind != "assistant",
+                   HarnessProfilePolicy.shared.supported(capabilities: model.remoteHostCapabilities) {
+                    Menu {
+                        ForEach([HarnessProfile.minimal, .standard, .ultimate], id: \.name) { profile in
+                            Button { model.createRemoteSessionFromHome(agentType: profile.agentType) } label: {
+                                HarnessProfileLabel(model: model, profile: profile)
+                            }
+                        }
+                    } label: { createLabel }
+                } else {
+                    Button { model.createRemoteSessionFromHome() } label: { createLabel }
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(model.remoteCreateSubmitting || !model.remoteCreateInteraction.canSubmit)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 24)
+        .padding(.bottom, 56)
+        .background(OpenBitFunTheme.page)
+    }
+    private var createLabel: some View {
                 HStack(spacing: 8) {
                     if model.remoteCreateSubmitting {
                         ProgressView().controlSize(.small).tint(OpenBitFunTheme.contentOnAction)
@@ -71,16 +95,6 @@ struct RemoteConnectedHomeView: View {
                 .frame(width: 148, height: 46)
                 .background(OpenBitFunTheme.accent)
                 .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .disabled(model.remoteCreateSubmitting || !model.remoteCreateInteraction.canSubmit)
-            .padding(.top, 12)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 24)
-        .padding(.bottom, 56)
-        .background(OpenBitFunTheme.page)
     }
 }
 
@@ -113,4 +127,6 @@ struct ConnectionStatusBar: View {
         .frame(height: 48)
         .background(OpenBitFunTheme.soft)
     }
+
+
 }

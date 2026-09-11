@@ -33,23 +33,12 @@
 }
 
 .openbitfun-config-page-header__title {
-  color: var(--openbitfun-color-content-primary);
-  font-size: var(--openbitfun-type-heading-page-font-size);
-  font-weight: var(--openbitfun-type-heading-page-font-weight);
-  line-height: var(--openbitfun-type-heading-page-line-height);
-  letter-spacing: var(--openbitfun-type-heading-page-letter-spacing);
   overflow-wrap: break-word;
 }
 
 .openbitfun-config-page-header__subtitle {
   display: block;
   margin: 0;
-  font-size: var(--openbitfun-type-body-lg-font-size);
-  font-weight: var(--openbitfun-type-body-lg-font-weight);
-  color: var(--openbitfun-color-content-primary);
-  line-height: var(--openbitfun-type-body-lg-line-height);
-  letter-spacing: var(--openbitfun-type-body-lg-letter-spacing);
-  font-family:var(--openbitfun-type-body-sm-font-family);
   max-width: 100%;
   overflow-wrap: break-word;
 }
@@ -127,7 +116,6 @@
   }
 
   .openbitfun-config-page-header__subtitle {
-    margin-top: var(--openbitfun-space-1);
     max-width: 100%;
   }
 

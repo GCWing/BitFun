@@ -1,7 +1,4 @@
-//! Core relay logic: room management and message routing.
-
+//! Account-scoped device presence and opaque message routing.
 pub mod device_manager;
-pub mod room;
-
+pub mod transport;
 pub use device_manager::DeviceManager;
-pub use room::RoomManager;

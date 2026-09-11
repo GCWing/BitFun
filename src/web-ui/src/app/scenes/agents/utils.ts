@@ -1,3 +1,4 @@
+import { isPrimaryAgent } from './agentVisibility';
 import type { TFunction } from 'i18next';
 import type { AgentSource } from '@/infrastructure/api/service-api/CustomAgentAPI';
 import {
@@ -8,7 +9,7 @@ import {
 } from './agentsStore';
 
 const MODE_DESCRIPTION_KEY_BY_ID: Record<string, string> = {
-  agentic: 'Agentic',
+  standard: 'Standard',
   cowork: 'Cowork',
   computeruse: 'ComputerUse',
   deepresearch: 'DeepResearch',
@@ -47,7 +48,8 @@ function getAgentBadge(
   agentKind?: AgentKind,
   source?: AgentSource,
 ): AgentBadgeConfig {
-  if (agentKind === 'mode') {
+  if (agentKind === 'harness') return { variant: 'accent', label: 'Agent Harness' };
+  if (agentKind === 'agent') {
     if (source === 'user') {
       return { variant: 'success', label: t('agentCard.badges.userMode') };
     }
@@ -71,9 +73,10 @@ function getAgentBadge(
 
 function getAgentDescription(
   t: TFunction<'scenes/agents'>,
-  agent: Pick<AgentWithCapabilities, 'id' | 'name' | 'description'>,
+  agent: Pick<AgentWithCapabilities, 'id' | 'name' | 'description' | 'source'>,
 ): string {
   const fallback = agent.description?.trim() || '—';
+  if (agent.source && agent.source !== 'builtin') return fallback;
   const canonicalModeKey = MODE_DESCRIPTION_KEY_BY_ID[agent.id.toLowerCase()];
   const candidates = Array.from(new Set([
     agent.id,
@@ -107,8 +110,8 @@ function enrichCapabilities(agent: AgentWithCapabilities): AgentWithCapabilities
   }
   const id = agent.id.toLowerCase();
 
-  if (agent.agentKind === 'mode') {
-    if (id === 'agentic') return { ...agent, capabilities: [{ category: 'coding', level: 5 }, { category: 'analysis', level: 4 }] };
+  if (isPrimaryAgent(agent)) {
+    if (id === 'standard') return { ...agent, capabilities: [{ category: 'coding', level: 5 }, { category: 'analysis', level: 4 }] };
     if (id === 'plan') return { ...agent, capabilities: [{ category: 'analysis', level: 5 }, { category: 'docs', level: 3 }] };
     if (id === 'cowork') return { ...agent, capabilities: [{ category: 'analysis', level: 4 }, { category: 'creative', level: 3 }] };
     if (id === 'computeruse') return { ...agent, capabilities: [{ category: 'ops', level: 5 }, { category: 'analysis', level: 3 }] };

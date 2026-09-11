@@ -1,1 +1,1 @@
-export * from './MarketAccountControls';
+export * from './AccountIdentityControls';

@@ -7,7 +7,6 @@ export interface TaskCompletionObservation {
 }
 
 export interface TaskCompletionNotificationPort {
-  prepare(): Promise<void>;
   keepAlive(onExpired: () => void): boolean;
   releaseKeepAlive(): void;
   publish(observation: TaskCompletionObservation): Promise<void>;
@@ -49,7 +48,6 @@ export class TaskCompletionNotificationController {
       sessionId,
       turnId
     };
-    void this.port.prepare();
   }
 
   onBackground(): boolean {

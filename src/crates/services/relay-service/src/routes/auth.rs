@@ -1,27 +1,14 @@
-//! Account authentication endpoints for the relay server.
-//!
-//! The relay stays zero-knowledge: it never sees the plaintext password or
-//! the master key. Clients derive a KEK from the password (Argon2id) locally,
-//! wrap a random master key, and send only:
-//!   - `password_hash`   (Argon2id over a separate salt, for server-side verify)
-//!   - `wrapped_master_key` (AES-GCM(KEK, master_key), server stores as-is)
-//!
-//! Brute-force protection is layered:
-//!   - per-account exponential-backoff lockout (in the `users` table)
-//!   - per-IP sliding-window rate limit (in-memory)
-//!   - Argon2id high parameters slow offline attacks (client-enforced)
+//! GitHub identity exchange for versioned OpenBitFun Relay device sessions.
 
 use axum::extract::{ConnectInfo, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{header, HeaderMap, StatusCode};
 use axum::{Extension, Json};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use chrono::Utc;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::net::SocketAddr;
 use std::sync::OnceLock;
-use subtle::ConstantTimeEq;
 
 use crate::db::{AuthToken, DeviceRow, UserRow};
 use crate::routes::api::AppState;
@@ -30,10 +17,7 @@ use crate::routes::api::AppState;
 /// credential-stuffing where one IP tries many usernames).
 const MAX_LOGIN_ATTEMPTS_PER_MIN: usize = 10;
 /// Max challenge requests per IP per minute (stops bulk salt harvesting).
-const MAX_CHALLENGE_PER_MIN: usize = 20;
 const MAX_RATE_LIMIT_BUCKETS: usize = 50_000;
-const MAX_USERNAME_BYTES: usize = 128;
-const MAX_PASSWORD_HASH_BYTES: usize = 128;
 const MAX_DEVICE_ID_BYTES: usize = 128;
 const MAX_DEVICE_NAME_BYTES: usize = 256;
 
@@ -49,14 +33,6 @@ fn valid_device_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
 
-fn valid_password_hash(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= MAX_PASSWORD_HASH_BYTES
-        && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'=' | b'-' | b'_')
-        })
-}
-
 fn valid_login_request_id(value: &str) -> bool {
     uuid::Uuid::parse_str(value).is_ok()
 }
@@ -65,38 +41,6 @@ fn valid_login_request_id(value: &str) -> bool {
 /// stored kind is left untouched rather than overwritten with a guess.
 fn valid_optional_device_kind(value: Option<&str>) -> bool {
     value.is_none_or(crate::db::is_valid_device_kind)
-}
-
-fn decoy_login_challenge(username: &str) -> LoginChallengeResponse {
-    static SECRET: OnceLock<[u8; 32]> = OnceLock::new();
-    let secret = SECRET.get_or_init(rand::random);
-    let material = |label: &[u8]| {
-        let mut hasher = Sha256::new();
-        hasher.update(secret);
-        hasher.update(label);
-        hasher.update(username.as_bytes());
-        hasher.finalize()
-    };
-    let salt_material = material(b"salt");
-    let kdf_salt_material = material(b"kdf-salt");
-    let ciphertext_head = material(b"wrapped-key-1");
-    let ciphertext_tail = material(b"wrapped-key-2");
-    let nonce_material = material(b"nonce");
-    let mut ciphertext = Vec::with_capacity(48);
-    ciphertext.extend_from_slice(&ciphertext_head);
-    ciphertext.extend_from_slice(&ciphertext_tail[..16]);
-
-    LoginChallengeResponse {
-        salt: BASE64.encode(&salt_material[..16]),
-        kdf_salt: BASE64.encode(&kdf_salt_material[..16]),
-        argon2_params: r#"{"m":16384,"t":3,"p":4}"#.to_string(),
-        wrapped_master_key: format!(
-            "{}.{}",
-            BASE64.encode(ciphertext),
-            BASE64.encode(&nonce_material[..12])
-        ),
-        login_idempotency_supported: true,
-    }
 }
 
 // ── IP rate limiter (sliding window, in-memory) ─────────────────────────
@@ -123,7 +67,7 @@ impl LoginRateLimiter {
     /// Record an attempt for one rate-limit scope and return `true` if the IP
     /// is still under the per-minute limit. An exact replay key is counted once
     /// so an ambiguous idempotent response cannot consume the full login budget.
-    fn check_and_record(
+    pub(crate) fn check_and_record(
         &self,
         scope: &str,
         ip: &str,
@@ -172,7 +116,7 @@ impl Default for LoginRateLimiter {
 
 /// Extract the client IP from `X-Forwarded-For` (first hop) or fall back to a
 /// static bucket so all headerless requests share one limiter entry.
-fn client_ip(headers: &HeaderMap, peer_addr: Option<SocketAddr>) -> String {
+pub(crate) fn client_ip(headers: &HeaderMap, peer_addr: Option<SocketAddr>) -> String {
     let Some(peer_addr) = peer_addr else {
         return "unknown".to_string();
     };
@@ -204,35 +148,18 @@ pub struct AuthResponse {
 }
 
 #[derive(Deserialize)]
-pub struct LoginChallengeRequest {
-    pub username: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct LoginChallengeResponse {
-    pub salt: String,
-    pub kdf_salt: String,
-    pub argon2_params: String,
-    pub wrapped_master_key: String,
-    pub login_idempotency_supported: bool,
-}
-
-#[derive(Deserialize)]
 pub struct LoginRequest {
-    pub username: String,
-    pub password_hash: String,
+    pub access_token: String,
     pub device_id: String,
     pub device_name: String,
-    /// `desktop` | `mobile` | `watch`. Absent from clients that predate the
-    /// field; see `device_kind_is_desktop` for how those rows are read.
-    #[serde(default)]
-    pub device_kind: Option<String>,
-    #[serde(default)]
-    pub request_id: Option<String>,
+    pub device_kind: String,
+    pub public_key: String,
+    pub request_id: String,
 }
 
 #[derive(Deserialize)]
 pub struct ProvisionDeviceRequest {
+    pub public_key: String,
     pub device_id: String,
     pub device_name: String,
     #[serde(default)]
@@ -264,226 +191,168 @@ fn err(error: &str, status: StatusCode) -> (StatusCode, Json<ErrorResponse>) {
     )
 }
 
-pub(crate) async fn verify_password_hash_credentials(
-    state: &AppState,
-    peer_addr: Option<SocketAddr>,
-    headers: &HeaderMap,
-    username: &str,
-    password_hash: &str,
-    rate_limit_replay_key: Option<&str>,
-) -> Result<UserRow, (StatusCode, Json<ErrorResponse>)> {
-    let Some(db) = state.db.as_ref() else {
-        return Err(err(
-            "account features disabled",
-            StatusCode::NOT_IMPLEMENTED,
-        ));
-    };
-
-    let ip = client_ip(headers, peer_addr);
-    if !state.login_rate_limiter.check_and_record(
-        "credentials",
-        &ip,
-        MAX_LOGIN_ATTEMPTS_PER_MIN,
-        rate_limit_replay_key,
-    ) {
-        return Err(err(
-            "too many login attempts from this IP",
-            StatusCode::TOO_MANY_REQUESTS,
-        ));
+fn identity_verifier(
+    injected: Option<&crate::identity::IdentityVerifier>,
+) -> Result<&crate::identity::IdentityVerifier, (StatusCode, Json<ErrorResponse>)> {
+    static VERIFIER: OnceLock<Result<crate::identity::IdentityVerifier, String>> = OnceLock::new();
+    if let Some(verifier) = injected {
+        return Ok(verifier);
     }
-
-    if !valid_bounded_text(username, MAX_USERNAME_BYTES) || !valid_password_hash(password_hash) {
-        return Err(err("invalid login parameters", StatusCode::BAD_REQUEST));
-    }
-
-    let user = UserRow::find_by_username(db, username.trim())
-        .await
-        .map_err(|error| {
-            tracing::error!("login: db error: {error}");
-            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
-        })?
-        .ok_or_else(|| err("invalid username or password", StatusCode::UNAUTHORIZED))?;
-
-    if user.is_locked() {
-        let retry = user.locked_until - Utc::now().timestamp();
-        return Err((
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(ErrorResponse {
-                error: "account temporarily locked, try later".to_string(),
-                retry_after_secs: Some(retry.max(0)),
-            }),
-        ));
-    }
-
-    // The browser or native client already paid the Argon2id cost. Compare
-    // the fixed secret without a data-dependent early exit.
-    let password_matches = user.password_hash.len() == password_hash.len()
-        && bool::from(
-            user.password_hash
-                .as_bytes()
-                .ct_eq(password_hash.as_bytes()),
-        );
-    if !password_matches {
-        let locked_until = UserRow::record_failed_attempt(db, &user.user_id)
-            .await
-            .map_err(|error| {
-                tracing::error!("login: failed to record attempt: {error}");
-                err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
-            })?;
-        let now = Utc::now().timestamp();
-        if locked_until > now {
-            return Err((
-                StatusCode::TOO_MANY_REQUESTS,
-                Json(ErrorResponse {
-                    error: "too many failed attempts, account locked".to_string(),
-                    retry_after_secs: Some(locked_until - now),
-                }),
-            ));
-        }
-        return Err(err(
-            "invalid username or password",
-            StatusCode::UNAUTHORIZED,
-        ));
-    }
-
-    UserRow::reset_failed_attempts(db, &user.user_id)
-        .await
-        .map_err(|error| {
-            tracing::error!("login: failed to reset attempts: {error}");
-            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
-        })?;
-    Ok(user)
+    VERIFIER
+        .get_or_init(|| {
+            crate::identity::IdentityVerifier::new()
+                .map_err(|_| "initialization failed".to_string())
+        })
+        .as_ref()
+        .map_err(|_| {
+            err(
+                "identity service unavailable",
+                StatusCode::SERVICE_UNAVAILABLE,
+            )
+        })
 }
 
-// ── Handlers ────────────────────────────────────────────────────────────
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPollRequest {
+    transaction_id: String,
+    transaction_secret: String,
+}
 
-/// `POST /api/auth/login/challenge` — fetch KDF params + wrapped master key
-/// so the client can derive the KEK locally and attempt decryption.
-pub async fn login_challenge(
+pub(crate) async fn github_start(
     State(state): State<AppState>,
     connect_info: Option<Extension<ConnectInfo<SocketAddr>>>,
     headers: HeaderMap,
-    Json(body): Json<LoginChallengeRequest>,
-) -> Result<Json<LoginChallengeResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let Some(db) = state.db.as_ref() else {
-        return Err(err(
-            "account features disabled",
-            StatusCode::NOT_IMPLEMENTED,
-        ));
-    };
-
+    verifier: Option<Extension<crate::identity::IdentityVerifier>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
     let ip = client_ip(
         &headers,
         connect_info.map(|Extension(ConnectInfo(addr))| addr),
     );
     if !state
         .login_rate_limiter
-        .check_and_record("challenge", &ip, MAX_CHALLENGE_PER_MIN, None)
+        .check_and_record("github-start", &ip, 10, None)
     {
         return Err(err(
-            "too many requests, try later",
+            "too many sign-in attempts",
             StatusCode::TOO_MANY_REQUESTS,
         ));
     }
-
-    if !valid_bounded_text(&body.username, MAX_USERNAME_BYTES) {
-        return Err(err("invalid username", StatusCode::BAD_REQUEST));
-    }
-
-    let username = body.username.trim();
-    let user = UserRow::find_by_username(db, username).await.map_err(|e| {
-        tracing::error!("challenge: db error: {e}");
-        err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
-    })?;
-
-    // Unknown accounts receive a deterministic, process-keyed decoy with the
-    // same shape and KDF cost as a real challenge. The client then fails with
-    // the same local "invalid username or password" path, without exposing a
-    // bulk username-enumeration oracle at this endpoint.
-    let Some(user) = user else {
-        return Ok(Json(decoy_login_challenge(username)));
-    };
-
-    Ok(Json(LoginChallengeResponse {
-        salt: user.salt,
-        kdf_salt: user.kdf_salt,
-        argon2_params: user.argon2_params,
-        wrapped_master_key: user.wrapped_master_key,
-        login_idempotency_supported: true,
-    }))
+    identity_verifier(verifier.as_ref().map(|v| &v.0))?
+        .start_auth()
+        .await
+        .map(Json)
+        .map_err(|status| err("GitHub sign-in could not be started", status))
 }
 
-/// `POST /api/auth/login` — verify the password hash and issue a token.
-pub async fn login(
+pub(crate) async fn github_poll(
     State(state): State<AppState>,
     connect_info: Option<Extension<ConnectInfo<SocketAddr>>>,
     headers: HeaderMap,
+    verifier: Option<Extension<crate::identity::IdentityVerifier>>,
+    Json(body): Json<GithubPollRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    let ip = client_ip(
+        &headers,
+        connect_info.map(|Extension(ConnectInfo(addr))| addr),
+    );
+    if !state
+        .login_rate_limiter
+        .check_and_record("github-poll", &ip, 120, None)
+    {
+        return Err(err("too many sign-in polls", StatusCode::TOO_MANY_REQUESTS));
+    }
+    identity_verifier(verifier.as_ref().map(|v| &v.0))?
+        .poll_auth(&body.transaction_id, &body.transaction_secret)
+        .await
+        .map(Json)
+        .map_err(|status| err("GitHub sign-in could not be checked", status))
+}
+
+pub(crate) async fn verify_identity_credentials(
+    state: &AppState,
+    peer_addr: Option<SocketAddr>,
+    headers: &HeaderMap,
+    access_token: &str,
+    injected_verifier: Option<&crate::identity::IdentityVerifier>,
+) -> Result<UserRow, (StatusCode, Json<ErrorResponse>)> {
+    let db = state.db.as_ref();
+    if !state.login_rate_limiter.check_and_record(
+        "identity",
+        &client_ip(headers, peer_addr),
+        MAX_LOGIN_ATTEMPTS_PER_MIN,
+        None,
+    ) {
+        return Err(err(
+            "too many login attempts",
+            StatusCode::TOO_MANY_REQUESTS,
+        ));
+    }
+    let verifier = identity_verifier(injected_verifier)?;
+    let identity = verifier.verify(access_token).await.map_err(|status| {
+        err(
+            if status == StatusCode::UNAUTHORIZED {
+                "Sign in with GitHub to continue"
+            } else {
+                "identity service unavailable"
+            },
+            status,
+        )
+    })?;
+    UserRow::upsert_verified(db, &identity.github_id.to_string(), &identity.login)
+        .await
+        .map_err(|error| {
+            tracing::error!("Identity persistence failed: {error}");
+            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
+        })
+}
+
+/// Exchange a shared OpenBitFun GitHub session for a device-scoped relay token.
+pub(crate) async fn login(
+    State(state): State<AppState>,
+    connect_info: Option<Extension<ConnectInfo<SocketAddr>>>,
+    headers: HeaderMap,
+    verifier: Option<Extension<crate::identity::IdentityVerifier>>,
     Json(body): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let public_key = BASE64.decode(&body.public_key).ok();
     if !valid_device_id(&body.device_id)
         || !valid_bounded_text(&body.device_name, MAX_DEVICE_NAME_BYTES)
-        || !valid_optional_device_kind(body.device_kind.as_deref())
-        || body
-            .request_id
-            .as_deref()
-            .is_some_and(|request_id| !valid_login_request_id(request_id))
+        || !crate::db::is_valid_device_kind(&body.device_kind)
+        || !valid_login_request_id(&body.request_id)
+        || !public_key
+            .as_ref()
+            .is_some_and(|key| key.len() == 32 && key.iter().any(|b| *b != 0))
     {
         return Err(err("invalid login parameters", StatusCode::BAD_REQUEST));
     }
-    let db = state
-        .db
-        .as_ref()
-        .ok_or_else(|| err("account features disabled", StatusCode::NOT_IMPLEMENTED))?;
-    let rate_limit_replay_key = body.request_id.as_ref().map(|request_id| {
-        let mut hasher = Sha256::new();
-        for value in [
-            request_id.as_str(),
-            body.username.as_str(),
-            body.password_hash.as_str(),
-            body.device_id.as_str(),
-            body.device_name.as_str(),
-        ] {
-            hasher.update((value.len() as u64).to_be_bytes());
-            hasher.update(value.as_bytes());
-        }
-        BASE64.encode(hasher.finalize())
-    });
-    let user = verify_password_hash_credentials(
+    let user = verify_identity_credentials(
         &state,
         connect_info.map(|Extension(ConnectInfo(addr))| addr),
         &headers,
-        &body.username,
-        &body.password_hash,
-        rate_limit_replay_key.as_deref(),
+        &body.access_token,
+        verifier.as_ref().map(|v| &v.0),
     )
     .await?;
-
+    let db = state.db.as_ref();
     DeviceRow::upsert(
         db,
         &body.device_id,
         &user.user_id,
         &body.device_name,
-        body.device_kind.as_deref(),
-        None,
+        Some(&body.device_kind),
+        Some(&body.public_key),
     )
     .await
-    .map_err(|e| {
-        tracing::error!("login: failed to upsert device: {e}");
-        err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
+    .map_err(|error| {
+        err(
+            "device registration failed",
+            registration_error_status(&error),
+        )
     })?;
-
-    let token = match body.request_id.as_deref() {
-        Some(request_id) => {
-            AuthToken::create_idempotent(db, &user.user_id, &body.device_id, request_id).await
-        }
-        None => AuthToken::create(db, &user.user_id, &body.device_id).await,
-    }
-    .map_err(|e| {
-        tracing::error!("login: failed to create token: {e}");
-        err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
-    })?;
-
-    tracing::info!("Account login: user_id={}", user.user_id);
+    let token = AuthToken::create_idempotent(db, &user.user_id, &body.device_id, &body.request_id)
+        .await
+        .map_err(|error| err("token creation failed", registration_error_status(&error)))?;
     Ok(Json(AuthResponse {
         token: token.token,
         user_id: user.user_id,
@@ -492,10 +361,7 @@ pub async fn login(
 
 /// `POST /api/auth/logout` — revoke the caller's token on the relay.
 pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> StatusCode {
-    let db = match state.db.as_ref() {
-        Some(db) => db,
-        None => return StatusCode::NOT_IMPLEMENTED,
-    };
+    let db = state.db.as_ref();
     let token = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -525,7 +391,7 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Status
             // Delete the token row
             if let Err(error) = sqlx::query("DELETE FROM auth_tokens WHERE token = ?")
                 .bind(&token)
-                .execute(&**db)
+                .execute(db)
                 .await
             {
                 tracing::error!(%error, "Failed to revoke account token");
@@ -588,11 +454,17 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Status
 /// `device_id` for lifetime tracking, but is limited to device discovery and
 /// RPC. It cannot open a device WebSocket, mint more credentials, delete a
 /// device, or access account sync/page APIs.
+#[derive(Deserialize)]
+pub struct DelegateRequest {
+    pub public_key: String,
+}
+
 pub async fn delegate(
     State(state): State<AppState>,
     headers: HeaderMap,
+    Json(body): Json<DelegateRequest>,
 ) -> Result<Json<AuthResponse>, StatusCode> {
-    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let db = state.db.as_ref();
     let token = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -609,11 +481,19 @@ pub async fn delegate(
         return Err(StatusCode::FORBIDDEN);
     }
 
+    let public_key = BASE64.decode(&body.public_key).ok();
+    if !public_key
+        .as_ref()
+        .is_some_and(|key| key.len() == 32 && key.iter().any(|byte| *byte != 0))
+    {
+        return Err(StatusCode::BAD_REQUEST);
+    }
     // Issue a capability-limited token for the same account and bind its
     // lifetime to the delegating device row.
-    let new_token = AuthToken::create_delegated(db, &auth.user_id, &auth.device_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let new_token =
+        AuthToken::create_keyed_delegated(db, &auth.user_id, &auth.device_id, &body.public_key)
+            .await
+            .map_err(|error| registration_error_status(&error))?;
 
     tracing::info!(
         "Delegated token for user_id={} device_id={}",
@@ -638,7 +518,11 @@ pub async fn provision_device(
     headers: HeaderMap,
     Json(body): Json<ProvisionDeviceRequest>,
 ) -> Result<Json<ProvisionDeviceResponse>, (StatusCode, Json<ErrorResponse>)> {
-    if body.device_id.len() != 32
+    let public_key = BASE64.decode(&body.public_key).ok();
+    if !public_key
+        .as_ref()
+        .is_some_and(|key| key.len() == 32 && key.iter().any(|b| *b != 0))
+        || body.device_id.len() != 32
         || !body
             .device_id
             .bytes()
@@ -653,10 +537,7 @@ pub async fn provision_device(
         ));
     }
 
-    let db = state
-        .db
-        .as_ref()
-        .ok_or_else(|| err("account features disabled", StatusCode::NOT_IMPLEMENTED))?;
+    let db = state.db.as_ref();
     let token = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
@@ -688,11 +569,15 @@ pub async fn provision_device(
                 .unwrap_or(crate::db::DEVICE_KIND_DESKTOP),
         ),
         &body.request_id,
+        &body.public_key,
     )
     .await
     .map_err(|error| {
         tracing::error!(%error, "Failed to provision account device");
-        err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
+        err(
+            "device registration unavailable",
+            registration_error_status(&error),
+        )
     })?
     .ok_or_else(|| {
         err(
@@ -713,11 +598,49 @@ pub async fn provision_device(
     }))
 }
 
+/// Validated principal extracted from the bearer token.
+pub struct AuthUser {
+    pub user_id: String,
+    #[allow(dead_code)]
+    pub device_id: String,
+}
+
+/// Validate the bearer token in `headers`; returns the owning user/device.
+pub async fn validate_auth(state: &AppState, headers: &HeaderMap) -> Result<AuthUser, StatusCode> {
+    let token = extract_bearer_token(headers).ok_or(StatusCode::UNAUTHORIZED)?;
+    validate_token(state, &token).await
+}
+
+/// Extract `Bearer` token from the `Authorization` header.
+pub fn extract_bearer_token(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+}
+
+/// Validate a raw token string against the account database.
+pub async fn validate_token(state: &AppState, token: &str) -> Result<AuthUser, StatusCode> {
+    let db = state.db.as_ref();
+    let auth = AuthToken::find(db, token)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    if !auth.is_device_token() {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    Ok(AuthUser {
+        user_id: auth.user_id,
+        device_id: auth.device_id,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::{connect, DbPool};
-    use crate::relay::RoomManager;
     use crate::MemoryAssetStore;
     use axum::body::{to_bytes, Body};
     use axum::http::{header, Request};
@@ -741,9 +664,7 @@ mod tests {
 
     async fn setup_app() -> (axum::Router, Arc<DbPool>, String) {
         let db = Arc::new(connect(":memory:").await.unwrap());
-        UserRow::create(&db, "owner", "alice", "s", "ks", "{}", "hash", "wmk")
-            .await
-            .unwrap();
+        UserRow::create(&db, "owner", "alice").await.unwrap();
         DeviceRow::upsert(&db, "owner-device", "owner", "Owner", None, None)
             .await
             .unwrap();
@@ -752,10 +673,9 @@ mod tests {
             .unwrap()
             .token;
         let app = crate::build_relay_router(
-            RoomManager::new(),
             Arc::new(MemoryAssetStore::new()),
             std::time::Instant::now(),
-            Some(db.clone()),
+            db.clone(),
             "test",
         );
         (app, db, token)
@@ -768,7 +688,12 @@ mod tests {
                     .method("POST")
                     .uri(path)
                     .header(header::AUTHORIZATION, format!("Bearer {token}"))
-                    .body(Body::empty())
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(if path == "/api/auth/delegate" {
+                        serde_json::json!({"public_key": BASE64.encode([9u8; 32])}).to_string()
+                    } else {
+                        "{}".to_string()
+                    }))
                     .unwrap(),
             )
             .await
@@ -796,6 +721,77 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn github_login_uses_verified_id_and_preserves_device_key_on_reconnect() {
+        let (app, db, _) = setup_app().await;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/me", listener.local_addr().unwrap());
+        let authority = axum::Router::new().route(
+            "/me",
+            axum::routing::get(|headers: HeaderMap| async move {
+                if headers
+                    .get(header::AUTHORIZATION)
+                    .and_then(|h| h.to_str().ok())
+                    != Some("Bearer shared-account-token")
+                {
+                    return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({})));
+                }
+                (
+                    StatusCode::OK,
+                    Json(serde_json::json!({"user":{"githubId":123,"login":"github-user"}})),
+                )
+            }),
+        );
+        let task = tokio::spawn(async move {
+            axum::serve(listener, authority).await.unwrap();
+        });
+        let app = app.layer(Extension(
+            crate::identity::IdentityVerifier::with_url(&url).unwrap(),
+        ));
+        let public_key = BASE64.encode([9u8; 32]);
+        let request = serde_json::json!({
+            "access_token":"shared-account-token", "user_id":"attacker-chosen-id",
+            "device_id":"new-device", "device_name":"Laptop", "device_kind":"desktop",
+            "public_key":public_key, "request_id":uuid::Uuid::new_v4().to_string(),
+        });
+        let first = post_json(&app, "/api/auth/login", "", request.clone()).await;
+        assert_eq!(first.status(), StatusCode::OK);
+        let first: serde_json::Value =
+            serde_json::from_slice(&to_bytes(first.into_body(), 16384).await.unwrap()).unwrap();
+        assert_eq!(first["user_id"], "123");
+        let second = post_json(&app, "/api/auth/login", "", request.clone()).await;
+        let second: serde_json::Value =
+            serde_json::from_slice(&to_bytes(second.into_body(), 16384).await.unwrap()).unwrap();
+        assert_eq!(second["token"], first["token"]);
+        DeviceRow::upsert(&db, "new-device", "123", "Laptop", None, None)
+            .await
+            .unwrap();
+        let devices = DeviceRow::list_by_user(&db, "123").await.unwrap();
+        assert_eq!(devices[0].public_key.as_deref(), Some(public_key.as_str()));
+        let mut invalid = request;
+        invalid["access_token"] = serde_json::json!("expired");
+        invalid["device_id"] = serde_json::json!("must-not-register");
+        assert_eq!(
+            post_json(&app, "/api/auth/login", "", invalid)
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(DeviceRow::list_by_user(&db, "123").await.unwrap().len(), 1);
+        assert_eq!(
+            post_json(
+                &app,
+                "/api/auth/login/challenge",
+                "",
+                serde_json::json!({"username":"alice"})
+            )
+            .await
+            .status(),
+            StatusCode::NOT_FOUND
+        );
+        task.abort();
+    }
+
+    #[tokio::test]
     async fn device_provisioning_is_full_scope_idempotent_and_device_only() {
         let (app, db, device_token) = setup_app().await;
         let request_id = uuid::Uuid::new_v4().to_string();
@@ -803,6 +799,7 @@ mod tests {
         let request = serde_json::json!({
             "device_id": device_id,
             "device_name": "SSH Build Host",
+            "public_key": BASE64.encode([9u8; 32]),
             "request_id": request_id,
         });
 
@@ -835,6 +832,7 @@ mod tests {
             serde_json::json!({
                 "device_id": device_id,
                 "device_name": "SSH Build Host",
+            "public_key": BASE64.encode([9u8; 32]),
                 "request_id": uuid::Uuid::new_v4().to_string(),
             }),
         )
@@ -857,6 +855,7 @@ mod tests {
             serde_json::json!({
                 "device_id": "cd".repeat(16),
                 "device_name": "Another Host",
+                "public_key": BASE64.encode([9u8; 32]),
                 "request_id": uuid::Uuid::new_v4().to_string(),
             }),
         )
@@ -887,20 +886,6 @@ mod tests {
                 .status(),
             StatusCode::FORBIDDEN
         );
-        let sync_response = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("GET")
-                    .uri("/api/sync/settings")
-                    .header(header::AUTHORIZATION, format!("Bearer {delegated_token}"))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(sync_response.status(), StatusCode::FORBIDDEN);
-
         DeviceRow::set_online(&db, "owner", "owner-device", true)
             .await
             .unwrap();
@@ -916,86 +901,6 @@ mod tests {
         assert_eq!(devices[0].online, 1);
     }
 
-    #[tokio::test]
-    async fn unknown_login_challenge_has_a_stable_valid_decoy_shape() {
-        let (app, _db, _token) = setup_app().await;
-        let request = || {
-            Request::builder()
-                .method("POST")
-                .uri("/api/auth/login/challenge")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(r#"{"username":"missing-user"}"#))
-                .unwrap()
-        };
-
-        let first = app.clone().oneshot(request()).await.unwrap();
-        assert_eq!(first.status(), StatusCode::OK);
-        let first_body = to_bytes(first.into_body(), 16 * 1024).await.unwrap();
-        let first_json: LoginChallengeResponse = serde_json::from_slice(&first_body).unwrap();
-        assert!(first_json.login_idempotency_supported);
-        let params: serde_json::Value = serde_json::from_str(&first_json.argon2_params).unwrap();
-        assert_eq!(params["m"], 16 * 1024);
-        assert_eq!(params["t"], 3);
-        assert_eq!(params["p"], 4);
-        assert_eq!(BASE64.decode(&first_json.salt).unwrap().len(), 16);
-        assert_eq!(BASE64.decode(&first_json.kdf_salt).unwrap().len(), 16);
-        let (ciphertext, nonce) = first_json.wrapped_master_key.split_once('.').unwrap();
-        assert_eq!(BASE64.decode(ciphertext).unwrap().len(), 48);
-        assert_eq!(BASE64.decode(nonce).unwrap().len(), 12);
-
-        let second = app.oneshot(request()).await.unwrap();
-        let second_body = to_bytes(second.into_body(), 16 * 1024).await.unwrap();
-        assert_eq!(first_body, second_body);
-    }
-
-    #[tokio::test]
-    async fn login_request_id_reuses_the_issued_token() {
-        let (app, db, _token) = setup_app().await;
-        let request_id = uuid::Uuid::new_v4().to_string();
-        let request = || {
-            Request::builder()
-                .method("POST")
-                .uri("/api/auth/login")
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(
-                    serde_json::json!({
-                        "username": "alice",
-                        "password_hash": "hash",
-                        "device_id": "retry-device",
-                        "device_name": "Retry Device",
-                        "request_id": request_id,
-                    })
-                    .to_string(),
-                ))
-                .unwrap()
-        };
-
-        let first = app.clone().oneshot(request()).await.unwrap();
-        assert_eq!(first.status(), StatusCode::OK);
-        let first_body = to_bytes(first.into_body(), 16 * 1024).await.unwrap();
-        let second = app.oneshot(request()).await.unwrap();
-        assert_eq!(second.status(), StatusCode::OK);
-        let second_body = to_bytes(second.into_body(), 16 * 1024).await.unwrap();
-        let first_token = serde_json::from_slice::<serde_json::Value>(&first_body).unwrap()
-            ["token"]
-            .as_str()
-            .unwrap()
-            .to_string();
-        let second_token = serde_json::from_slice::<serde_json::Value>(&second_body).unwrap()
-            ["token"]
-            .as_str()
-            .unwrap()
-            .to_string();
-
-        assert_eq!(first_token, second_token);
-        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM auth_tokens WHERE request_id = ?")
-            .bind(&request_id)
-            .fetch_one(&*db)
-            .await
-            .unwrap();
-        assert_eq!(count.0, 1);
-    }
-
     #[test]
     fn exact_idempotent_login_replays_consume_one_rate_limit_slot() {
         let limiter = LoginRateLimiter::new();
@@ -1008,5 +913,17 @@ mod tests {
         // Challenge traffic has its own budget and cannot exhaust credential
         // verification for the same client IP.
         assert!(limiter.check_and_record("challenge", "127.0.0.1", 1, None));
+    }
+}
+
+fn registration_error_status(error: &anyhow::Error) -> StatusCode {
+    if error.chain().any(|cause| {
+        let text = cause.to_string();
+        text.contains("account device quota exceeded")
+            || text.contains("account token quota exceeded")
+    }) {
+        StatusCode::TOO_MANY_REQUESTS
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
     }
 }

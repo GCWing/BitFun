@@ -801,7 +801,6 @@ $_section-header-height: 22px;
     }
 
     &:hover {
-      transform: translateY(-2px) scale(1.06);
       box-shadow: 0 10px 20px color-mix(in srgb, var(--openbitfun-color-content-on-light) 24%, transparent);
       filter: saturate(1);
       opacity: 1;
@@ -982,7 +981,7 @@ $_section-header-height: 22px;
     width: fit-content;
     max-width: min(440px, calc(100vw - 32px));
     max-height: min(560px, calc(100vh - 16px));
-    z-index: 9999;
+    z-index: var(--openbitfun-layer-popover);
     transform-origin: top left;
     animation: openbitfun-footer-menu-in var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-decelerate) forwards;
 
@@ -1029,6 +1028,8 @@ $_section-header-height: 22px;
   }
 
   &__workspace-menu-workspaces {
+    display: flex;
+    flex-direction: column;
     max-height: 240px;
     overscroll-behavior: contain;
   }
@@ -1605,7 +1606,7 @@ $_section-header-height: 22px;
 .openbitfun-nav-panel__footer-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 9998;
+  z-index: calc(var(--openbitfun-layer-popover) - 1);
 }
 
 /* Positioning-only overrides; the design-system Menu owns the surface look. */
@@ -1614,7 +1615,7 @@ $_section-header-height: 22px;
   min-width: 148px;
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
-  z-index: 9999;
+  z-index: var(--openbitfun-layer-popover);
   transform-origin: bottom right;
   animation: openbitfun-footer-menu-in var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-decelerate) forwards;
 
@@ -1641,7 +1642,7 @@ $_section-header-height: 22px;
   position: fixed;
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
-  z-index: 10000;
+  z-index: calc(var(--openbitfun-layer-popover) + 1);
   animation: openbitfun-nav-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
 
   &[data-placement='right'] {
@@ -1659,7 +1660,7 @@ $_section-header-height: 22px;
 
 .openbitfun-device-overview {
   position: fixed;
-  z-index: 9999;
+  z-index: var(--openbitfun-layer-popover);
   width: min(280px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
   display: flex;
@@ -2110,11 +2111,6 @@ $_section-header-height: 22px;
     transition: none;
   }
 
-  .openbitfun-nav-panel__top-action-btn:hover .openbitfun-nav-panel__top-action-icon-circle,
-  .openbitfun-nav-panel__top-action-btn:active .openbitfun-nav-panel__top-action-icon-circle {
-    transform: scale(1);
-  }
-
   .openbitfun-nav-panel__top-action-btn:not(.openbitfun-nav-panel__top-action-btn--sub) .openbitfun-nav-panel__top-action-icon-slot {
     transition: none;
   }
@@ -2149,43 +2145,6 @@ $_section-header-height: 22px;
   gap: var(--openbitfun-space-1);
   width: 100%;
   min-width: 0;
-}
-
-.openbitfun-nav-panel__utility-action {
-  flex: 0 0 auto;
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px solid;
-  @include shell-surfaces.sidebar-hairline-color;
-  border-radius: var(--openbitfun-radius-pill);
-  background: var(--openbitfun-color-surface-scene);
-  color: var(--openbitfun-color-content-secondary);
-  cursor: pointer;
-  transition: background var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-              border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-              color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
-
-  &:hover,
-  &:focus-visible {
-    background: var(--openbitfun-color-content-primary);
-    border-color: var(--openbitfun-color-content-primary);
-    color: var(--openbitfun-color-surface-scene);
-
-    > svg {
-      color: var(--openbitfun-color-surface-scene);
-      stroke: currentColor;
-    }
-  }
-
-  &:focus-visible {
-    outline: 1px solid var(--openbitfun-color-accent-default);
-    outline-offset: 1px;
-  }
 }
 
 .openbitfun-nav-panel__count-badge {
@@ -2237,19 +2196,24 @@ $_section-header-height: 22px;
 }
 
 .openbitfun-nav-panel__top-action-sublist {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 180ms var(--openbitfun-motion-easing-standard),
+              opacity 180ms var(--openbitfun-motion-easing-standard);
+
+  &.is-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+
+.openbitfun-nav-panel__top-action-sublist-inner {
   display: flex;
   flex-direction: column;
   gap: calc(var(--openbitfun-space-1) / 2);
+  min-height: 0;
   overflow: hidden;
-  max-height: 0;
-  opacity: 0;
-  transition: max-height 0.22s var(--openbitfun-motion-easing-standard),
-              opacity 0.15s var(--openbitfun-motion-easing-standard);
-
-  &.is-open {
-    max-height: 104px;
-    opacity: 1;
-  }
 }
 
 .openbitfun-nav-panel__session-view-toggle {
@@ -2388,8 +2352,6 @@ $_section-header-height: 22px;
   background: var(--openbitfun-color-action-primary-background);
   color: var(--openbitfun-color-action-primary-content);
   box-shadow: var(--openbitfun-shadow-sm);
-  transform: scale(1);
-  transform-origin: center;
 
   .openbitfun-nav-panel__top-action-btn:hover & {
     background: var(--openbitfun-color-action-primary-hover);
@@ -2402,7 +2364,6 @@ $_section-header-height: 22px;
     background: var(--openbitfun-color-action-primary-pressed);
     color: var(--openbitfun-color-action-primary-content);
     box-shadow: var(--openbitfun-shadow-xs);
-    transform: scale(0.86);
   }
 }
 
@@ -2493,11 +2454,6 @@ $_section-header-height: 22px;
     gap: calc(var(--openbitfun-space-1) / 2);
   }
 
-  &__top-action-sublist {
-    gap: calc(var(--openbitfun-space-1) / 2);
-    transition: none;
-  }
-
   &__top-action-btn {
     height: 30px;
     padding-inline: var(--openbitfun-space-2);
@@ -2509,7 +2465,6 @@ $_section-header-height: 22px;
       color 120ms ease;
 
     &:active {
-      transform: scale(0.985);
       background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 
@@ -2534,10 +2489,6 @@ $_section-header-height: 22px;
 
     .openbitfun-nav-panel__top-action-btn:hover & {
       transform: none;
-    }
-
-    .openbitfun-nav-panel__top-action-btn:active & {
-      transform: scale(0.95);
     }
   }
 
@@ -2573,10 +2524,6 @@ $_section-header-height: 22px;
     transition:
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease;
-
-    &--interactive:active {
-      transform: scale(0.985);
-    }
   }
 
   &__section-label {
@@ -2592,10 +2539,6 @@ $_section-header-height: 22px;
       transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       color 120ms ease,
       background 120ms ease;
-
-    &:active {
-      transform: scale(0.94);
-    }
   }
 
   &__item-slot {
@@ -2624,10 +2567,6 @@ $_section-header-height: 22px;
       background 120ms ease,
       color 120ms ease,
       opacity 120ms ease;
-
-    &:active {
-      transform: scale(0.985);
-    }
 
     &.is-active {
       @include nav-font.nav-panel-text-row-active;
@@ -2676,10 +2615,6 @@ $_section-header-height: 22px;
     &.is-active {
       box-shadow: none;
     }
-
-    &:active {
-      transform: scale(0.985);
-    }
   }
 
   &__pages-entry.is-active,
@@ -2699,12 +2634,7 @@ $_section-header-height: 22px;
       filter 120ms ease;
 
     &:hover {
-      transform: scale(1.05);
       box-shadow: none;
-    }
-
-    &:active {
-      transform: scale(0.94);
     }
   }
 
@@ -2719,10 +2649,6 @@ $_section-header-height: 22px;
     &:hover {
       transform: none;
       box-shadow: none;
-    }
-
-    &:active {
-      transform: scale(0.985);
     }
   }
 
@@ -2757,11 +2683,6 @@ $_section-header-height: 22px;
     color 120ms ease;
 }
 
-.openbitfun-nav-panel__footer-btn--icon:active,
-.openbitfun-nav-panel__footer .openbitfun-notification-btn:active {
-  transform: scale(0.94);
-}
-
 .openbitfun-nav-panel__workspace-menu,
 .openbitfun-nav-panel__footer-menu,
 .openbitfun-nav-panel__appearance-submenu {
@@ -2779,10 +2700,6 @@ $_section-header-height: 22px;
     border-color 120ms ease,
     background 120ms ease,
     color 120ms ease;
-
-  &:active:not(:disabled) {
-    transform: scale(0.97);
-  }
 }
 
 @keyframes openbitfun-nav-popover-in {
@@ -2831,6 +2748,10 @@ $_section-header-height: 22px;
   .openbitfun-device-overview__backup.is-syncing svg {
     animation: none;
   }
+
+  .openbitfun-nav-panel__top-action-sublist {
+    transition: none;
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -2871,7 +2792,6 @@ $_section-header-height: 22px;
   }
 
   &__search-trigger__icon,
-  &__utility-action,
   &__section-action,
   &__item-action,
   &__footer-btn--icon {

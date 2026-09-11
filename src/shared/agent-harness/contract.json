@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "harnesses": [
+    { "id": "Minimal", "legacyIds": ["minimal"], "legacyWireId": "minimal" },
+    { "id": "Standard", "legacyIds": ["standard", "balanced", "agentic", "Agentic"], "legacyConfigIds": ["coding_shared"], "legacyWireId": "agentic" },
+    { "id": "Ultimate", "legacyIds": ["ultimate", "Ultra", "ultra"], "legacyWireId": "Ultra" },
+    { "id": "Creative", "legacyIds": ["creative"], "legacyWireId": "Creative" }
+  ]
+}

@@ -21,10 +21,7 @@ import com.openbitfun.mobile.app.ui.theme.generated.MobileDesignTypography
  * literals, so aligning the two clients is a matter of what those roles resolve
  * to — nothing below this file had to change to get the new colours.
  *
- * The tokens Material has no role for live in [OpenBitFunColors]. Only the ones a
- * screen actually paints with are carried over; `connect_scan_accent` stays
- * behind because it decorates a viewfinder HarmonyOS draws itself and Play
- * Services draws for us. A colour nothing reads is a colour nobody maintains.
+ * Additional semantic colors cover app-owned surfaces, including the inline scanner.
  */
 private val LightTokens = MobileDesignColors.Light
 private val DarkTokens = MobileDesignColors.Dark
@@ -132,6 +129,7 @@ internal data class OpenBitFunColors(
     val mediaScrim: Color,
     val mediaControlBackground: Color,
     val toastBackground: Color,
+    val scanAccent: Color,
     val shadowSubtle: Color,
     val shadowMedium: Color,
     val shadowStrong: Color,
@@ -172,6 +170,7 @@ private val LightExtras = OpenBitFunColors(
     mediaScrim = LightTokens.MediaScrim,
     mediaControlBackground = LightTokens.MediaControlBackground,
     toastBackground = LightTokens.ToastBackground,
+    scanAccent = LightTokens.ConnectScanAccent,
     shadowSubtle = LightTokens.ShadowSubtle,
     shadowMedium = LightTokens.ShadowMedium,
     shadowStrong = LightTokens.ShadowStrong,
@@ -202,6 +201,7 @@ private val DarkExtras = OpenBitFunColors(
     mediaScrim = DarkTokens.MediaScrim,
     mediaControlBackground = DarkTokens.MediaControlBackground,
     toastBackground = DarkTokens.ToastBackground,
+    scanAccent = DarkTokens.ConnectScanAccent,
     shadowSubtle = DarkTokens.ShadowSubtle,
     shadowMedium = DarkTokens.ShadowMedium,
     shadowStrong = DarkTokens.ShadowStrong,

@@ -44,7 +44,6 @@
 
     &:active:not(:disabled) {
       background: var(--openbitfun-color-action-neutral-surface);
-      transform: scale(0.98);
     }
 
     &:disabled {

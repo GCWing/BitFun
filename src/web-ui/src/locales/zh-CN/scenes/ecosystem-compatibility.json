@@ -13,11 +13,8 @@
     "empty": "没有匹配的兼容产品"
   },
   "host": {
-    "label": "执行主机",
     "local": "本机",
-    "remote": "远程 · {{name}}",
-    "switchLabel": "切换执行主机",
-    "switchAction": "执行主机切换"
+    "remote": "远程 · {{name}}"
   },
   "groups": {
     "connected": "已连接或发现",

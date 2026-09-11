@@ -66,11 +66,11 @@ export const SmoothHeightCollapse: React.FC<SmoothHeightCollapseProps> = ({
       setHeight(`${startHeight}px`);
       frameId = window.requestAnimationFrame(() => {
         setHeight(`${inner.scrollHeight}px`);
+        timeoutId = window.setTimeout(() => {
+          setPhase('open');
+          setHeight('auto');
+        }, durationMs);
       });
-      timeoutId = window.setTimeout(() => {
-        setPhase('open');
-        setHeight('auto');
-      }, durationMs);
     } else {
       const startHeight =
         outerRef.current?.getBoundingClientRect().height ??
@@ -79,10 +79,11 @@ export const SmoothHeightCollapse: React.FC<SmoothHeightCollapseProps> = ({
       setHeight(`${startHeight}px`);
       frameId = window.requestAnimationFrame(() => {
         setHeight('0px');
+        // The transition starts with this frame, not when the toggle was requested.
+        timeoutId = window.setTimeout(() => {
+          setPhase('closed');
+        }, durationMs);
       });
-      timeoutId = window.setTimeout(() => {
-        setPhase('closed');
-      }, durationMs);
     }
 
     return () => {

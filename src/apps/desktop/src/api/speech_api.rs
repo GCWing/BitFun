@@ -313,7 +313,6 @@ pub async fn speech_save_realtime_config(
         .set_config("app.voice_call", &config)
         .await
         .map_err(|error| format!("Failed to save controller realtime voice settings: {error}"))?;
-    crate::api::remote_connect_api::notify_settings_changed();
 
     Ok(SpeechRealtimeConfig {
         enabled: config.enabled,

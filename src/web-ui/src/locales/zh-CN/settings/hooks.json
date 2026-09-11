@@ -97,5 +97,16 @@
     "loadFailed": "加载 Hook 设置失败",
     "loadFailedLocked": "无法读取 Hook 设置。为避免误启用命令执行，相关开关已锁定。",
     "retry": "重新加载"
+  },
+  "discovery": {
+    "title": "发现的外部 Hook",
+    "description": "查看 DeepSeek Harness、PI 和 OpenCode 的本地 Hook 声明。发现不会执行或导入这些 Hook。",
+    "disabled": "来源中已禁用",
+    "unsupported": "来源桥接不支持",
+    "opaque": "需要原生运行时确认",
+    "nativeOnly": "原生事件，启用状态未确认",
+    "readOnly": "只读",
+    "loading": "正在发现外部 Hook…",
+    "empty": "未发现外部 Hook 声明。"
   }
 }

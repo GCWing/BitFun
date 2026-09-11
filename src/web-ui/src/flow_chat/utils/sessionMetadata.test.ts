@@ -26,14 +26,14 @@ function createSession(overrides: Partial<Session> = {}): Session {
     status: 'idle',
     config: {
       modelName: 'gpt-test',
-      agentType: 'agentic',
+      agentType: 'Standard',
     },
     createdAt: 1000,
     lastActiveAt: 1000,
     error: null,
     todos: [],
     maxContextTokens: 128128,
-    mode: 'agentic',
+    mode: 'Standard',
     workspacePath: '/workspace',
     parentSessionId: undefined,
     sessionKind: 'normal',
@@ -107,7 +107,7 @@ describe('sessionMetadata', () => {
     const existingMetadata: SessionMetadata = {
       sessionId: 'child-1',
       sessionName: 'Old Name',
-      agentType: 'agentic',
+      agentType: 'Standard',
       modelName: 'old-model',
       createdAt: 10,
       lastActiveAt: 10,
@@ -161,7 +161,7 @@ describe('sessionMetadata', () => {
     const metadata = buildSessionMetadata(session, {
       sessionId: 'session-1',
       sessionName: 'Session Title',
-      agentType: 'agentic',
+      agentType: 'Standard',
       modelName: 'gpt-test',
       createdAt: 1000,
       lastActiveAt: 1000,
@@ -194,7 +194,7 @@ describe('sessionMetadata', () => {
     const metadata = buildSessionMetadata(session, {
       sessionId: 'session-1',
       sessionName: 'Session Title',
-      agentType: 'agentic',
+      agentType: 'Standard',
       modelName: 'gpt-test',
       createdAt: 1000,
       lastActiveAt: 1000,
@@ -227,21 +227,21 @@ describe('sessionMetadata', () => {
 
   it('persists locale-aware default title metadata before the first message', () => {
     const session = createSession({
-      title: 'flow-chat:session.newCodeWithIndex',
+      title: 'flow-chat:session.new',
       titleSource: 'i18n',
-      titleI18nKey: 'flow-chat:session.newCodeWithIndex',
-      titleI18nParams: { count: 2 },
+      titleI18nKey: 'flow-chat:session.new',
+      workspaceSessionNumber: 2,
       titleStatus: undefined,
     });
 
     const metadata = buildSessionMetadata(session);
 
-    expect(metadata.sessionName).toBe('flow-chat:session.newCodeWithIndex');
+    expect(metadata.sessionName).toBe('flow-chat:session.new');
     expect(metadata.lastFinishedAt).toBeNull();
     expect(metadata.customMetadata).toEqual({
       titleSource: 'i18n',
-      titleKey: 'flow-chat:session.newCodeWithIndex',
-      titleParams: { count: 2 },
+      titleKey: 'flow-chat:session.new',
+      titleParams: { defaultTitleText: 'flow-chat:session.new' },
     });
   });
 
@@ -249,7 +249,7 @@ describe('sessionMetadata', () => {
     const metadata: SessionMetadata = {
       sessionId: 'child-1',
       sessionName: 'BTW Child',
-      agentType: 'agentic',
+      agentType: 'Standard',
       modelName: 'gpt-test',
       createdAt: 1000,
       lastActiveAt: 1001,
@@ -623,7 +623,7 @@ describe('sessionMetadata', () => {
       const existingMetadata: SessionMetadata = {
         sessionId: 'session-1',
         sessionName: 'Session Title',
-        agentType: 'agentic',
+        agentType: 'Standard',
         modelName: 'gpt-test',
         createdAt: 1000,
         lastActiveAt: 1000,
@@ -652,7 +652,7 @@ describe('sessionMetadata', () => {
       const existingMetadata: SessionMetadata = {
         sessionId: 'session-1',
         sessionName: 'Session Title',
-        agentType: 'agentic',
+        agentType: 'Standard',
         modelName: 'gpt-test',
         createdAt: 1000,
         lastActiveAt: 1000,

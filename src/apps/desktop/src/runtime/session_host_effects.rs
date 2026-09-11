@@ -21,12 +21,4 @@ impl DesktopSessionHostEffects for ProductionDesktopSessionHostEffects {
             service.release_openbitfun_session(session_id).await;
         }
     }
-
-    fn notify_session_changed(&self, session_id: &str, workspace_path: &str) {
-        crate::api::remote_connect_api::notify_session_changed(session_id, workspace_path);
-    }
-
-    fn notify_session_deleted(&self, session_id: &str) {
-        crate::api::remote_connect_api::notify_session_deleted(session_id);
-    }
 }

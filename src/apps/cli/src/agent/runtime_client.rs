@@ -2668,7 +2668,7 @@ mod tests {
         AgentSessionSummary {
             session_id: session_id.to_string(),
             session_name: "Workspace session".to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             model_id: None,
             reasoning_preset: None,
             last_user_dialog_agent_type: None,
@@ -2723,7 +2723,7 @@ mod tests {
             notices,
             vec![SessionMigrationNotice::Mode {
                 previous_id: "removed-mode".to_string(),
-                restored_id: "agentic".to_string(),
+                restored_id: "Standard".to_string(),
             }]
         );
     }
@@ -2769,7 +2769,7 @@ mod tests {
                 project_path: None,
                 project_id: "project".to_string(),
                 session_id: "child".to_string(),
-                agent_id: "agentic".to_string(),
+                agent_id: "Standard".to_string(),
                 action: "run command".to_string(),
                 resources: Vec::new(),
                 save_resources: Vec::new(),
@@ -2903,8 +2903,8 @@ mod dual_backend_behavior_tests {
     fn embedded_modes() -> Vec<AgentModeCatalogEntry> {
         vec![
             AgentModeCatalogEntry {
-                id: "agentic".to_string(),
-                route_key: "agentic".to_string(),
+                id: "Standard".to_string(),
+                route_key: "Standard".to_string(),
                 description: "Primary workspace agent".to_string(),
                 model_id: Some("primary-model".to_string()),
                 is_external: false,
@@ -3437,7 +3437,7 @@ mod dual_backend_behavior_tests {
             project_path: None,
             project_id: "project-1".to_string(),
             session_id: session_id.to_string(),
-            agent_id: "agentic".to_string(),
+            agent_id: "Standard".to_string(),
             action: "edit".to_string(),
             resources: vec!["src/main.rs".to_string()],
             save_resources: vec!["src/main.rs".to_string()],
@@ -3456,7 +3456,7 @@ mod dual_backend_behavior_tests {
     ) -> ScenarioSnapshot {
         let modes = client.available_agent_modes().await.expect("modes");
         let created_id = client
-            .create_new_session("agentic")
+            .create_new_session("Standard")
             .await
             .expect("create session");
         let listed = client.list_sessions().await.expect("list sessions");
@@ -3476,7 +3476,7 @@ mod dual_backend_behavior_tests {
             .find(|session| session.session_id == created_id);
 
         let turn_id = client
-            .send_message("hello".to_string(), "agentic")
+            .send_message("hello".to_string(), "Standard")
             .await
             .expect("send message");
         client
@@ -3566,7 +3566,7 @@ mod dual_backend_behavior_tests {
         fixture.state.insert_session(
             "orphan-session".to_string(),
             "orphan".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
         );
         client
             .delete_session("orphan-session")
@@ -3611,9 +3611,9 @@ mod dual_backend_behavior_tests {
         assert_eq!(embedded, shared);
         assert_eq!(
             embedded.mode_ids,
-            ["agentic".to_string(), "workspace-plan".to_string()]
+            ["Standard".to_string(), "workspace-plan".to_string()]
         );
-        assert_eq!(embedded.created_session_agent_type, "agentic");
+        assert_eq!(embedded.created_session_agent_type, "Standard");
         assert_eq!(embedded.listed_session_count, 1);
         assert_eq!(
             embedded.renamed_session_name.as_deref(),
@@ -3626,7 +3626,7 @@ mod dual_backend_behavior_tests {
         assert!(embedded.permission_cleared);
         assert_eq!(
             embedded.restore_session_agent_type.as_deref(),
-            Some("agentic")
+            Some("Standard")
         );
         assert_eq!(embedded.restore_transcript_messages, 0);
         assert_eq!(embedded.event_states, ["first", "second"]);
@@ -3653,11 +3653,11 @@ mod dual_backend_behavior_tests {
             }
 
             let session_id = client
-                .create_new_session("agentic")
+                .create_new_session("Standard")
                 .await
                 .expect("create session");
             let turn_id = client
-                .send_message("hello".to_string(), "agentic")
+                .send_message("hello".to_string(), "Standard")
                 .await
                 .expect("send message");
             fixture.state.settlement_outcomes.lock().unwrap().insert(
@@ -3691,7 +3691,7 @@ mod dual_backend_behavior_tests {
 
         let create_request = AgentSessionCreateRequest {
             session_name: "remote-unsupported-session".to_string(),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             agent_route_key: None,
             workspace_path: Some(fixture.workspace.to_string_lossy().into_owned()),
             project_workspace_path: Some(fixture.workspace.to_string_lossy().into_owned()),

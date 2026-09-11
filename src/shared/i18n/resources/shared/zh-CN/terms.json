@@ -11,15 +11,19 @@
     "workspace": "工作区"
   },
   "modes": {
-    "agentic": "代理模式",
     "assistant": "助手模式",
     "expert": "专家模式",
     "review": "评审模式"
   },
   "agents": {
-    "code": "代码会话",
-    "cowork": "协作会话",
-    "claw": "Claw",
+    "Minimal": "极简",
+    "Standard": "标准",
+    "Ultimate": "极致",
+    "Creative": "创造",
+    "Claw": "助理",
+    "Cowork": "办公协作",
+    "DeepResearch": "深度研究",
+    "ComputerUse": "电脑操作",
     "default": "默认助手"
   },
   "tools": {
@@ -33,7 +37,6 @@
   },
   "connectionMethods": {
     "lan": "局域网",
-    "ngrok": "Ngrok",
     "openbitfunServer": "OpenBitFun Server",
     "customServer": "自定义服务器",
     "botFeishu": "飞书机器人",

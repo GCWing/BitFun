@@ -4,10 +4,11 @@ import { localSessionDriver } from './LocalSessionDriver';
 import type { DialogTurn } from '../../types/flow-chat';
 import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 
-const { mockStartAcpDialogTurn, mockStartAgenticDialogTurn, mockTransition } = vi.hoisted(() => ({
+const { mockStartAcpDialogTurn, mockStartAgenticDialogTurn, mockTransition, mockUpdateSessionMetadata } = vi.hoisted(() => ({
   mockStartAcpDialogTurn: vi.fn(),
   mockStartAgenticDialogTurn: vi.fn(),
   mockTransition: vi.fn(),
+  mockUpdateSessionMetadata: vi.fn(),
 }));
 
 vi.mock('@/infrastructure/api/service-api/ACPClientAPI', () => ({
@@ -30,6 +31,9 @@ vi.mock('../../state-machine', () => ({
 }));
 
 vi.mock('../shared', () => ({ applyGeneratingTitlePlaceholder: vi.fn() }));
+vi.mock('../../services/flow-chat-manager/PersistenceModule', () => ({
+  cleanupSaveState: vi.fn(), updateSessionMetadata: mockUpdateSessionMetadata,
+}));
 
 vi.mock('../../utils/modelSync', () => ({ syncSessionModelSelection: vi.fn() }));
 
@@ -100,6 +104,7 @@ describe('localSessionDriver.startTurn on an ACP session', () => {
     vi.clearAllMocks();
     mockTransition.mockResolvedValue(true);
     mockStartAcpDialogTurn.mockResolvedValue(undefined);
+    mockUpdateSessionMetadata.mockResolvedValue(undefined);
   });
 
   it('gives the first turn a storage slot so it can be persisted', async () => {
@@ -113,6 +118,8 @@ describe('localSessionDriver.startTurn on an ACP session', () => {
     expect(mockStartAcpDialogTurn).toHaveBeenCalledTimes(1);
     expect(addedTurns).toHaveLength(1);
     expect(addedTurns[0].storageTurnIndex).toBe(0);
+    expect(mockUpdateSessionMetadata).toHaveBeenCalledExactlyOnceWith(context, SESSION_ID, ['titleMetadata']);
+    expect(mockStartAcpDialogTurn.mock.invocationCallOrder[0]).toBeLessThan(mockUpdateSessionMetadata.mock.invocationCallOrder[0]);
   });
 
   it('continues after the turns already on disk when the session is resumed', async () => {
@@ -127,6 +134,7 @@ describe('localSessionDriver.startTurn on an ACP session', () => {
     });
 
     expect(addedTurns[0].storageTurnIndex).toBe(2);
+    expect(mockUpdateSessionMetadata).not.toHaveBeenCalled();
   });
 
   it('leaves the slot to the runtime for a non-ACP turn', async () => {
@@ -135,11 +143,21 @@ describe('localSessionDriver.startTurn on an ACP session', () => {
 
     await localSessionDriver.startTurn(
       context,
-      { ...startTurnInput(session), acpClientId: undefined, currentAgentType: 'agentic' },
+      { ...startTurnInput(session), acpClientId: undefined, currentAgentType: 'Standard' },
       { createdLocalTurnId: null, hostAcceptedTurn: false },
     );
 
     expect(mockStartAgenticDialogTurn).toHaveBeenCalledTimes(1);
     expect(addedTurns[0].storageTurnIndex).toBeUndefined();
+    expect(mockUpdateSessionMetadata).toHaveBeenCalledExactlyOnceWith(context, SESSION_ID, ['titleMetadata']);
+  });
+
+  it('does not release a default title slot when the host rejects the first turn', async () => {
+    const { context, session } = createHarness([]);
+    mockStartAcpDialogTurn.mockRejectedValueOnce(new Error('offline'));
+    await expect(localSessionDriver.startTurn(context, startTurnInput(session), {
+      createdLocalTurnId: null, hostAcceptedTurn: false,
+    })).rejects.toThrow('offline');
+    expect(mockUpdateSessionMetadata).not.toHaveBeenCalled();
   });
 });

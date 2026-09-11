@@ -5,6 +5,7 @@ import { OverflowText, Spinner, Tooltip } from '@openbitfun/ui';
 import { RetainedMountBoundary } from '@/shared/presence';
 import { sessionAPI, type SessionLineageSnapshot } from '@/infrastructure/api/service-api/SessionAPI';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance';
+import { getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPosition';
 import { flowChatStore } from '../../store/FlowChatStore';
@@ -12,6 +13,7 @@ import {
   buildSessionLineageTree,
   collectExpandedRunningBranches,
   countSessionLineageDescendants,
+  filterActiveSessionLineageTree,
   type SessionLineageLifecycle,
   type SessionLineageNode,
 } from '../../utils/sessionLineage';
@@ -43,8 +45,10 @@ interface SessionTreePopoverProps {
   hasActiveDescendants?: boolean;
   onSelectSession?: (selection: SessionTreeSelection) => void;
   onCancelSession?: (selection: SessionTreeSelection) => Promise<boolean>;
+  onDeleteSession?: (selection: SessionTreeSelection) => Promise<boolean>;
   /** Render the tree inside a parent-owned popover instead of creating another trigger and surface. */
   embedded?: boolean;
+  activeOnly?: boolean;
   /** Whether an embedded tree is active and should load live data. */
   open?: boolean;
   /** Ask the parent-owned popover to close after a selection or keyboard dismissal. */
@@ -75,7 +79,9 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
   hasActiveDescendants = false,
   onSelectSession,
   onCancelSession,
+  onDeleteSession,
   embedded = false,
+  activeOnly = false,
   open = false,
   onRequestClose,
   t,
@@ -90,6 +96,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
   const [collapsedSessionIds, setCollapsedSessionIds] = useState<Set<string>>(new Set());
   const [openActionSessionId, setOpenActionSessionId] = useState<string | null>(null);
   const [cancellingSessionIds, setCancellingSessionIds] = useState<Set<string>>(new Set());
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -270,7 +277,8 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
     );
   }, [liveRevision, sessionId, snapshot]);
 
-  const descendantCount = countSessionLineageDescendants(tree);
+  const visibleTree = useMemo(() => activeOnly ? filterActiveSessionLineageTree(tree) : tree, [activeOnly, tree]);
+  const descendantCount = countSessionLineageDescendants(visibleTree);
   const panelLayout = useAnchoredPopoverPosition({
     open: isOpen && !embedded,
     anchorRef: triggerRef,
@@ -341,7 +349,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!onCancelSession || node.isRoot || !nodeHasActiveWork(node)) return;
+    if (node.isRoot || (!onDeleteSession && (!onCancelSession || !nodeHasActiveWork(node)))) return;
 
     if (openActionSessionId === node.sessionId) {
       setOpenActionSessionId(null);
@@ -352,7 +360,21 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
     actionMenuAnchorRef.current = event.currentTarget;
     setOpenActionSessionId(node.sessionId);
     updateActionMenuPosition();
-  }, [onCancelSession, openActionSessionId, updateActionMenuPosition]);
+  }, [onCancelSession, onDeleteSession, openActionSessionId, updateActionMenuPosition]);
+
+  const handleDelete = useCallback(async (node: SessionLineageNode) => {
+    if (!onDeleteSession || node.isRoot || deletingSessionId) return;
+    const scope = getActiveSurfaceScope();
+    setOpenActionSessionId(null);
+    setActionMenuPosition(null);
+    setDeletingSessionId(node.sessionId);
+    try {
+      await onDeleteSession({ ...node, displayTitle: nodeDisplayTitle(node) });
+    } finally {
+      setDeletingSessionId(null);
+      if (scope.isCurrent()) await refreshSnapshot();
+    }
+  }, [deletingSessionId, onDeleteSession, refreshSnapshot]);
 
   const handleCancel = useCallback(async (node: SessionLineageNode) => {
     if (!onCancelSession || node.isRoot || !nodeHasActiveWork(node)) return;
@@ -395,19 +417,10 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
       ? t('flowChatHeader.agentTreeCancelling')
       : lifecycleLabel(node.lifecycle, t);
     const secondaryLabel = node.subagentType || node.agentType;
-    const rawPrimaryLabel = node.isRoot ? node.title : node.agentId || node.title;
     const primaryLabel = nodeDisplayTitle(node);
-    const descriptiveTitle = node.title !== primaryLabel && node.title !== rawPrimaryLabel
-      ? node.title
-      : undefined;
-    const nodeMeta = node.isRoot
-      ? secondaryLabel
-      : [secondaryLabel, descriptiveTitle]
-          .filter((value, index, values): value is string =>
-            Boolean(value) && values.indexOf(value) === index
-          )
-          .join(' · ');
+    const nodeMeta = secondaryLabel;
     const canCancel = !!onCancelSession && !node.isRoot && nodeHasActiveWork(node);
+    const canDelete = !!onDeleteSession && !node.isRoot;
 
     return (
       <React.Fragment key={node.sessionId}>
@@ -427,7 +440,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
           role="treeitem"
           aria-level={depth + 1}
           aria-expanded={hasChildren ? isExpanded : undefined}
-          style={{ paddingLeft: `${6 + Math.min(depth, 10) * 14}px` }}
+          style={{ paddingLeft: `${(embedded ? 0 : 6) + Math.min(depth, 10) * 14}px` }}
         >
           {hasChildren ? (
             <button
@@ -449,7 +462,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
             onClick={() => handleSelect(node)}
             aria-label={node.isRoot
               ? undefined
-              : [primaryLabel, secondaryLabel, descriptiveTitle, statusLabel]
+              : [primaryLabel, secondaryLabel, statusLabel]
                   .filter(Boolean)
                   .join(', ')}
           >
@@ -476,7 +489,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
               ) : null}
             </span>
           </button>
-          {canCancel ? (
+          {canCancel || canDelete ? (
             <div className="session-tree-popover__node-actions">
               <Tooltip content={t('flowChatHeader.agentTreeActions')}>
                 <IconButton
@@ -486,7 +499,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
                   aria-label={t('flowChatHeader.agentTreeActions')}
                   aria-haspopup="menu"
                   aria-expanded={openActionSessionId === node.sessionId}
-                  disabled={isCancelling}
+                  disabled={isCancelling || deletingSessionId !== null}
                   icon={<Icon name="more" size="lg" style={{ width: 13, height: 13 }} aria-hidden="true" />}
                 />
               </Tooltip>
@@ -500,7 +513,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
                   style={actionMenuPosition}
                   data-testid="flowchat-header-session-tree-menu"
                 >
-                  <MenuItem
+                  {canCancel ? <MenuItem
                     type="button"
                     tone="danger"
                     data-openbitfun-component="flow-chat-header"
@@ -512,7 +525,16 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
                     <span>{isCancelling
                       ? t('flowChatHeader.agentTreeCancelling')
                       : t('flowChatHeader.agentTreeCancel')}</span>
-                  </MenuItem>
+                  </MenuItem> : null}
+                  {canDelete ? <MenuItem
+                    type="button"
+                    tone="danger"
+                    onClick={() => void handleDelete(node)}
+                    disabled={deletingSessionId !== null}
+                    leading={<Icon name="delete" size="sm" />}
+                  >
+                    {t('flowChatHeader.agentTreeDelete')}
+                  </MenuItem> : null}
                 </Menu>,
                 getAppearanceOverlayHost(),
               ) : null}
@@ -532,10 +554,10 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
   };
 
   const panelLabel = t('flowChatHeader.agentTree');
-  const renderedTreeNodes = tree
+  const renderedTreeNodes = visibleTree
     ? embedded
-      ? tree.children.map(child => renderNode(child, 0))
-      : renderNode(tree, 0)
+      ? visibleTree.children.map(child => renderNode(child, 0))
+      : renderNode(visibleTree, 0)
     : null;
 
   const treeBody = (
@@ -544,7 +566,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
       data-openbitfun-component="flow-chat-header"
       data-openbitfun-part="sessionTreeBody"
     >
-      {tree ? <div role="tree">{renderedTreeNodes}</div> : null}
+      {visibleTree ? <div role="tree">{renderedTreeNodes}</div> : null}
       {isLoading && !tree ? (
         <div
           className="session-tree-popover__state"
@@ -564,7 +586,7 @@ export const SessionTreePopover: React.FC<SessionTreePopoverProps> = ({
           data-openbitfun-part="sessionTreeState"
           data-openbitfun-state="empty"
         >
-          {t('flowChatHeader.agentTreeEmpty')}
+          {t(activeOnly ? 'flowChatHeader.agentTreeNoActive' : 'flowChatHeader.agentTreeEmpty')}
         </div>
       ) : null}
       {loadFailed ? (

@@ -34,8 +34,8 @@ Save page versions and publish them to public or private URLs while managing tit
 
 ## 怎么用 / How to use it
 
-1. 登录 OpenBitFun 账户
-   Sign in to a OpenBitFun account
+1. 使用 GitHub 登录
+   Sign in to a GitHub account
 2. 打开 Pages
    Open Pages
 3. 选择页面并确认发布与可见性

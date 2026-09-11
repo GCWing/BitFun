@@ -528,6 +528,8 @@ export const codexAdapterPublicApiEntries = [
 ].map((symbol) => userInstructionSourceAdapterEntry(symbol, 'Codex')));
 
 export const staticHookSupportPublicApiEntries = [
+  // Shared by DSH/PI only for validated, redacted source/event construction.
+  'StaticHookCatalog',
   'BoundedFileRead',
   'read_bounded_file',
   'regular_file_exists',
@@ -542,7 +544,7 @@ export const staticHookSupportPublicApiEntries = [
 ].map((symbol) => staticHookAdapterEntry(
   symbol,
   'static-hook-support parser owner',
-  'OpenCode, Claude Code, and Codex static Hook source adapters',
+  'OpenCode, Claude Code, Codex, DeepSeek Harness, and PI static Hook source adapters',
 )).concat([
   'PreparedStaticHookCommand',
   'StaticHookAssetError',

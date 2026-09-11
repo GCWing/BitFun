@@ -189,7 +189,7 @@ function ensureBtwSessionAvailableInternal(
     flowChatStore.addExternalSession(
       params.childSessionId,
       params.sessionTitle || resolveBtwSessionTitle(params.childSessionId),
-      params.agentType || parentSession?.mode || 'agentic',
+      params.agentType || parentSession?.mode || 'Standard',
       resolvedWorkspacePath,
       {
         parentSessionId: params.parentSessionId,

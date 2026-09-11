@@ -769,7 +769,7 @@ mod tests {
             session_id: "session-a".to_string(),
             timestamp: 10,
             kind: Default::default(),
-            agent_type: Some("agentic".to_string()),
+            agent_type: Some("Standard".to_string()),
             user_message: crate::service::session::UserMessageData {
                 id: "user-message".to_string(),
                 content: "hello".to_string(),

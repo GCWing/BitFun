@@ -38,6 +38,12 @@ struct AccountDeviceDispatchRpc;
 #[async_trait]
 impl DeviceDispatchRpc for AccountDeviceDispatchRpc {
     async fn invoke(&self, device_id: &str, command: &str, args: Value) -> anyhow::Result<Value> {
+        use openbitfun_core_types::agent_identity_wire::{
+            translate_agent_identity_command, translate_agent_identity_response,
+            AgentIdentityDialect,
+        };
+        let args = translate_agent_identity_command(command, args, AgentIdentityDialect::Legacy)
+            .map_err(anyhow::Error::msg)?;
         let command_json = serde_json::to_string(&serde_json::json!({
             "cmd": "host_invoke",
             "command": command,
@@ -50,7 +56,13 @@ impl DeviceDispatchRpc for AccountDeviceDispatchRpc {
         )
         .await
         .map_err(anyhow::Error::msg)?;
-        decode_device_dispatch_rpc(&raw)
+        translate_agent_identity_response(
+            command,
+            decode_device_dispatch_rpc(&raw)?,
+            &Value::Null,
+            AgentIdentityDialect::Canonical,
+        )
+        .map_err(anyhow::Error::msg)
     }
 }
 

@@ -1,5 +1,7 @@
+import { normalizeAccountRelayUrl, OFFICIAL_RELAY_URL } from './AccountDeviceLink';
 import { http } from '@kit.NetworkKit';
-import { CloudAccountCrypto, CloudAccountKdfParams } from './CloudAccountCrypto';
+import { CloudAccountCrypto } from './CloudAccountCrypto';
+import { X25519 } from './X25519';
 import { Encoding } from './Encoding';
 import { HarmonyRemoteCryptoCipher } from './RemoteCrypto';
 import { OhosError } from './OhosError';
@@ -7,27 +9,19 @@ import { RemoteLogger } from './RemoteLogger';
 import { RemoteI18n } from '../i18n/RemoteI18n';
 import { CommandStatusResponse, EncryptedPayload, RemoteCommand } from '../model/RemoteModels';
 
-interface AccountChallenge {
-  salt: string;
-  kdf_salt: string;
-  argon2_params: string;
-  wrapped_master_key: string;
+interface AccountAuthResponse { token: string; user_id: string; }
+interface GitHubStart {
+  transactionId: string; transactionSecret: string; authorizationUrl: string;
+  expiresAt: number; pollIntervalSeconds: number;
 }
-
-interface AccountAuthResponse {
-  token: string;
-  user_id: string;
-}
-
-interface LoginChallengeRequest { username: string; }
+interface GitHubPollRequest { transactionId: string; transactionSecret: string; }
+interface GitHubTokens { accessToken: string; }
+interface GitHubPoll { status: string; tokens?: GitHubTokens; }
 interface LoginRequest {
-  username: string;
-  password_hash: string;
-  device_id: string;
-  device_name: string;
-  device_kind: string;
-  request_id?: string;
+  access_token: string; device_id: string; device_name: string; device_kind: string;
+  public_key: string; request_id: string;
 }
+interface PeerPublicKey { public_key: string; }
 interface RelayErrorResponse { error?: string; }
 
 export class CloudAccountRequestError extends Error {
@@ -66,9 +60,11 @@ export interface CloudProvisionedDevice {
   token: string;
   userId: string;
   deviceId: string;
+  deviceSecret: Uint8Array;
 }
 
 interface ProvisionDeviceRequest {
+  public_key: string;
   device_id: string;
   device_name: string;
   device_kind: string;
@@ -89,19 +85,8 @@ interface CloudAccountDeviceWire {
   last_seen_at?: number;
 }
 
-interface SyncSettingsEntry {
-  encrypted_data: string;
-  nonce: string;
-  version: number;
-}
-
-export interface CloudSettingsBlob {
-  plaintext: string;
-  version: number;
-}
-
 /** Default OpenBitFun cloud relay used by the desktop account flow. */
-export const DEFAULT_CLOUD_RELAY_URL: string = 'https://remote.openbitfun.com/relay';
+export const DEFAULT_CLOUD_RELAY_URL: string = OFFICIAL_RELAY_URL;
 
 /** Device kinds the relay accepts; mirrors `relay-service/src/db.rs::DEVICE_KINDS`. */
 const DEVICE_KIND_DESKTOP: string = 'desktop';
@@ -143,109 +128,54 @@ function isDesktopDeviceRow(device: CloudAccountDeviceWire, selfDeviceId: string
 }
 
 /** Client for the current desktop relay account protocol. */
+interface DeviceKeyPair { privateKey: Uint8Array; publicKey: Uint8Array; }
+
 export class CloudAccountClient {
   private readonly cipher: HarmonyRemoteCryptoCipher = new HarmonyRemoteCryptoCipher();
 
-  async login(relayUrl: string, username: string, password: string, deviceId: string): Promise<CloudAccountSession> {
-    return this.loginDevice(
-      relayUrl, username, password, deviceId, 'HarmonyOS Phone', DEVICE_KIND_MOBILE);
+  private authorizationGeneration: number = 0;
+
+  cancelAuthorization(): void { this.authorizationGeneration++; }
+
+  async login(relayUrl: string, deviceId: string, openAuthorization: (url: string) => Promise<boolean>, deviceSecret: Uint8Array): Promise<CloudAccountSession> {
+    const generation = ++this.authorizationGeneration;
+    const startRequest: Record<string, string> = {};
+    const start = await this.post<GitHubStart>(relayUrl, '/api/auth/github/start', startRequest);
+    if (generation !== this.authorizationGeneration) throw new Error('Sign-in cancelled.');
+    if (!start.authorizationUrl.startsWith('https://github.com/login/oauth/authorize?')) {
+      throw new Error('Untrusted account authorization URL.');
+    }
+    if (!await openAuthorization(start.authorizationUrl)) throw new Error('Could not open GitHub sign-in.');
+    const deadline = Math.min(start.expiresAt * 1000, Date.now() + 600000);
+    while (Date.now() < deadline && generation === this.authorizationGeneration) {
+      await new Promise<void>((resolve) => setTimeout(resolve, Math.min(30, Math.max(1, start.pollIntervalSeconds)) * 1000));
+      if (generation !== this.authorizationGeneration) break;
+      const request: GitHubPollRequest = { transactionId: start.transactionId, transactionSecret: start.transactionSecret };
+      const poll = await this.post<GitHubPoll>(relayUrl, '/api/auth/github/poll', request);
+      if (generation !== this.authorizationGeneration) break;
+      if (poll.status === 'authorized' && poll.tokens?.accessToken) {
+        if (deviceSecret.length !== 32) throw new Error('Invalid device identity.');
+        const keys: DeviceKeyPair = { privateKey: new Uint8Array(deviceSecret), publicKey: X25519.scalarMultBase(deviceSecret) };
+        const body: LoginRequest = {
+          access_token: poll.tokens.accessToken, device_id: deviceId, device_name: 'HarmonyOS Phone',
+          device_kind: DEVICE_KIND_MOBILE, public_key: Encoding.bytesToBase64(keys.publicKey),
+          request_id: Encoding.randomId('').slice(1)
+        };
+        try {
+          const auth = await this.post<AccountAuthResponse>(relayUrl, '/api/auth/login', body);
+          if (generation !== this.authorizationGeneration) throw new Error('Sign-in cancelled.');
+          if (!auth.token || !auth.user_id) throw new Error('Invalid account identity.');
+          return { token: auth.token, userId: auth.user_id, masterKey: keys.privateKey };
+        } catch (err) {
+          keys.privateKey.fill(0);
+          throw OhosError.wrap('GitHub sign-in', err);
+        }
+      }
+      if (poll.status === 'expired' || poll.status === 'denied') break;
+    }
+    throw new Error('GitHub sign-in expired or was cancelled.');
   }
 
-  /**
-   * Compatibility path for relays whose dedicated device-provisioning route is
-   * present but cannot mint against their existing account database.
-   *
-   * This is still a real device login: the watch receives its own token and
-   * device row. Only the password proof travels to the relay, while the
-   * plaintext password and the account master key stay on this phone.
-   */
-  async loginWatch(
-    relayUrl: string,
-    username: string,
-    password: string,
-    currentSession: CloudAccountSession,
-    deviceId: string,
-    deviceName: string,
-    requestId: string
-  ): Promise<CloudProvisionedDevice> {
-    const watchSession = await this.loginDevice(
-      relayUrl, username, password, deviceId, deviceName, DEVICE_KIND_WATCH, requestId);
-    if (watchSession.userId !== currentSession.userId ||
-      !CloudAccountClient.sameBytes(watchSession.masterKey, currentSession.masterKey)) {
-      throw new Error('The confirmed account does not match the signed-in account.');
-    }
-    return { token: watchSession.token, userId: watchSession.userId, deviceId };
-  }
-
-  private async loginDevice(
-    relayUrl: string,
-    username: string,
-    password: string,
-    deviceId: string,
-    deviceName: string,
-    deviceKind: string,
-    requestId: string = ''
-  ): Promise<CloudAccountSession> {
-    const normalizedRelayUrl = relayUrl.trim() || DEFAULT_CLOUD_RELAY_URL;
-    const normalizedUser = username.trim();
-    const startedAt = Date.now();
-    RemoteLogger.info(`cloud device login start relay=${normalizedRelayUrl} kind=${deviceKind}`);
-    if (normalizedUser.length === 0 || normalizedUser.length > 128 || password.length === 0 || password.length > 1024) {
-      throw new Error('Invalid account credentials.');
-    }
-    const challengeRequest: LoginChallengeRequest = { username: normalizedUser };
-    const challengeStartedAt = Date.now();
-    const challenge = await this.post<AccountChallenge>(normalizedRelayUrl, '/api/auth/login/challenge', challengeRequest);
-    RemoteLogger.info(`cloud login challenge received elapsed_ms=${Date.now() - challengeStartedAt}`);
-    const params = JSON.parse(challenge.argon2_params) as CloudAccountKdfParams;
-    const salt = Encoding.base64ToBytes(challenge.salt);
-    const kdfSalt = Encoding.base64ToBytes(challenge.kdf_salt);
-    const kek = await CloudAccountCrypto.derivePasswordHash(password, salt, params);
-    RemoteLogger.info(`cloud login password proof derived elapsed_ms=${Date.now() - startedAt}`);
-    const masterKey = await this.unwrapMasterKey(kek, challenge.wrapped_master_key);
-    RemoteLogger.info(`cloud login master key unwrapped elapsed_ms=${Date.now() - startedAt}`);
-    const passwordHash = await CloudAccountCrypto.derivePasswordHash(password, kdfSalt, params);
-    const loginRequest: LoginRequest = {
-      username: normalizedUser,
-      password_hash: Encoding.bytesToBase64(passwordHash),
-      device_id: deviceId,
-      device_name: deviceName,
-      device_kind: deviceKind
-    };
-    if (requestId.length > 0) {
-      loginRequest.request_id = requestId;
-    }
-    const auth = await this.post<AccountAuthResponse>(normalizedRelayUrl, '/api/auth/login', loginRequest);
-    RemoteLogger.info(`cloud login authenticated elapsed_ms=${Date.now() - startedAt}`);
-    return { token: auth.token, userId: auth.user_id, masterKey };
-  }
-
-  private static sameBytes(left: Uint8Array, right: Uint8Array): boolean {
-    if (left.length !== right.length) {
-      return false;
-    }
-    let difference = 0;
-    for (let index = 0; index < left.length; index += 1) {
-      difference |= left[index] ^ right[index];
-    }
-    return difference === 0;
-  }
-
-  /**
-   * Adds another device to this account and returns its own credential.
-   *
-   * The relay gates `/api/auth/provision-device` on nothing but
-   * `AuthToken::is_device_token()` (`relay-service/src/routes/auth.rs`), so a
-   * phone that signed in with the account password is as entitled to mint here
-   * as the desktop is — the desktop was never special, it just happened to be
-   * the one holding a session. A token delegated by a room pairing is
-   * `delegated_control` rather than `device` and is refused with 403; that is
-   * the caller's cue to fall back to asking the desktop.
-   *
-   * The account master key is deliberately not part of this exchange. The relay
-   * never sees it, and the caller already holds its own copy — a watch gets it
-   * sealed to its ephemeral key, not from here.
-   */
   async provisionDevice(
     relayUrl: string,
     session: CloudAccountSession,
@@ -253,7 +183,9 @@ export class CloudAccountClient {
     deviceName: string,
     requestId: string
   ): Promise<CloudProvisionedDevice> {
+    const keys = X25519.generateKeyPair();
     const body: ProvisionDeviceRequest = {
+      public_key: Encoding.bytesToBase64(keys.publicKey),
       device_id: deviceId,
       device_name: deviceName,
       device_kind: DEVICE_KIND_WATCH,
@@ -269,26 +201,7 @@ export class CloudAccountClient {
       // in as somebody else. Refuse rather than pass it on.
       throw new Error('Relay returned a mismatched provisioned device identity.');
     }
-    return { token, userId, deviceId: provisionedDeviceId };
-  }
-
-  async fetchSettings(relayUrl: string, session: CloudAccountSession): Promise<CloudSettingsBlob | undefined> {
-    let entry: SyncSettingsEntry;
-    try {
-      entry = await this.request<SyncSettingsEntry>(relayUrl, '/api/sync/settings', 'GET', undefined, session.token);
-    } catch (err) {
-      if (err instanceof CloudAccountRequestError && err.statusCode === 404) {
-        return undefined;
-      }
-      throw err instanceof Error ? err : new Error('Cloud settings request failed.');
-    }
-    if (!entry || !entry.encrypted_data || !entry.nonce) {
-      return undefined;
-    }
-    return {
-      plaintext: await this.decryptSyncPayload(session.masterKey, entry.encrypted_data, entry.nonce),
-      version: entry.version
-    };
+    return { token, userId, deviceId: provisionedDeviceId, deviceSecret: keys.privateKey };
   }
 
   /**
@@ -331,10 +244,13 @@ export class CloudAccountClient {
     if (target.length === 0) {
       throw new Error('Remote target device is required.');
     }
+    const peer = await this.request<PeerPublicKey>(relayUrl,
+      `/api/devices/${encodeURIComponent(target)}/key`, 'GET', undefined, session.token);
+    const messageKey = await CloudAccountCrypto.deriveDeviceKey(session.masterKey, Encoding.base64ToBytes(peer.public_key));
     const nonce = Encoding.randomBytes(12);
     const encrypted = await this.cipher.encrypt(
       Encoding.utf8ToBytes(JSON.stringify(command)),
-      session.masterKey,
+      messageKey,
       nonce
     );
     const body: EncryptedPayload = {
@@ -352,7 +268,7 @@ export class CloudAccountClient {
     );
     const plain = await this.cipher.decrypt(
       Encoding.base64ToBytes(response.encrypted_data),
-      session.masterKey,
+      messageKey,
       Encoding.base64ToBytes(response.nonce)
     );
     const parsed = Encoding.parseJsonObject<T>(Encoding.bytesToUtf8(plain));
@@ -360,32 +276,6 @@ export class CloudAccountClient {
       throw new Error(parsed.message || 'Remote device command failed.');
     }
     return parsed;
-  }
-
-  private async decryptSyncPayload(masterKey: Uint8Array, data: string, nonceText: string): Promise<string> {
-    const plain = await this.cipher.decrypt(Encoding.base64ToBytes(data), masterKey, Encoding.base64ToBytes(nonceText));
-    return Encoding.bytesToUtf8(plain);
-  }
-
-  private async unwrapMasterKey(kek: Uint8Array, packed: string): Promise<Uint8Array> {
-    const parts = packed.split('.');
-    if (parts.length !== 2) {
-      throw new Error('Invalid wrapped master key.');
-    }
-    const ciphertext = Encoding.base64ToBytes(parts[0]);
-    const nonce = Encoding.base64ToBytes(parts[1]);
-    if (kek.length !== 32 || nonce.length !== 12) {
-      throw new Error('Invalid account encryption parameters.');
-    }
-    try {
-      const plain = await this.cipher.decrypt(ciphertext, kek, nonce);
-      if (plain.length !== 32) {
-        throw new Error('Invalid master key length.');
-      }
-      return plain;
-    } catch (_err) {
-      throw new Error('Invalid username or password.');
-    }
   }
 
   private async post<T>(relayUrl: string, path: string, body: Object): Promise<T> {
@@ -401,7 +291,8 @@ export class CloudAccountClient {
     readTimeoutMs: number = 120000
   ): Promise<T> {
     const request = http.createHttp();
-    const base = relayUrl.replace(/\/$/, '');
+    const base = normalizeAccountRelayUrl(relayUrl);
+    if (!base) throw new Error('Invalid Relay URL');
     // Timed so the watch has something to be slow relative to. Phone and watch
     // reach the same relay and the same desktop, so a gap between them is the
     // client's own cost and a shared floor is the round trip's.

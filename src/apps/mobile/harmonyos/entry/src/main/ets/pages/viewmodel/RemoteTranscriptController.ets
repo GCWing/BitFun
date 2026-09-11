@@ -105,7 +105,6 @@ export class RemoteTranscriptController {
     const activeTurnId = this.remoteActiveTurnId();
     const canSteerRunningTurn = queuedBehindRunningTurn && activeTurnId.length > 0 &&
       this.remote.supportsHostCapability(REMOTE_CAPABILITY_DIALOG_STEER_V1);
-    this.remote.clearComposer();
     const imageContexts: RemoteImageContext[] = images.length > 0 ?
       runtime.imagePicker.toRemoteContexts(images) : [];
     if (canSteerRunningTurn) {

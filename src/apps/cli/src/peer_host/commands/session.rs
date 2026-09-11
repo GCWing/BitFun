@@ -272,28 +272,33 @@ pub(crate) async fn list_persisted_sessions_count(
     Ok(json!(list.len()))
 }
 
-/// CLI Peer observers can acknowledge results without projecting Session
-/// history back into the Runtime. Other metadata edits remain unsupported.
+/// CLI Peer observers can acknowledge results and persist title presentation
+/// without projecting Session history back into the Runtime.
 pub(crate) async fn save_session_metadata(
     state: &PeerHostState,
     args: &Value,
 ) -> Result<Value, String> {
-    use openbitfun_core::service::session::{apply_session_unread_completion, SessionMetadata};
+    use openbitfun_core::service::session::{
+        apply_session_title_metadata, apply_session_unread_completion, SessionMetadata,
+    };
     let request = request_value(args);
     let fields: Vec<String> =
         serde_json::from_value(request.get("fields").cloned().unwrap_or(Value::Null))
             .map_err(|error| format!("Invalid session metadata fields: {error}"))?;
-    if fields
-        .iter()
-        .any(|field| !matches!(field.as_str(), "unreadCompletion" | "needsUserAttention"))
-    {
+    if fields.iter().any(|field| {
+        !matches!(
+            field.as_str(),
+            "unreadCompletion" | "needsUserAttention" | "titleMetadata"
+        )
+    }) {
         return Err(
-            "CLI Peer Host supports only session notification metadata updates".to_string(),
+            "CLI Peer Host supports only session notification and title metadata updates"
+                .to_string(),
         );
     }
     let incoming: SessionMetadata =
         serde_json::from_value(request.get("metadata").cloned().unwrap_or(Value::Null))
-            .map_err(|error| format!("Invalid session notification metadata: {error}"))?;
+            .map_err(|error| format!("Invalid session presentation metadata: {error}"))?;
     let workspace_path = resolved_session_storage_path(state, request).await?;
     state
         .compatibility
@@ -304,9 +309,12 @@ pub(crate) async fn save_session_metadata(
             if fields.iter().any(|field| field == "needsUserAttention") {
                 current.needs_user_attention = incoming.needs_user_attention.clone();
             }
+            if fields.iter().any(|field| field == "titleMetadata") {
+                apply_session_title_metadata(current, &incoming);
+            }
         })
         .await
-        .map_err(|error| format!("Failed to update session notification metadata: {error}"))?;
+        .map_err(|error| format!("Failed to update session presentation metadata: {error}"))?;
     Ok(Value::Null)
 }
 
@@ -1035,11 +1043,11 @@ mod tests {
             session: AgentSessionSummary {
                 session_id: "session_1".to_string(),
                 session_name: "Main".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 model_id: Some("provider/model".to_string()),
                 reasoning_preset: Some("high".to_string()),
                 last_user_dialog_agent_type: Some("plan".to_string()),
-                last_submitted_agent_type: Some("agentic".to_string()),
+                last_submitted_agent_type: Some("Standard".to_string()),
                 turn_count: 3,
                 created_at_ms: 12_345,
                 last_active_at_ms: 20_000,
@@ -1049,11 +1057,11 @@ mod tests {
 
         assert_eq!(value["sessionId"], "session_1");
         assert_eq!(value["sessionName"], "Main");
-        assert_eq!(value["agentType"], "agentic");
+        assert_eq!(value["agentType"], "Standard");
         assert_eq!(value["modelName"], "provider/model");
         assert_eq!(value["reasoningPreset"], "high");
         assert_eq!(value["lastUserDialogAgentType"], "plan");
-        assert_eq!(value["lastSubmittedAgentType"], "agentic");
+        assert_eq!(value["lastSubmittedAgentType"], "Standard");
         assert_eq!(value["state"], "Idle");
         assert_eq!(value["turnCount"], 3);
         assert_eq!(value["createdAt"], 12);
@@ -1073,7 +1081,7 @@ mod tests {
         let mut restored = CoreSession::new_with_id(
             "session_1".to_string(),
             "Main".to_string(),
-            "agentic".to_string(),
+            "Standard".to_string(),
             SessionConfig::default(),
         );
         let mut live = restored.clone();

@@ -47,7 +47,7 @@ vi.mock('../store/FlowChatStore', () => ({
           workspacePath: 'D:\\workspace\\repo',
           remoteConnectionId: 'remote-1',
           remoteSshHost: 'host-1',
-          config: { agentType: 'Ultra' },
+          config: { agentType: 'Ultimate' },
           dialogTurns: [],
         }],
       ]);

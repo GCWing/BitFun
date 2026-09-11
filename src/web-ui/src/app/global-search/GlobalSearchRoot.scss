@@ -1,10 +1,10 @@
 @use '../styles/nav-panel-font-scope.scss' as nav-font;
 
 .global-search-dialog {
-  // Fits the default two-row action grid plus one workspace and assistant.
-  // Query and drilldown views keep the results region scrollable when needed.
+  // The results viewport absorbs short windows and longer result sets.
+  inline-size: var(--openbitfun-layout-search-dialog-width);
   block-size: min(
-    480px,
+    var(--openbitfun-layout-search-dialog-height),
     calc(100vh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter))
   );
 }
@@ -33,66 +33,7 @@
 
   &__header {
     flex: 0 0 auto;
-    padding: 16px 18px 10px;
-  }
-
-  &__query {
-    display: flex;
-    align-items: center;
-    min-height: 40px;
-    padding: 0 10px 0 12px;
-    gap: 8px;
-    border: 1px solid var(--openbitfun-color-border-subtle);
-    border-radius: 9px;
-    background: var(--global-search-raised-surface);
-    box-shadow: none;
-
-    &:focus-within {
-      border-color: var(--openbitfun-color-border-default);
-      box-shadow: none;
-    }
-
-    input {
-      flex: 1;
-      min-width: 0;
-      height: 100%;
-      border: 0;
-      outline: 0;
-      background: transparent;
-      color: var(--openbitfun-color-content-primary);
-      font: inherit;
-      font-size: var(--openbitfun-type-label-md-font-size);
-      font-weight: var(--openbitfun-type-body-sm-font-weight);
-      line-height: var(--openbitfun-type-meta-line-height);
-
-      &::placeholder {
-        color: var(--openbitfun-color-content-muted);
-        opacity: 1;
-      }
-
-      // The query shell owns the visible focus state. This selector also
-      // outranks AppLayout's app-wide `*:focus-visible` outline.
-      &:focus,
-      &:focus-visible {
-        outline: none;
-        outline-offset: 0;
-        box-shadow: none;
-      }
-    }
-  }
-
-  &__scope-bar {
-    display: flex;
-    align-items: center;
-    min-height: 28px;
-    margin-top: 10px;
-    gap: 12px;
-  }
-
-  &__scopes {
-    display: flex;
-    align-items: center;
-    gap: 4px;
+    padding: 0;
   }
 
   &__results {
@@ -465,14 +406,7 @@
 }
 
 @media (max-width: 980px) {
-  .global-search-dialog {
-    block-size: calc(100vh - 2 * var(--openbitfun-overlay-dialog-viewport-gutter));
-  }
-
-  .global-search--modal {
-    .global-search__header {
-      padding: 26px 26px 18px;
-    }
+.global-search--modal {
 
     .global-search__results {
       padding-inline: 26px;
@@ -490,35 +424,6 @@
 
 @media (max-width: 700px) {
   .global-search--modal {
-    .global-search__header {
-      padding: 18px 18px 14px;
-    }
-
-    .global-search__query {
-      min-height: 56px;
-      padding-inline: 14px;
-
-      input {
-        font-size: var(--openbitfun-type-body-lg-font-size);
-      }
-    }
-
-    .global-search__query-icon {
-      width: 20px;
-      height: 20px;
-      padding-right: 9px;
-    }
-
-    .global-search__scope-bar {
-      min-height: 38px;
-      margin-top: 14px;
-    }
-
-    .global-search__scope {
-      min-height: 36px;
-      padding-inline: 13px;
-      font-size: var(--openbitfun-type-label-md-font-size);
-    }
 
     .global-search__prefix-hint,
     .global-search__result-context,
@@ -565,18 +470,6 @@
 
 @media (max-height: 850px) and (min-width: 701px) {
   .global-search--modal {
-    .global-search__header {
-      padding-top: 24px;
-      padding-bottom: 16px;
-    }
-
-    .global-search__query {
-      min-height: 58px;
-    }
-
-    .global-search__scope-bar {
-      margin-top: 14px;
-    }
 
     .global-search__result--action {
       min-height: 112px;
@@ -603,60 +496,20 @@
   color: var(--openbitfun-color-content-primary);
   font-family:var(--openbitfun-type-body-sm-font-family);
 
-  .global-search__header {
-    padding: 0;
-  }
-
-  .global-search__query-system-shell {
-    width: 100%;
-  }
-
+  .global-search__query-system-shell,
   .global-search__query--system {
-    display: inline-flex;
     width: 100%;
-    min-height: 0;
-    padding: 0;
-    gap: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-
-    &:focus-within {
-      border-color: transparent;
-      box-shadow: none;
-    }
-
-    input {
-      color: var(--openbitfun-color-content-primary);
-      font-family:var(--openbitfun-type-body-sm-font-family);
-      font-size: var(--openbitfun-type-body-md-font-size);
-      font-weight: var(--openbitfun-type-body-sm-font-weight);
-
-      &::placeholder {
-        color: var(--openbitfun-color-content-muted);
-      }
-    }
   }
 
   .global-search__scope-bar {
-    min-height: var(--openbitfun-control-height-sm);
-    margin-top: var(--openbitfun-space-4);
-    gap: var(--openbitfun-space-2);
-  }
-
-  .global-search__scopes {
-    gap: var(--openbitfun-space-2);
-  }
-
-  .global-search__scope--system {
-    min-height: var(--openbitfun-control-height-sm);
-    font-size: var(--openbitfun-type-body-md-font-size);
+    display: flex;
+    min-width: 0;
+    margin-top: var(--openbitfun-layout-search-dialog-scope-gap);
   }
 
   .global-search__results {
     min-height: 0;
-    margin-top: var(--openbitfun-space-4);
+    margin-top: var(--openbitfun-layout-search-dialog-results-gap);
     padding: 0;
     color: var(--openbitfun-color-content-primary);
     scrollbar-gutter: auto;
@@ -860,14 +713,8 @@
 }
 
 @media (max-width: 980px) {
-  .global-search-modal-content {
-    padding: var(--openbitfun-space-4);
-  }
 
   .global-search--modal {
-    .global-search__header {
-      padding: 0;
-    }
 
     .global-search__results {
       padding: 0;
@@ -889,29 +736,6 @@
   }
 
   .global-search--modal {
-    .global-search__header {
-      padding: 0;
-    }
-
-    .global-search__query--system {
-      min-height: 0;
-      padding: 0;
-
-      input {
-        font-size: var(--openbitfun-type-body-md-font-size);
-      }
-    }
-
-    .global-search__scope-bar {
-      min-height: var(--openbitfun-control-height-sm);
-      margin-top: var(--openbitfun-space-4);
-    }
-
-    .global-search__scope--system {
-      min-height: var(--openbitfun-control-height-sm);
-      padding-inline: var(--openbitfun-space-4);
-      font-size: var(--openbitfun-type-label-md-font-size);
-    }
 
     .global-search__results {
       display: block !important;
@@ -938,21 +762,6 @@
 
 @media (max-height: 850px) and (min-width: 701px) {
   .global-search--modal {
-    .global-search__header {
-      padding: 0;
-    }
-
-    .global-search__query--system {
-      min-height: 0;
-    }
-
-    .global-search__scope-bar {
-      margin-top: var(--openbitfun-space-3);
-    }
-
-    .global-search__results {
-      margin-top: var(--openbitfun-space-4);
-    }
 
     .global-search__footer {
       flex-basis: var(--openbitfun-control-height-sm);
@@ -967,12 +776,18 @@
  * to the viewport's content-bearing regions.
  */
 .global-search-modal-content {
-  --global-search-modal-inline-end-inset: var(--openbitfun-overlay-dialog-content-padding-lg);
+  --global-search-modal-inline-end-inset: var(--openbitfun-layout-search-dialog-padding);
+
+  padding: var(--openbitfun-layout-search-dialog-padding);
 
   padding-inline-end: 0;
 }
 
 .global-search--modal {
+  .global-search__query-system-shell {
+    --openbitfun-control-height-sm: var(--openbitfun-layout-search-dialog-query-height);
+  }
+
   > .global-search__header,
   > .global-search__results,
   > .global-search__footer {
@@ -980,15 +795,11 @@
   }
 }
 
-@media (max-width: 980px) {
-  .global-search-modal-content {
-    --global-search-modal-inline-end-inset: var(--openbitfun-space-4);
-  }
-}
-
 @media (max-width: 700px) {
   .global-search-modal-content {
     --global-search-modal-inline-end-inset: var(--openbitfun-space-3);
+    padding: var(--openbitfun-space-3);
+    padding-inline-end: 0;
   }
 }
 

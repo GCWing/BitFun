@@ -244,7 +244,7 @@ function mapEventKind(kind: string): FileSystemChangeEvent['type'] {
 
 export class TauriExplorerFileSystemProvider implements ExplorerFileSystemProvider {
   async getChildren(request: ExplorerChildrenRequest): Promise<FileSystemNode[]> {
-    const rawChildren = await workspaceAPI.explorerGetChildren(request.path);
+    const rawChildren = await workspaceAPI.explorerGetChildren(request.path, request.remoteConnectionId);
     return sortNodes(
       rawChildren.map((node) => transformRawNode(node)),
       request.options?.sortBy,

@@ -134,7 +134,7 @@ mod tests {
         MemoryStartupRequest {
             session_id: "session-a".to_string(),
             session_kind: SessionKind::Standard,
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             workspace_path: Some("workspace".to_string()),
             is_remote_workspace: false,
             has_user_input: true,

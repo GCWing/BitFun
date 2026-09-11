@@ -178,7 +178,6 @@
 /* Shared compact visual language */
 .session-list__header,
 .chat-page__header,
-.devices-page__header,
 .workspace-page__header {
   min-height: 64px;
   background: color-mix(in srgb, var(--openbitfun-color-surface-canvas) 90%, transparent);
@@ -187,7 +186,6 @@
 }
 
 .session-list__header-copy h1,
-.devices-page__title,
 .workspace-page__header h1 {
   font-family: var(--openbitfun-type-heading-compact-page-font-family);
   font-weight: var(--openbitfun-type-heading-compact-page-font-weight);
@@ -384,7 +382,7 @@
   color: var(--openbitfun-color-content-muted);
 
   &--code,
-  &--agentic,
+  &--Standard,
   &--cowork,
   &--Cowork,
   &--claw,
@@ -425,7 +423,6 @@
   cursor: pointer;
 }
 
-.devices-page__body,
 .workspace-page__content {
   width: 100%;
 }
@@ -435,21 +432,6 @@
   border-color: var(--openbitfun-color-border-subtle);
   background: var(--openbitfun-color-surface-panel);
   box-shadow: var(--openbitfun-shadow-xs);
-}
-
-.devices-page__device-icon,
-.devices-page__device.is-current .devices-page__device-icon {
-  width: 42px;
-  height: 42px;
-  border-color: var(--openbitfun-color-border-subtle);
-  background: var(--openbitfun-color-surface-tertiary);
-  color: var(--openbitfun-color-content-secondary);
-}
-
-.devices-page__badge--current {
-  border-color: var(--openbitfun-color-border-subtle);
-  background: var(--openbitfun-color-surface-panel);
-  color: var(--openbitfun-color-content-secondary);
 }
 
 .workspace-page__btn--primary {
@@ -520,14 +502,12 @@
   }
 
   .chat-page__header,
-  .devices-page__header,
   .workspace-page__header {
     min-height: 72px;
   }
 
   .chat-page__messages { padding-top: 30px; }
 
-  .devices-page__body,
   .workspace-page__content {
     max-width: 760px;
     margin: 0 auto;
@@ -569,7 +549,6 @@
   .session-list__header-target { display: none; }
 
   .chat-page__header,
-  .devices-page__header,
   .workspace-page__header {
     padding-left: max(12px, env(safe-area-inset-left, 0px));
     padding-right: max(12px, env(safe-area-inset-right, 0px));

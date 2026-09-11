@@ -32,7 +32,7 @@ export function getCapabilityAccentBorder(category: CapabilityCategory): string 
 }
 
 export const CORE_AGENT_ACCENTS = {
-  agentic: {
+  Standard: {
     accentColor: 'var(--openbitfun-color-accent-default)',
     accentBg: getAlphaColor('var(--openbitfun-color-accent-default)', '1a', 10),
   },
@@ -46,7 +46,7 @@ export const CORE_AGENT_ACCENTS = {
   },
 } as const satisfies Record<string, AgentAccentStyle>;
 
-export const DEFAULT_CORE_AGENT_ACCENT: AgentAccentStyle = CORE_AGENT_ACCENTS.agentic;
+export const DEFAULT_CORE_AGENT_ACCENT: AgentAccentStyle = CORE_AGENT_ACCENTS.Standard;
 
 export const AGENT_TEAM_TAG_COLORS = [
   {
@@ -58,7 +58,7 @@ export const AGENT_TEAM_TAG_COLORS = [
     border: getAlphaColor(CORE_AGENT_ACCENTS.Cowork.accentColor),
   },
   {
-    color: CORE_AGENT_ACCENTS.agentic.accentColor,
-    border: getAlphaColor(CORE_AGENT_ACCENTS.agentic.accentColor),
+    color: CORE_AGENT_ACCENTS.Standard.accentColor,
+    border: getAlphaColor(CORE_AGENT_ACCENTS.Standard.accentColor),
   },
 ] as const;

@@ -114,7 +114,6 @@ pub(crate) async fn set_config(state: &PeerHostState, args: &Value) -> Result<Va
 
     // Config changed on this host via a peer controller — schedule the cloud
     // push so other same-account devices converge.
-    state.account_runtime.notify_local_settings_changed();
 
     Ok(outcome)
 }

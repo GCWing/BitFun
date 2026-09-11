@@ -4,7 +4,7 @@
   "title": "OpenBitFun Playbook",
   "origin": "https://playbook.openbitfun.com",
   "source": "src/shared/interactive-capabilities/catalog.json",
-  "digest": "d7a7419ddd673eb733ae8bd33dbb3dcd3b4d1ce0acfc953067a3403fe26d6699",
+  "digest": "896281a3cd5cac2b50ec607988e04624224444911ddb2d58ba59a5d7d06493c5",
   "ownerDigest": "c0e5c187cf62bc6ed06196ce8520b3eb427bf268cf24659b72d2552fb1d99c54",
   "searchAcceptance": [
     {
@@ -138,11 +138,11 @@
     "features": 22,
     "settings": 21,
     "userFacing": 43,
-    "documentedItems": 321,
+    "documentedItems": 319,
     "controlCoverage": {
       "direct": 48,
       "delegated": 61,
-      "interactive": 212,
+      "interactive": 210,
       "unsupported": 0
     }
   },
@@ -8666,11 +8666,8 @@
         "start-stop-status",
         "network",
         "bots",
-        "relay-wizard",
         "account",
         "devices",
-        "session-sync",
-        "settings-sync",
         "peer-device"
       ],
       "kind": "query",
@@ -8897,52 +8894,6 @@
       }
     },
     {
-      "id": "feature.remote-connect:open:relay-wizard",
-      "capabilityId": "feature.remote-connect",
-      "itemIds": [
-        "relay-wizard"
-      ],
-      "kind": "open",
-      "risk": "ui",
-      "executionHost": "presentationSurface",
-      "availability": {
-        "desktop": {
-          "available": true
-        },
-        "cli": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
-        },
-        "peer": {
-          "available": true,
-          "requiredCapabilities": [
-            "product_control_v1",
-            "product_control_presentation_v1"
-          ]
-        },
-        "remoteControl": {
-          "available": true
-        },
-        "detachedDispatch": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
-        }
-      },
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false
-      },
-      "outputSchema": {
-        "type": "object",
-        "additionalProperties": true
-      },
-      "openReason": "unstructuredInteraction",
-      "presentationTarget": {
-        "kind": "event",
-        "eventName": "openbitfun:open-remote-connect"
-      }
-    },
-    {
       "id": "feature.remote-connect:open:account",
       "capabilityId": "feature.remote-connect",
       "itemIds": [
@@ -8993,98 +8944,6 @@
       "capabilityId": "feature.remote-connect",
       "itemIds": [
         "devices"
-      ],
-      "kind": "open",
-      "risk": "ui",
-      "executionHost": "presentationSurface",
-      "availability": {
-        "desktop": {
-          "available": true
-        },
-        "cli": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
-        },
-        "peer": {
-          "available": true,
-          "requiredCapabilities": [
-            "product_control_v1",
-            "product_control_presentation_v1"
-          ]
-        },
-        "remoteControl": {
-          "available": true
-        },
-        "detachedDispatch": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
-        }
-      },
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false
-      },
-      "outputSchema": {
-        "type": "object",
-        "additionalProperties": true
-      },
-      "openReason": "unstructuredInteraction",
-      "presentationTarget": {
-        "kind": "event",
-        "eventName": "openbitfun:open-remote-connect"
-      }
-    },
-    {
-      "id": "feature.remote-connect:open:session-sync",
-      "capabilityId": "feature.remote-connect",
-      "itemIds": [
-        "session-sync"
-      ],
-      "kind": "open",
-      "risk": "ui",
-      "executionHost": "presentationSurface",
-      "availability": {
-        "desktop": {
-          "available": true
-        },
-        "cli": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
-        },
-        "peer": {
-          "available": true,
-          "requiredCapabilities": [
-            "product_control_v1",
-            "product_control_presentation_v1"
-          ]
-        },
-        "remoteControl": {
-          "available": true
-        },
-        "detachedDispatch": {
-          "available": false,
-          "reason": "This delivery profile has no live presentation surface"
-        }
-      },
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false
-      },
-      "outputSchema": {
-        "type": "object",
-        "additionalProperties": true
-      },
-      "openReason": "unstructuredInteraction",
-      "presentationTarget": {
-        "kind": "event",
-        "eventName": "openbitfun:open-remote-connect"
-      }
-    },
-    {
-      "id": "feature.remote-connect:open:settings-sync",
-      "capabilityId": "feature.remote-connect",
-      "itemIds": [
-        "settings-sync"
       ],
       "kind": "open",
       "risk": "ui",
@@ -14816,6 +14675,7 @@
       "id": "setting.workspace.session:query",
       "capabilityId": "setting.workspace.session",
       "itemIds": [
+        "default-agent-harness",
         "automatic-titles",
         "title-model",
         "accelerated-search",
@@ -14944,6 +14804,52 @@
       "valueSource": {
         "kind": "static"
       },
+      "presentationTarget": {
+        "kind": "settings",
+        "pageId": "workspace.session"
+      }
+    },
+    {
+      "id": "setting.workspace.session:open:default-agent-harness",
+      "capabilityId": "setting.workspace.session",
+      "itemIds": [
+        "default-agent-harness"
+      ],
+      "kind": "open",
+      "risk": "ui",
+      "executionHost": "presentationSurface",
+      "availability": {
+        "desktop": {
+          "available": true
+        },
+        "cli": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        },
+        "peer": {
+          "available": true,
+          "requiredCapabilities": [
+            "product_control_v1",
+            "product_control_presentation_v1"
+          ]
+        },
+        "remoteControl": {
+          "available": true
+        },
+        "detachedDispatch": {
+          "available": false,
+          "reason": "This delivery profile has no live presentation surface"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "openReason": "unstructuredInteraction",
       "presentationTarget": {
         "kind": "settings",
         "pageId": "workspace.session"
@@ -23820,7 +23726,7 @@
         "微信",
         "多设备",
         "Peer Device",
-        "账户同步"
+        "GitHub"
       ],
       "keywordsEn": [
         "remote connect",
@@ -23831,28 +23737,28 @@
         "WeChat",
         "multi-device",
         "peer device",
-        "account sync"
+        "GitHub"
       ],
       "highlightsZh": [
-        "通过局域网、Ngrok 或自建 Relay 连接",
+        "通过局域网或官方 Relay 连接",
         "接入飞书、Telegram 或微信 Bot",
-        "登录账户、同步会话并进入 Peer Device Mode"
+        "使用 GitHub 身份管理设备并进入 Peer Device Mode"
       ],
       "highlightsEn": [
-        "Connect through LAN, Ngrok, or a self-hosted relay",
+        "Connect through LAN or the official Relay",
         "Use Feishu, Telegram, or WeChat bots",
-        "Sign in, sync sessions, and enter Peer Device Mode"
+        "Use GitHub identity to manage devices and enter Peer Device Mode"
       ],
       "items": [
         {
           "id": "connection-methods",
-          "titleZh": "选择局域网、Ngrok、官方 Relay、自建 Relay 或自定义服务器",
-          "titleEn": "Choose LAN, Ngrok, the hosted relay, a self-hosted relay, or a custom server",
+          "titleZh": "选择局域网或官方 Relay",
+          "titleEn": "Choose LAN or the official Relay",
           "control": {
             "kind": "open",
             "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“选择局域网、Ngrok、官方 Relay、自建 Relay 或自定义服务器”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Choose LAN, Ngrok, the hosted relay, a self-hosted relay, or a custom server” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
+            "reasonZh": "“选择局域网或官方 Relay”需要结合当前网络与设备状态，确认目标主机后才能连接；Agent 打开连接入口，由用户完成选择。",
+            "reasonEn": "“Choose LAN or the official Relay” depends on the current network and device state and requires the user to confirm the target host; the Agent opens the connection entry for that choice."
           }
         },
         {
@@ -23889,25 +23795,14 @@
           }
         },
         {
-          "id": "relay-wizard",
-          "titleZh": "通过向导预检、安装 Docker、部署、注册并验证自建 Relay",
-          "titleEn": "Preflight, install Docker, deploy, register, and verify a self-hosted relay through the wizard",
-          "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“通过向导预检、安装 Docker、部署、注册并验证自建 Relay”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Preflight, install Docker, deploy, register, and verify a self-hosted relay through the wizard” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
-          }
-        },
-        {
           "id": "account",
-          "titleZh": "登录、退出并查看账户状态和凭据提示",
-          "titleEn": "Sign in, sign out, and inspect account status and credential hints",
+          "titleZh": "使用 GitHub 登录、退出并查看身份状态",
+          "titleEn": "Sign in with GitHub, sign out, and inspect identity status",
           "control": {
             "kind": "open",
             "reasonCode": "externalAuth",
-            "reasonZh": "OpenBitFun 账户登录必须由用户在外部认证页面确认；Agent 可以打开入口并读取非秘密状态，但不能冒充账户持有人。",
-            "reasonEn": "OpenBitFun account sign-in requires confirmation on an external authentication page; the Agent may open the entry and read non-secret status but cannot impersonate the account holder."
+            "reasonZh": "GitHub 账户登录必须由用户在外部认证页面确认；Agent 可以打开入口并读取非秘密状态，但不能冒充账户持有人。",
+            "reasonEn": "GitHub account sign-in requires confirmation on an external authentication page; the Agent may open the entry and read non-secret status but cannot impersonate the account holder."
           }
         },
         {
@@ -23919,28 +23814,6 @@
             "reasonCode": "unstructuredInteraction",
             "reasonZh": "“列出、连接、查看在线状态和删除同账户设备”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
             "reasonEn": "“List, connect, inspect online status, and remove same-account devices” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
-          }
-        },
-        {
-          "id": "session-sync",
-          "titleZh": "同步、导出、导入、删除或发送会话到另一台设备",
-          "titleEn": "Sync, export, import, delete, or send sessions to another device",
-          "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“同步、导出、导入、删除或发送会话到另一台设备”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Sync, export, import, delete, or send sessions to another device” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
-          }
-        },
-        {
-          "id": "settings-sync",
-          "titleZh": "在设备间自动或手动同步 OpenBitFun 设置",
-          "titleEn": "Synchronize OpenBitFun settings across devices automatically or on demand",
-          "control": {
-            "kind": "open",
-            "reasonCode": "unstructuredInteraction",
-            "reasonZh": "“在设备间自动或手动同步 OpenBitFun 设置”由多个实时状态相关步骤组成，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把后续交互保留在用户可见界面。",
-            "reasonEn": "“Synchronize OpenBitFun settings across devices automatically or on demand” spans multiple live-state-dependent steps and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the remaining interaction visible to the user."
           }
         },
         {
@@ -23995,7 +23868,7 @@
         "微信",
         "多设备",
         "Peer Device",
-        "账户同步",
+        "GitHub",
         "remote connect",
         "remote control",
         "mobile",
@@ -24003,31 +23876,24 @@
         "WeChat",
         "multi-device",
         "peer device",
-        "account sync",
-        "通过局域网、Ngrok 或自建 Relay 连接",
+        "通过局域网或官方 Relay 连接",
         "接入飞书、Telegram 或微信 Bot",
-        "登录账户、同步会话并进入 Peer Device Mode",
-        "Connect through LAN, Ngrok, or a self-hosted relay",
+        "使用 GitHub 身份管理设备并进入 Peer Device Mode",
+        "Connect through LAN or the official Relay",
         "Use Feishu, Telegram, or WeChat bots",
-        "Sign in, sync sessions, and enter Peer Device Mode",
-        "选择局域网、Ngrok、官方 Relay、自建 Relay 或自定义服务器",
-        "Choose LAN, Ngrok, the hosted relay, a self-hosted relay, or a custom server",
+        "Use GitHub identity to manage devices and enter Peer Device Mode",
+        "选择局域网或官方 Relay",
+        "Choose LAN or the official Relay",
         "启动、停止 Remote Connect 并查看实时连接状态和设备信息",
         "Start or stop Remote Connect and inspect live status and device information",
         "查看局域网 IP、网络信息与可分享的连接配置",
         "Inspect LAN IP, network details, and shareable connection configuration",
         "配置飞书、Telegram、微信等 Bot 并单独停止 Bot",
         "Configure Feishu, Telegram, WeChat, and other bots, and stop a bot independently",
-        "通过向导预检、安装 Docker、部署、注册并验证自建 Relay",
-        "Preflight, install Docker, deploy, register, and verify a self-hosted relay through the wizard",
-        "登录、退出并查看账户状态和凭据提示",
-        "Sign in, sign out, and inspect account status and credential hints",
+        "使用 GitHub 登录、退出并查看身份状态",
+        "Sign in with GitHub, sign out, and inspect identity status",
         "列出、连接、查看在线状态和删除同账户设备",
         "List, connect, inspect online status, and remove same-account devices",
-        "同步、导出、导入、删除或发送会话到另一台设备",
-        "Sync, export, import, delete, or send sessions to another device",
-        "在设备间自动或手动同步 OpenBitFun 设置",
-        "Synchronize OpenBitFun settings across devices automatically or on demand",
         "进入 Peer Device Mode，把另一台 OpenBitFun 设备作为命令与事件数据面",
         "Enter Peer Device Mode and use another OpenBitFun device as the command and event data plane",
         "打开 Remote Connect",
@@ -24355,12 +24221,12 @@
         }
       ],
       "stepsZh": [
-        "登录 OpenBitFun 账户",
+        "使用 GitHub 登录",
         "打开 Pages",
         "选择页面并确认发布与可见性"
       ],
       "stepsEn": [
-        "Sign in to a OpenBitFun account",
+        "Sign in to a GitHub account",
         "Open Pages",
         "Choose a page and confirm publishing and visibility"
       ],
@@ -27431,11 +27297,13 @@
       "categoryId": "assistant",
       "titleZh": "会话与工作区设置",
       "titleEn": "Session & workspace settings",
-      "summaryZh": "控制会话标题生成、工作区加速搜索和与项目上下文相关的行为。",
-      "summaryEn": "Control session-title generation, accelerated workspace search, and project-context behavior.",
+      "summaryZh": "控制默认 Agent Harness、会话标题生成、工作区加速搜索和与项目上下文相关的行为。",
+      "summaryEn": "Control the default Agent Harness, session-title generation, accelerated workspace search, and project-context behavior.",
       "keywordsZh": [
         "会话设置",
         "工作区设置",
+        "默认 Harness",
+        "上次选择",
         "标题生成",
         "项目搜索",
         "索引"
@@ -27443,21 +27311,36 @@
       "keywordsEn": [
         "session settings",
         "workspace settings",
+        "default Harness",
+        "last selection",
         "title generation",
         "project search",
         "index"
       ],
       "highlightsZh": [
+        "跟随上次选择或固定默认 Harness",
         "自动生成会话标题",
         "本地工作区加速搜索",
         "会话使用的标题模型"
       ],
       "highlightsEn": [
+        "Follow the last selection or fix a default Harness",
         "Automatic session titles",
         "Accelerated local-workspace search",
         "Model used for session titles"
       ],
       "items": [
+        {
+          "id": "default-agent-harness",
+          "titleZh": "让普通新会话跟随 ChatInput 上次选择，或固定使用指定 Harness",
+          "titleEn": "Make regular new sessions follow the last ChatInput selection or use a fixed Harness",
+          "control": {
+            "kind": "open",
+            "reasonCode": "unstructuredInteraction",
+            "reasonZh": "“让普通新会话跟随 ChatInput 上次选择，或固定使用指定 Harness”由会话设置页中的关联控件共同管理，目前没有一个能确定完成整个流程的单一结构化 Command；Agent 会打开精确入口，并把选择保留在用户可见界面。",
+            "reasonEn": "“Make regular new sessions follow the last ChatInput selection or use a fixed Harness” is managed by related controls on the session settings page and currently has no single structured Command that can deterministically complete the whole workflow; the Agent opens the exact entry and keeps the selection visible to the user."
+          }
+        },
         {
           "id": "automatic-titles",
           "titleZh": "启用或停用根据会话内容自动生成标题",
@@ -27523,18 +27406,22 @@
       "stepsZh": [
         "打开设置",
         "进入“工作区 > 会话与工作区”",
-        "调整标题或搜索选项"
+        "调整默认 Harness、标题或搜索选项"
       ],
       "stepsEn": [
         "Open Settings",
         "Go to Workspace > Session & Workspace",
-        "Tune title or search controls"
+        "Tune the default Harness, title, or search controls"
       ],
       "agentExamplesZh": [
+        "让新会话跟随 ChatInput 上一次选择的 Harness",
+        "把新会话固定为 Ultimate Harness",
         "关闭自动生成会话标题",
         "启用工作区加速搜索"
       ],
       "agentExamplesEn": [
+        "Make new sessions follow the last Harness selected in ChatInput",
+        "Fix Ultimate as the Harness for new sessions",
         "Turn off automatic session titles",
         "Enable accelerated workspace search"
       ],
@@ -27587,20 +27474,28 @@
         "AI & collaboration",
         "会话设置",
         "工作区设置",
+        "默认 Harness",
+        "上次选择",
         "标题生成",
         "项目搜索",
         "索引",
         "session settings",
         "workspace settings",
+        "default Harness",
+        "last selection",
         "title generation",
         "project search",
         "index",
+        "跟随上次选择或固定默认 Harness",
         "自动生成会话标题",
         "本地工作区加速搜索",
         "会话使用的标题模型",
+        "Follow the last selection or fix a default Harness",
         "Automatic session titles",
         "Accelerated local-workspace search",
         "Model used for session titles",
+        "让普通新会话跟随 ChatInput 上次选择，或固定使用指定 Harness",
+        "Make regular new sessions follow the last ChatInput selection or use a fixed Harness",
         "启用或停用根据会话内容自动生成标题",
         "Enable or disable automatic titles generated from session content",
         "让标题模型继承主模型、快速模型或使用指定模型",
@@ -27611,8 +27506,12 @@
         "Inspect index status and rebuild the workspace index when needed",
         "远程工作区明确降级搜索实现，不把远程路径回退到本机",
         "Use an explicit remote-workspace search path without silently falling back to local files",
+        "让新会话跟随 ChatInput 上一次选择的 Harness",
+        "把新会话固定为 Ultimate Harness",
         "关闭自动生成会话标题",
         "启用工作区加速搜索",
+        "Make new sessions follow the last Harness selected in ChatInput",
+        "Fix Ultimate as the Harness for new sessions",
         "Turn off automatic session titles",
         "Enable accelerated workspace search"
       ],

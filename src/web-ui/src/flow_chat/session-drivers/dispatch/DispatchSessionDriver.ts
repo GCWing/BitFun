@@ -42,7 +42,7 @@ import { dispatchJobStore } from '@/features/dispatch/dispatchJobStore';
 import { forgetDispatchTranscript } from '@/features/dispatch/dispatchTranscriptCache';
 import { requestDispatchJobRefresh } from '@/features/dispatch/DispatchJobObserver';
 import { markOptimisticDispatchTurnMetadata } from '@/features/dispatch/optimisticDispatchTurn';
-import { openDispatchSessionFile } from '@/features/dispatch/dispatchFileNavigation';
+import { openDispatchSessionFile, readDispatchSessionImage, downloadDispatchSessionFile } from '@/features/dispatch/dispatchFileNavigation';
 import { cleanupSaveState } from '../../services/flow-chat-manager/PersistenceModule';
 import { cleanupSessionBuffers } from '../../services/flow-chat-manager/TextChunkModule';
 import { sessionProjectWorkspacePath } from '../../utils/sessionWorkspace';
@@ -177,7 +177,7 @@ async function continueDispatchJob(
   const followUpSession =
     context.flowChatStore.getState().sessions.get(sessionId) ?? input.readySession;
   const followUpAgentType =
-    (input.currentAgentType?.trim() || followUpSession.mode || 'agentic').trim();
+    (input.currentAgentType?.trim() || followUpSession.mode || 'Standard').trim();
   // The composer edits these between turns; the follow-up carries them as
   // per-turn overrides which the target persists onto the job.
   const turnModel = followUpSession.config.dispatchModel?.trim() || undefined;
@@ -309,7 +309,7 @@ function removeProjectionLocally(
 }
 
 export const dispatchSessionDriver: SessionDriver = {
-  fileAccess: { open: openDispatchSessionFile },
+  fileAccess: { open: openDispatchSessionFile, readImage: readDispatchSessionImage, download: downloadDispatchSessionFile },
   id: 'dispatch',
   navigationStatusSource: dispatchNavigationStatusSource,
 

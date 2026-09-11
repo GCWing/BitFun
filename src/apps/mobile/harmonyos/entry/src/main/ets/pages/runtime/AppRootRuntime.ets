@@ -37,11 +37,15 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
 
   async aboutToAppear(): Promise<void> {
     await this.localeController.initialize(this.host.context());
+    if (this.host.offerTaskNotifications) {
+      await this.taskCompletionNotificationPort.offerOnboarding(
+        (): Promise<boolean> => this.host.offerTaskNotifications!()
+      );
+    }
     this.syncRemotePageSummary();
     await this.remoteChatCache.init(this.host.context());
     await this.remoteSessionListCache.init(this.host.context());
     await this.restoreCachedRemoteSessions();
-    await this.generalChatBootstrapController.restore(this.host.context());
     await this.settingsController.initializeCloudAccount(this.host.context());
     if (this.settingsController.hasCloudAccountSession()) {
       try {
@@ -51,7 +55,6 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
         RemoteLogger.warn(`device directory restore failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
-    await this.settingsController.refreshModelCatalog();
     await this.restoreIdentity();
     await this.startWatchProvisioning();
   }
@@ -98,7 +101,6 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     }
     this.remoteConnectionCoordinator.invalidate();
     this.remotePageState.setBusy(false);
-    this.generalChatDraftLifecycleController.persistVisible(this.generalChatPageState.chatInput);
   }
 
   aboutToDisappear(): void {
@@ -109,9 +111,6 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     this.remoteActivityViewModel.invalidate();
     this.remoteConnectionCoordinator.invalidate();
     this.remotePageState.setBusy(false);
-    this.generalChatDraftLifecycleController.persistVisible(this.generalChatPageState.chatInput);
-    this.generalChatConversationViewModel.stop(true, 'failed');
-    this.generalChatDraftLifecycleController.cancel();
     this.remoteFileDownloadController.cancel();
     this.filePreviewController.close();
     this.voiceInputLifecycleController.cancel(`${this.appShellViewModel.currentRoute()}`, () => {
@@ -145,7 +144,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
       return true;
     }
     if (action === AppNavigationBackAction.PopRemoteHome) {
-      this.appShellViewModel.popRoute(AppRoute.ChatHome);
+      this.appShellViewModel.popRoute(AppRoute.RemoteHome);
       return true;
     }
     return false;
@@ -165,64 +164,23 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
 
 
   async restoreIdentity(): Promise<void> {
-    // Always restore the install identity first. Account-device startup used to
-    // return before this happened, so the phone presented a new random device
-    // id on every launch and could not reliably exclude itself from the list.
+    // Read the install id and old target hint without reconnecting an old room.
+    // The authenticated directory is the sole authority for restoring control.
     await this.remoteConnectionController.restoreWithoutReconnect(this.host.context());
-    const controlTargetPreference = this.remoteConnectionController.controlTargetPreference();
-    let preferredTarget = this.settingsController.preferredCloudTarget();
-
-    if (controlTargetPreference === 'room') {
-      await this.remoteConnectionController.reconnectRestoredPairing();
-      if ((this.remotePageState.connectionState as ConnectionState) === ConnectionState.Connected) {
-        return;
-      }
-      // A rotated room may fall back only to the same physical desktop through
-      // the account path. Never jump to an unrelated remembered account device.
-      if (preferredTarget?.deviceId !== this.remotePageState.desktopId) {
-        preferredTarget = await this.settingsController.migrateLegacyPairingTarget(
-          this.remotePageState.remoteUrl,
-          this.remotePageState.desktopId,
-          this.remotePageState.desktopName
-        );
-      }
-      if (preferredTarget?.deviceId === this.remotePageState.desktopId) {
-        await this.restoreAccountDeviceTarget(false);
+    if (!this.settingsController.hasCloudAccountSession()) {
+      this.remotePageState.clearControlTarget();
+      this.remotePageState.setConnectionState(ConnectionState.Disconnected);
+      if (this.remotePageState.remoteUrl.length > 0) {
+        this.remotePageState.setStatusText(RemoteI18n.t('connect.legacySignInRequired'));
       }
       return;
     }
-
-    if (!preferredTarget && this.settingsController.hasCloudAccountSession()) {
-      preferredTarget = await this.settingsController.migrateLegacyPairingTarget(
-        this.remotePageState.remoteUrl,
-        this.remotePageState.desktopId,
-        this.remotePageState.desktopName
-      );
-    }
-    if (preferredTarget) {
+    if (this.settingsController.preferredCloudTarget()) {
       await this.restoreAccountDeviceTarget(false);
-      return;
     }
-    if (this.settingsController.hasCloudAccountSession()) {
-      // Legacy records have no explicit control-target preference. With no
-      // stable same-device target, leave the user on the hydrated directory
-      // instead of guessing whether an old QR should supersede the account.
-      RemoteLogger.info('account session restored without a target preference; skipped ambiguous QR reconnect');
-      return;
-    }
-    await this.remoteConnectionController.reconnectRestoredPairing();
   }
 
-  /**
-   * Reconnects to the desktop the signed-in account was last driving.
-   *
-   * The scanned-room path restores itself from its pairing snapshot, but the
-   * account path used to do nothing at launch: the phone came up holding a
-   * session list and a desktop name with no link behind either, and the only
-   * way back was for the user to walk the device picker again. Announcing
-   * `reconnecting` up front is what keeps that from reading as connected while
-   * the device lookup is still in flight.
-   */
+  /** Restores only a device proven by the current authenticated directory. */
   private async restoreAccountDeviceTarget(navigateHome: boolean): Promise<void> {
     const preferredTarget = this.settingsController.preferredCloudTarget();
     const deviceId = preferredTarget?.deviceId || this.remotePageState.controlTargetDeviceId.trim();
@@ -239,14 +197,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   async connect(autoReconnect: boolean = false, accountPassword: string = ''): Promise<void> {
-    await this.remoteConnectionController.connect(autoReconnect, accountPassword);
-    if ((this.remotePageState.connectionState as ConnectionState) !== ConnectionState.Connected) {
-      return;
-    }
-    await this.settingsController.persistDelegatedAccountSession(
-      this.remotePageState.desktopId,
-      this.remotePageState.desktopName
-    );
+    this.handleDetectedRemoteUrl(this.remotePageState.remoteUrl);
   }
 
   async reconnect(): Promise<void> {
@@ -254,11 +205,10 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
       await this.restoreAccountDeviceTarget(true);
       return;
     }
-    await this.remoteConnectionController.reconnect();
+    this.appShellState.openSettings('account');
   }
 
   async disconnect(clearPairing: boolean): Promise<void> {
-    this.miniAppViewModel.close();
     this.filePreviewController.invalidate();
     await this.remoteConnectionController.disconnect(clearPairing);
   }
@@ -405,7 +355,6 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     if (this.conversationController.visibleVoiceListening()) {
       await this.stopVoiceInput(false);
     }
-    this.generalChatDraftLifecycleController.persistVisible(this.generalChatPageState.chatInput);
     const activeRemoteSessionId = this.remotePageState.isConversationDismissed ? '' :
       (this.remotePageState.activeSession.sessionId || '');
     const target = AppRouteContract.remoteSurfaceDestination(
@@ -438,7 +387,6 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
     if (this.conversationController.visibleVoiceListening()) {
       await this.stopVoiceInput(false);
     }
-    this.generalChatDraftLifecycleController.persistVisible(this.generalChatPageState.chatInput);
     const activeRemoteSessionId = RemoteUiState.canUseRemote((this.remotePageState.connectionState as ConnectionState)) &&
       !this.remotePageState.isConversationDismissed ?
       (this.remotePageState.activeSession.sessionId || '') : '';
@@ -665,18 +613,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   currentActiveTurnId(): string {
-    if (!this.appShellViewModel.isGeneralChatVisible()) {
-      return this.conversationController.remoteActiveTurnId();
-    }
-    const activeTurnMessage = this.generalChatPageState.activeTurnMessage;
-    if (activeTurnMessage.turnId && activeTurnMessage.turnId.length > 0) {
-      return activeTurnMessage.turnId;
-    }
-    const activePrefix = 'active-';
-    if (activeTurnMessage.id.indexOf(activePrefix) === 0) {
-      return activeTurnMessage.id.slice(activePrefix.length);
-    }
-    return '';
+    return this.conversationController.remoteActiveTurnId();
   }
 
   hasRemoteBindingForResume(): boolean {
@@ -686,19 +623,13 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
         (this.remotePageState.connectionState as ConnectionState) !== ConnectionState.Idle &&
         (this.remotePageState.connectionState as ConnectionState) !== ConnectionState.Disconnected;
     }
-    return this.remotePageState.remoteUrl.trim().length > 0 &&
-      this.remotePageState.userId.trim().length > 0 &&
-      (this.remotePageState.connectionState as ConnectionState) !== ConnectionState.Idle &&
-      (this.remotePageState.connectionState as ConnectionState) !== ConnectionState.Parsing &&
-      (this.remotePageState.connectionState as ConnectionState) !== ConnectionState.Pairing &&
-      (this.remotePageState.connectionState as ConnectionState) !== ConnectionState.Disconnected;
+    return false;
   }
 
   async reconnectActiveRemote(): Promise<void> {
     const preferredTarget = this.settingsController.preferredCloudTarget();
     if (!preferredTarget) {
-      await this.connect(true);
-      return;
+      throw new Error(RemoteI18n.t('connect.legacySignInRequired'));
     }
     const targetId = preferredTarget.deviceId;
     const device = (await this.settingsController.listCloudAccountDevices())
@@ -710,12 +641,7 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
   }
 
   hasRemoteBindingForCodeHome(): boolean {
-    return this.remotePageState.remoteUrl.trim().length > 0 &&
-      this.remotePageState.userId.trim().length > 0 &&
-      ((this.remotePageState.connectionState as ConnectionState) === ConnectionState.Connected ||
-        (this.remotePageState.connectionState as ConnectionState) === ConnectionState.Reconnecting ||
-        (this.remotePageState.connectionState as ConnectionState) === ConnectionState.Pairing ||
-        (this.remotePageState.connectionState as ConnectionState) === ConnectionState.Parsing);
+    return this.hasRemoteBindingForResume();
   }
 
 }

@@ -1,3 +1,4 @@
+import { MobileDesignGeometry } from '../../generated/MobileDesignTokens';
 import { AppShellState } from '../state/AppShellState';
 import { ConversationLayoutPolicy } from '../policy/ConversationLayoutPolicy';
 import {
@@ -9,6 +10,7 @@ import {
 import { AdaptiveSheetOptions } from './AdaptiveSheetOptions';
 import {
   PAGE_BG,
+  SCRIM,
   SHELL_SCRIM,
   TRANSPARENT,
 } from './Theme';
@@ -19,6 +21,7 @@ const WIDE_SHEET_RADIUS: number = 30;
 export struct AppShell {
   @Param shellState: AppShellState = new AppShellState();
   @Param useWideLayout: boolean = false;
+  @Param compactAccountLogin: boolean = false;
   @Param settingsPlacement: SettingsPlacement =
     SettingsPlacementPolicy.compactBottom(SettingsSheetKind.Settings);
   @Param connectPlacement: SettingsPlacement =
@@ -32,6 +35,18 @@ export struct AppShell {
 
   build() {
     Stack({ alignContent: Alignment.Start }) {
+      Column().width(0).height(0)
+        .bindContentCover(this.shellState.showSettings && this.compactAccountLogin,
+          this.CompactLoginCover(), {
+            backgroundColor: TRANSPARENT,
+            modalTransition: ModalTransition.NONE,
+            enableSafeArea: true,
+            onWillDismiss: (action: DismissContentCoverAction): void => {
+              this.shellState.showSettings = false;
+              action.dismiss();
+            }
+          })
+
       Column() {
         // The drawer is a compact affordance. Wide layouts put the same session
         // list in the master pane instead, and this copy stayed mounted behind
@@ -102,7 +117,31 @@ export struct AppShell {
     .onAreaChange((_oldArea: Area, newArea: Area) => {
       this.shellWidth = this.areaLength(newArea.width);
     })
-    .bindSheet($$this.shellState.showSettings, this.SettingsSheetContent(), this.settingsSheetOptions())
+    .bindSheet(this.shellState.showSettings && !this.compactAccountLogin,
+      this.SettingsSheetContent(), this.settingsSheetOptions())
+
+  }
+
+  @Builder
+  private CompactLoginCover() {
+    Stack({ alignContent: Alignment.Bottom }) {
+      Column().width('100%').height('100%').backgroundColor(SCRIM)
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+        .onClick(() => { this.shellState.showSettings = false; })
+      Scroll() {
+        Column() { this.settings() }
+          .width('100%')
+      }
+      .width(Math.min(MobileDesignGeometry.loginSheetMaxWidth,
+        this.shellWidth - 2 * MobileDesignGeometry.loginSheetOuterMargin))
+      .scrollBar(BarState.Off)
+      .backgroundColor(PAGE_BG)
+      .borderRadius(MobileDesignGeometry.sheetTopRadius)
+      .clip(true)
+      .margin({ bottom: MobileDesignGeometry.loginSheetOuterMargin })
+    }
+    .width('100%')
+    .height('100%')
   }
 
   @Builder
@@ -111,7 +150,7 @@ export struct AppShell {
       this.settings()
     }
     .width('100%')
-    .height('100%')
+    .height(this.compactAccountLogin ? undefined : '100%')
     .borderRadius(this.usesWideSheetChrome(this.settingsPlacement) ? WIDE_SHEET_RADIUS : 0)
     .clip(this.usesWideSheetChrome(this.settingsPlacement))
     .shadow({
@@ -148,7 +187,12 @@ export struct AppShell {
   }
 
   private settingsSheetOptions(): SheetOptions {
-    return AdaptiveSheetOptions.fromPlacement(this.settingsPlacement);
+    const options = AdaptiveSheetOptions.fromPlacement(this.settingsPlacement);
+    options.onWillDismiss = (action: DismissSheetAction): void => {
+      this.shellState.showSettings = false;
+      action.dismiss();
+    };
+    return options;
   }
 
   private connectSheetOptions(): SheetOptions {

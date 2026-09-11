@@ -4,6 +4,7 @@ import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ListboxOption, OverflowText, Select, Tooltip } from '@openbitfun/ui';
+import { CommandToolCard } from '@openbitfun/ui/flow-chat';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -72,6 +73,41 @@ describe('overflow text full-content access', () => {
     expect(onClick).toHaveBeenCalledOnce();
     expect(tooltip()).toBeNull();
     expect(button.getAttribute('aria-describedby')).toBe('help');
+  });
+
+  it('keeps the command tooltip open when portal enter precedes native trigger leave', () => {
+    render(<CommandToolCard action="Run" command={longLabel} emptyCommand="Empty" isExpanded={false} status="completed" />);
+    expect(host.querySelector('[title]')).toBeNull();
+    const label = host.querySelector('[data-openbitfun-part="command"] [data-overflow]')!;
+    const trigger = label.closest('[data-overflow-trigger]') ?? label;
+    hover(trigger);
+    reveal();
+    const popup = tooltip()!;
+    expect(popup.textContent).toBe(longLabel);
+    act(() => {
+      popup.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, relatedTarget: trigger }));
+      trigger.dispatchEvent(new MouseEvent('mouseleave', { relatedTarget: popup }));
+    });
+    act(() => vi.advanceTimersByTime(1000));
+    expect(tooltip()).toBe(popup);
+    act(() => popup.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body })));
+    act(() => vi.advanceTimersByTime(500));
+    expect(tooltip()).toBeNull();
+  });
+
+  it('does not toggle the command card when clicking inside its tooltip', () => {
+    const onToggle = vi.fn();
+    render(<CommandToolCard action="Run" command={longLabel} emptyCommand="Empty"
+      isExpanded={false} status="completed" output="Output" onToggle={onToggle} />);
+    const label = host.querySelector<HTMLElement>('[data-openbitfun-part="command"] [data-overflow]')!;
+    hover(label.closest('[data-overflow-trigger]') ?? label);
+    reveal();
+    const popup = tooltip()!;
+    act(() => popup.querySelector<HTMLElement>('[data-openbitfun-part="body"]')!.click());
+    expect(onToggle).not.toHaveBeenCalled();
+    expect(tooltip()).toBe(popup);
+    act(() => label.click());
+    expect(onToggle).toHaveBeenCalledOnce();
   });
 
   it('reveals rich labels and plain-text arrays without waiting for a marquee', () => {
@@ -170,6 +206,14 @@ describe('overflow text full-content access', () => {
     hover(host.querySelector('button')!);
     reveal();
     expect(tooltip()?.textContent).toBe(longLabel);
+  });
+
+  it('ignores harmless vertical ink overflow for a fully visible single-line label', () => {
+    availableWidth = 1000;
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(10);
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(11);
+    render(<OverflowText>Short</OverflowText>);
+    expect(host.querySelector('[data-overflow]')?.getAttribute('data-overflow')).toBe('false');
   });
 
   it('leaves short, fully visible labels without a tooltip', () => {

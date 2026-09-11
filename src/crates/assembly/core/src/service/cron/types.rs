@@ -201,5 +201,5 @@ const fn default_enabled() -> bool {
 }
 
 fn default_agent_type() -> String {
-    "agentic".to_string()
+    "Standard".to_string()
 }

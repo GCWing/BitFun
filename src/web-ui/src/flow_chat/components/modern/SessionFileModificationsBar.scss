@@ -99,10 +99,6 @@
       color: var(--openbitfun-color-content-primary);
     }
 
-    &:active:not(:disabled) {
-      transform: scale(0.95);
-    }
-
     &:disabled {
       opacity: 0.4;
       cursor: not-allowed;

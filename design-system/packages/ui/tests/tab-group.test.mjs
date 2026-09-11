@@ -57,6 +57,36 @@ test("controlled value and disabled items preserve selection and focus contracts
   assert.equal((markup.match(/aria-selected="true"/g) ?? []).length, 1);
 });
 
+test("product wrappers preserve the standard tablist, selection and end-action anatomy", () => {
+  const markup = renderToStaticMarkup(createElement(TabGroup, {
+    items: [items[0], {
+      ...items[1],
+      endAction: createElement("button", { type: "button", "aria-label": "Close Settings" }, "Close"),
+    }],
+    value: "settings",
+    renderItem: (item, node, index) => createElement("div", {
+      "data-document": item.value,
+      "data-index": index,
+      draggable: true,
+    }, node),
+  }));
+
+  assert.equal((markup.match(/role="tablist"/g) ?? []).length, 1);
+  assert.equal((markup.match(/role="tab"/g) ?? []).length, 2);
+  assert.equal((markup.match(/aria-selected="true"/g) ?? []).length, 1);
+  assert.match(markup, /data-document="settings" data-index="1" draggable="true"/);
+  assert.match(markup, /<\/button><span[^>]+data-openbitfun-part="endAction"><button/);
+});
+
+test("label metadata remains inside the accessible tab and outside rolling text", () => {
+  const markup = renderToStaticMarkup(createElement(TabGroup, {
+    items: [{ value: "session", label: "New Session", labelTransitionKey: "session-2", labelSuffix: "02" }],
+  }));
+  assert.match(markup, /data-openbitfun-component="rolling-text"/);
+  assert.match(markup, /<span[^>]*data-openbitfun-part="labelSuffix">02<\/span><\/button>/);
+  assert.equal((markup.match(/role="tab"/g) ?? []).length, 1);
+});
+
 test("TabGroup exposes compact and standard geometry without changing selection behavior", () => {
   const standardMarkup = renderToStaticMarkup(
     createElement(TabGroup, { "aria-label": "Standard tabs", items }),

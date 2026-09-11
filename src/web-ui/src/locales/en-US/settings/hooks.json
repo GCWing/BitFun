@@ -97,5 +97,16 @@
     "loadFailed": "Failed to load hook settings",
     "loadFailedLocked": "Hook settings could not be read. Related switches are locked to avoid enabling command execution by mistake.",
     "retry": "Reload"
+  },
+  "discovery": {
+    "title": "Discovered external hooks",
+    "description": "Inspect local Hook declarations from DeepSeek Harness, PI, and OpenCode. Discovery does not run or import them.",
+    "disabled": "Disabled in source",
+    "unsupported": "Unsupported by source bridge",
+    "opaque": "Requires native runtime inspection",
+    "nativeOnly": "Native event; activation unverified",
+    "readOnly": "Read only",
+    "loading": "Discovering external hooks...",
+    "empty": "No external Hook declarations found."
   }
 }

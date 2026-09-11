@@ -26,9 +26,10 @@
 
   .root[data-has-context="true"] {
     padding-block-start: var(--openbitfun-control-composer-context-offset);
-    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
     border-radius: var(--openbitfun-control-composer-surface-radius);
-    background: var(--openbitfun-color-surface-subtle);
+    background: var(--openbitfun-color-composer-context-background);
+    backdrop-filter: blur(var(--openbitfun-control-composer-context-blur));
+    -webkit-backdrop-filter: blur(var(--openbitfun-control-composer-context-blur));
   }
 
   .context {
@@ -53,19 +54,13 @@
     flex-direction: column;
     gap: var(--openbitfun-control-composer-surface-gap);
     padding: var(--openbitfun-control-composer-surface-padding);
-    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-field-border);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-composer-border);
     border-radius: var(--openbitfun-control-composer-surface-radius);
     background: var(--openbitfun-color-surface-raised);
     box-shadow: var(--openbitfun-shadow-composer);
     transition:
       border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
-  }
-
-  .root[data-has-context="true"] > .surface {
-    inline-size: calc(100% - var(--openbitfun-border-width-default) - var(--openbitfun-border-width-default));
-    margin-inline: var(--openbitfun-border-width-default);
-    margin-block-end: var(--openbitfun-border-width-default);
   }
 
   .surface:focus-within {
@@ -175,7 +170,20 @@
     }
   }
 
+  @media (prefers-reduced-transparency: reduce) {
+    .root[data-has-context="true"] {
+      background: var(--openbitfun-color-surface-panel);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+
   @media (forced-colors: active) {
+    .root[data-has-context="true"] {
+      background: Canvas;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
     .root[data-has-context="true"],
     .surface,
     .root[data-invalid="true"] > .surface {

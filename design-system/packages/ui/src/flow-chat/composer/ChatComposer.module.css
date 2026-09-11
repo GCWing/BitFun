@@ -4,20 +4,16 @@
     min-inline-size: 0;
     inline-size: 100%;
     flex-direction: column;
-    border-radius: var(--openbitfun-radius-2xl);
+    border-radius: var(--openbitfun-control-composer-surface-radius);
     color: var(--openbitfun-color-content-primary);
     background: transparent;
     font-family:var(--openbitfun-type-body-md-font-family);
   }
 
   .root[data-has-context="true"] {
-    /* Keep the band opaque while moving it toward the foreground: lighter in
-       dark themes and darker in light themes. */
-    background: color-mix(
-      in srgb,
-      var(--openbitfun-color-surface-panel) 94%,
-      var(--openbitfun-color-content-primary) 6%
-    );
+    background: var(--openbitfun-color-composer-context-background);
+    backdrop-filter: blur(var(--openbitfun-control-composer-context-blur));
+    -webkit-backdrop-filter: blur(var(--openbitfun-control-composer-context-blur));
   }
 
   .context {
@@ -50,13 +46,13 @@
     min-block-size: var(--openbitfun-control-height-md);
     box-sizing: border-box;
     align-items: center;
-    gap: var(--openbitfun-space-3);
-    padding: var(--openbitfun-space-2);
-    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-action-neutral-border);
-    border-radius: var(--openbitfun-radius-2xl);
+    gap: var(--openbitfun-control-composer-surface-gap);
+    padding: var(--openbitfun-control-composer-surface-padding);
+    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-composer-border);
+    border-radius: var(--openbitfun-control-composer-surface-radius);
     color: var(--openbitfun-color-content-primary);
-    background: var(--openbitfun-color-surface-panel);
-    box-shadow: var(--openbitfun-shadow-base);
+    background: var(--openbitfun-color-surface-raised);
+    box-shadow: var(--openbitfun-shadow-composer);
     transition:
       border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
@@ -73,7 +69,7 @@
     align-items: center;
     padding-block: var(--openbitfun-control-chat-composer-compact-padding-block);
     padding-inline: var(--openbitfun-control-chat-composer-compact-padding-inline);
-    border-radius: var(--openbitfun-radius-pill);
+    border-radius: var(--openbitfun-control-composer-surface-radius);
   }
 
   .surface[data-openbitfun-layout="expanded"] {
@@ -173,7 +169,20 @@
     }
   }
 
+  @media (prefers-reduced-transparency: reduce) {
+    .root[data-has-context="true"] {
+      background: var(--openbitfun-color-surface-panel);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+
   @media (forced-colors: active) {
+    .root[data-has-context="true"] {
+      background: Canvas;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
     .surface,
     .surface:focus-within {
       border-color: CanvasText;

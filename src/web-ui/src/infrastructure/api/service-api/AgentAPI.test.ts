@@ -240,7 +240,7 @@ describe('AgentAPI', () => {
 
     await expect(agentAPI.createSession({
       sessionName: 'Isolated task',
-      agentType: 'agentic',
+      agentType: 'Standard',
       workspacePath: '/repo',
       projectWorkspacePath: '/repo',
       requestId: 'request-worktree-1',

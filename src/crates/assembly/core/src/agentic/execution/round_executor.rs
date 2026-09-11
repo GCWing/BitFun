@@ -1761,7 +1761,7 @@ mod tests {
             primary_model_facts: tool_runtime::context::PrimaryModelFacts::new(
                 "model-1", "model-1", "openai", true,
             ),
-            agent_type: "agentic".to_string(),
+            agent_type: "Standard".to_string(),
             context_vars: HashMap::new(),
             permission_constraints: Default::default(),
             permission_runtime_ceiling: None,

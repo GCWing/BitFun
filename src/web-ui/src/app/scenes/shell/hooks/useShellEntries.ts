@@ -14,6 +14,7 @@ import {
 import { useManualTerminalProfiles } from './useManualTerminalProfiles';
 import { getTerminalService } from '@/tools/terminal/services/TerminalService';
 import { useTerminalSessions } from './useTerminalSessions';
+import type { WorkspaceInfo } from '@/shared/types';
 
 interface EditingTerminalState {
   entry: ShellEntry;
@@ -37,8 +38,10 @@ export interface UseShellEntriesReturn {
   saveEdit: (input: SaveShellEntryInput) => void;
 }
 
-export function useShellEntries(): UseShellEntriesReturn {
-  const { workspacePath, activeWorkspace: workspace, openedWorkspacesList } = useWorkspaceContext();
+export function useShellEntries(targetWorkspace?: WorkspaceInfo | null): UseShellEntriesReturn {
+  const { activeWorkspace, openedWorkspacesList } = useWorkspaceContext();
+  const workspace = targetWorkspace === undefined ? activeWorkspace : targetWorkspace;
+  const workspacePath = workspace?.rootPath ?? '';
   const scope = useSyncExternalStore(onSurfaceActivated, getActiveSurfaceScope, getActiveSurfaceScope);
   const isRemote = workspace?.workspaceKind === 'remote';
   const currentConnectionId = workspace?.connectionId ?? null;
@@ -121,8 +124,11 @@ export function useShellEntries(): UseShellEntriesReturn {
 
   const openShellSession = useCallback((sessionId: string, sessionName: string) => {
     assertCurrent();
-    openShellSessionTarget({ sessionId, sessionName });
-  }, [assertCurrent]);
+    openShellSessionTarget({ sessionId, sessionName, scope: {
+      surfaceId: scope.surfaceId, workspaceId: workspace?.id,
+      workspacePath, remoteConnectionId: currentConnectionId ?? undefined,
+    } });
+  }, [assertCurrent, scope.surfaceId, workspace?.id, workspacePath, currentConnectionId]);
 
   const startEntry = useCallback(async (entry: ShellEntry) => {
     const { session, created } = await startEntrySession(entry);

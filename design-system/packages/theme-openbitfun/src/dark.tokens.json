@@ -19,6 +19,16 @@
     }
   },
   "color": {
+    "composer": {
+      "border": { "$type": "color", "$value": "{color.field.border}" },
+      "contextBackground": { "$type": "color", "$value": "{color.surface.subtle}" }
+    },
+    "numberBadge": {
+      "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
+    },
+    "actionCard": {
+      "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
+    },
     "surface": {
       "canvas": { "$type": "color", "$value": "{ref.color.neutral.950}" },
       "panel": { "$type": "color", "$value": "{ref.color.neutral.900}" },
@@ -57,6 +67,7 @@
       }
     },
     "keyHint": {
+      "content": { "$type": "color", "$value": "{color.content.muted}" },
       "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
     },
     "scrollbar": {
@@ -64,6 +75,7 @@
       "thumbHover": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" }
     },
     "content": {
+      "caption": { "$description": "Menu and navigation group captions; carries final opacity without attenuating primary text again.", "$type": "color", "$value": "{color.content.muted}" },
       "primary": { "$type": "color", "$value": "{ref.color.neutral.200}" },
       "secondary": { "$type": "color", "$value": "{ref.color.neutral.350}" },
       "muted": { "$type": "color", "$value": "{ref.color.neutral.550}" },
@@ -175,6 +187,7 @@
       }
     },
     "field": {
+      "groupBackground": { "$description": "Grouped form tint; independent of opaque tertiary containers and transient subtle feedback.", "$type": "color", "$value": "{color.surface.tertiary}" },
       "borderActive": { "$type": "color", "$value": "{color.field.borderFocus}" },
       "placeholder": { "$type": "color", "$value": "{color.content.muted}" },
       "background": { "$type": "color", "$value": "{ref.color.neutral.900}" },

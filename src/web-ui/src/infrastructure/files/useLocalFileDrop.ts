@@ -31,6 +31,7 @@ export function createLocalFileDropController(
 ): LocalFileDropController {
   let enterPaths: string[] = [];
   let disposed = false;
+  let hoverGeneration = 0;
   let lastDrop: { signature: string; at: number } | null = null;
 
   const clear = () => {
@@ -40,6 +41,7 @@ export function createLocalFileDropController(
 
   return {
     async handle(payload) {
+      const generation = ++hoverGeneration;
       const enabled = options.isEnabled();
       if (disposed) return;
       if (payload.type === 'leave') {
@@ -52,13 +54,14 @@ export function createLocalFileDropController(
       }
       if (payload.type === 'enter') {
         enterPaths = [...payload.paths];
-        return;
       }
 
       const scaleFactor = await options.getScaleFactor();
       const target = options.getTarget();
       const hit = isDragPositionOverElement(payload.position, scaleFactor, target);
-      if (payload.type === 'over') {
+      if (disposed || !options.isEnabled()) return;
+      if (payload.type === 'over' || payload.type === 'enter') {
+        if (generation !== hoverGeneration) return;
         options.onDragOver?.(hit);
         return;
       }

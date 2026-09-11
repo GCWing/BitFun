@@ -12,26 +12,86 @@
       "data": "Data & Maintenance"
     },
     "pages": {
-      "general": { "label": "General", "description": "Startup, updates, window behavior, sleep, and notifications." },
-      "appearance": { "label": "Appearance", "description": "Language, themes, effects, appearance packages, and interface typography." },
-      "pet": { "label": "Pet", "description": "Display surface, character packages, import, and preview." },
-      "voice": { "label": "Voice", "description": "Voice input, local speech models, and realtime voice calls." },
-      "shortcuts": { "label": "Keyboard Shortcuts", "description": "Browse, customize, and reset keyboard shortcuts." },
-      "terminal": { "label": "Terminal", "description": "Default shell and terminal panel placement." },
-      "editor": { "label": "Editor", "description": "Code editor appearance, indentation, display, and formatting." },
-      "models": { "label": "Models", "description": "Default models, providers, subscriptions, catalog, and network proxy." },
-      "memory": { "label": "Memory", "description": "Memory generation, use, extraction, and consolidation." },
-      "sessionWorkspace": { "label": "Session & Workspace", "description": "Session titles and current workspace search." },
-      "worktrees": { "label": "Worktrees", "description": "Git worktree isolation and parallel-session defaults." },
-      "execution": { "label": "Execution & Permissions", "description": "Tool permissions, execution, review, and recovery settings." },
-      "browserDesktopControl": { "label": "Browser & Desktop Control", "description": "Browser connections, desktop interaction, and required system permissions." },
-      "automation": { "label": "Automation", "description": "Quick actions and Agent lifecycle hooks." },
-      "webSearch": { "label": "Web Search", "description": "Choose the WebSearch provider, endpoint, and device-local credential." },
-      "mcp": { "label": "MCP", "description": "Manage MCP servers, connections, and exposed tools." },
-      "acp": { "label": "ACP Agents", "description": "Configure external agents that connect through Agent Client Protocol." },
-      "usage": { "label": "Call Statistics", "description": "Model requests, token usage, and cache hit rates." },
-      "archivedSessions": { "label": "Archived Sessions", "description": "View, restore, or permanently delete archived sessions." },
-      "diagnostics": { "label": "Logs & Diagnostics", "description": "Log levels, runtime information, and troubleshooting." }
+      "general": {
+        "label": "General",
+        "description": "Startup, updates, window behavior, sleep, and notifications."
+      },
+      "appearance": {
+        "label": "Appearance",
+        "description": "Language, themes, effects, appearance packages, and interface typography."
+      },
+      "pet": {
+        "label": "Pet",
+        "description": "Display surface, character packages, import, and preview."
+      },
+      "voice": {
+        "label": "Voice",
+        "description": "Voice input, local speech models, and realtime voice calls."
+      },
+      "shortcuts": {
+        "label": "Keyboard Shortcuts",
+        "description": "Browse, customize, and reset keyboard shortcuts."
+      },
+      "terminal": {
+        "label": "Terminal",
+        "description": "Default shell and terminal panel placement."
+      },
+      "editor": {
+        "label": "Editor",
+        "description": "Code editor appearance, indentation, display, and formatting."
+      },
+      "models": {
+        "label": "Models",
+        "description": "Default models, providers, subscriptions, catalog, and network proxy."
+      },
+      "memory": {
+        "label": "Memory",
+        "description": "Memory generation, use, extraction, and consolidation."
+      },
+      "sessionWorkspace": {
+        "label": "Session & Workspace",
+        "description": "Default Harness, session titles, and current workspace search."
+      },
+      "worktrees": {
+        "label": "Worktrees",
+        "description": "Git worktree isolation and parallel-session defaults."
+      },
+      "execution": {
+        "label": "Execution & Permissions",
+        "description": "Tool permissions, execution, review, and recovery settings."
+      },
+      "browserDesktopControl": {
+        "label": "Browser & Desktop Control",
+        "description": "Browser connections, desktop interaction, and required system permissions."
+      },
+      "automation": {
+        "label": "Automation",
+        "description": "Quick actions and Agent lifecycle hooks."
+      },
+      "webSearch": {
+        "label": "Web Search",
+        "description": "Choose the WebSearch provider, endpoint, and device-local credential."
+      },
+      "mcp": {
+        "label": "MCP",
+        "description": "Manage MCP servers, connections, and exposed tools."
+      },
+      "acp": {
+        "label": "ACP Agents",
+        "description": "Configure external agents that connect through Agent Client Protocol."
+      },
+      "usage": {
+        "label": "Call Statistics",
+        "description": "Model requests, token usage, and cache hit rates."
+      },
+      "archivedSessions": {
+        "label": "Archived Sessions",
+        "description": "View, restore, or permanently delete archived sessions."
+      },
+      "diagnostics": {
+        "label": "Logs & Diagnostics",
+        "description": "Log levels, runtime information, and troubleshooting."
+      }
     },
     "views": {
       "common": "Common",
@@ -455,7 +515,7 @@
   },
   "agenticTools": {
     "title": "Tool Settings",
-    "subtitle": "Configure Agentic tool permissions and behavior",
+    "subtitle": "Configure Agent tool permissions and behavior",
     "fileOperations": "File Operations",
     "fileOperationsDesc": "Allow AI to read and write files",
     "terminalAccess": "Terminal Access",

@@ -1,11 +1,10 @@
-import { Button, Icon } from '@openbitfun/ui';
+import { Button, Card, Icon, NumberBadge, PageHeader, StatusPill } from '@openbitfun/ui';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bot, CircleAlert, LoaderCircle, Wrench } from 'lucide-react';
 import {
   GalleryEmpty,
   GalleryLayout,
-  GalleryPageHeader,
   GalleryZone,
   GalleryGrid,
   GallerySkeleton,
@@ -183,10 +182,12 @@ const NurseryGallery: React.FC = () => {
       data-openbitfun-component="nursery-gallery"
       data-openbitfun-part="root"
     >
-      <GalleryPageHeader
+      <PageHeader
+        className="nursery-gallery__header"
+        level={2}
         title={t('nursery.gallery.title')}
-        subtitle={t('nursery.gallery.subtitle')}
-        actions={(
+        description={t('nursery.gallery.subtitle')}
+        action={(
           <Button
             type="button"
             variant="primary"
@@ -209,57 +210,59 @@ const NurseryGallery: React.FC = () => {
 
       <div className="gallery-zones" data-openbitfun-component="nursery-gallery" data-openbitfun-part="content">
         <section className="nursery-defaults" aria-labelledby="nursery-defaults-title" data-openbitfun-component="nursery-gallery" data-openbitfun-part="defaults">
-          <div className="nursery-defaults__content" data-openbitfun-component="nursery-gallery" data-openbitfun-part="defaultsContent">
-            <div className="nursery-defaults__title-row">
-              <h3 className="nursery-defaults__title" id="nursery-defaults-title">
-                {t('nursery.template.title')}
-              </h3>
-              <span className="nursery-defaults__badge">{t('nursery.template.defaultBadge')}</span>
-            </div>
-            <p className="nursery-defaults__subtitle">{t('nursery.template.subtitle')}</p>
+          <Card className="nursery-defaults__surface" appearance="subtle" padding="md" radius="md">
+            <div className="nursery-defaults__content" data-openbitfun-component="nursery-gallery" data-openbitfun-part="defaultsContent">
+              <div className="nursery-defaults__title-row">
+                <h3 className="nursery-defaults__title" id="nursery-defaults-title">
+                  {t('nursery.template.title')}
+                </h3>
+                <StatusPill tone="neutral">{t('nursery.template.defaultBadge')}</StatusPill>
+              </div>
+              <p className="nursery-defaults__subtitle">{t('nursery.template.subtitle')}</p>
 
-            <div
-              className="nursery-defaults__stats"
-              data-openbitfun-component="nursery-gallery"
-              data-openbitfun-part="stats"
-              aria-live="polite"
-              aria-busy={templateStatsStatus === 'loading'}
+              <div
+                className="nursery-defaults__stats"
+                data-openbitfun-component="nursery-gallery"
+                data-openbitfun-part="stats"
+                aria-live="polite"
+                aria-busy={templateStatsStatus === 'loading'}
+              >
+                {templateStatsStatus === 'loading' ? (
+                  <>
+                    <span className="nursery-defaults__stat-skeleton" aria-hidden="true" />
+                    <span className="nursery-defaults__stat-skeleton" aria-hidden="true" />
+                  </>
+                ) : templateStatsStatus === 'error' ? (
+                  <span className="nursery-defaults__stat nursery-defaults__stat--error">
+                    <Icon glyph={CircleAlert} size="xs" />
+                    {t('nursery.template.statsUnavailable')}
+                  </span>
+                ) : templateStats ? (
+                  <>
+                    <span className="nursery-defaults__stat">
+                      <Icon glyph={Wrench} size="xs" />
+                      {t('nursery.template.stats.tools', { count: templateStats.enabledToolCount })}
+                    </span>
+                    <span className="nursery-defaults__stat">
+                      <Icon name="extension" size="xs" aria-hidden="true" />
+                      {t('nursery.template.stats.skills', { count: templateStats.enabledSkillCount })}
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="nursery-defaults__action"
+              leadingIcon={<Icon name="settings" size="sm" />}
+              trailingIcon={<Icon name="chevron-right" size="sm" />}
+              onClick={openDefaults}
             >
-              {templateStatsStatus === 'loading' ? (
-                <>
-                  <span className="nursery-defaults__stat-skeleton" aria-hidden="true" />
-                  <span className="nursery-defaults__stat-skeleton" aria-hidden="true" />
-                </>
-              ) : templateStatsStatus === 'error' ? (
-                <span className="nursery-defaults__stat nursery-defaults__stat--error">
-                  <Icon glyph={CircleAlert} size="xs" />
-                  {t('nursery.template.statsUnavailable')}
-                </span>
-              ) : templateStats ? (
-                <>
-                  <span className="nursery-defaults__stat">
-                    <Icon glyph={Wrench} size="xs" />
-                    {t('nursery.template.stats.tools', { count: templateStats.enabledToolCount })}
-                  </span>
-                  <span className="nursery-defaults__stat">
-                    <Icon name="extension" size="xs" aria-hidden="true" />
-                    {t('nursery.template.stats.skills', { count: templateStats.enabledSkillCount })}
-                  </span>
-                </>
-              ) : null}
-            </div>
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="nursery-defaults__action"
-            leadingIcon={<Icon name="settings" size="sm" />}
-            trailingIcon={<Icon name="chevron-right" size="sm" />}
-            onClick={openDefaults}
-          >
-            {t('nursery.template.configure')}
-          </Button>
+              {t('nursery.template.configure')}
+            </Button>
+          </Card>
         </section>
 
         <GalleryZone
@@ -268,7 +271,7 @@ const NurseryGallery: React.FC = () => {
           title={t('nursery.gallery.assistantsTitle')}
           subtitle={t('nursery.gallery.assistantsSubtitle')}
           tools={(
-            <span className="gallery-zone-count">{sortedAssistantWorkspacesList.length}</span>
+            <NumberBadge value={sortedAssistantWorkspacesList.length} />
           )}
         >
           {workspaceLoading && sortedAssistantWorkspacesList.length === 0 ? (

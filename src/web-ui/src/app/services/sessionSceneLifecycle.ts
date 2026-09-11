@@ -1,6 +1,6 @@
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { startAutoSync } from '@/flow_chat/services/storeSync';
-import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
+import { workspaceManager, type WorkspaceEvent } from '@/infrastructure/services/business/workspaceManager';
 import { getActiveSurfaceId, isSurfaceChangedError } from '@/infrastructure/peer-device/deviceSurface';
 import { createLogger } from '@/shared/utils/logger';
 import { registerSessionSceneNavigation, useSceneStore } from '../stores/sceneStore';
@@ -49,8 +49,9 @@ export function startSessionSceneLifecycle(): () => void {
 
   let previousSelection = current();
   let previousSurface = getActiveSurfaceId();
+  let previousWorkspaces = new Map(workspaceManager.getState().openedWorkspaces);
   let reconciling = false;
-  const reconcile = () => {
+  const reconcile = (event?: WorkspaceEvent) => {
     if (reconciling) return;
     reconciling = true;
     try {
@@ -58,11 +59,16 @@ export function startSessionSceneLifecycle(): () => void {
       if (surfaceId !== previousSurface) {
         previousSurface = surfaceId;
         previousSelection = current();
-        useSceneStore.getState().resetForPeerSwitch();
+        previousWorkspaces = new Map(workspaceManager.getState().openedWorkspaces);
+        useSceneStore.getState().resetForPeerSwitch(true);
       }
+      const closedWorkspace = event?.type === 'workspace:closed' || event?.type === 'workspace:removed'
+        ? previousWorkspaces.get(event.workspaceId) : undefined;
+      if (event) previousWorkspaces = new Map(workspaceManager.getState().openedWorkspaces);
       const selected = current();
-      const selectionChanged = selected?.sessionId !== previousSelection?.sessionId
-        || selected?.workspaceKey !== previousSelection?.workspaceKey;
+      // Identity enrichment (or a closed workspace falling back to a path) is
+      // reconciled below. It is not a request to activate the session again.
+      const selectionChanged = selected?.sessionId !== previousSelection?.sessionId;
       previousSelection = selected;
       const scenes = useSceneStore.getState();
       // The pending navigation owns the upcoming selection. Bootstrap/hydrate
@@ -79,6 +85,9 @@ export function startSessionSceneLifecycle(): () => void {
       for (const tab of useSceneStore.getState().openTabs) {
         const session = tab.session?.surfaceId === surfaceId
           ? source.sessions.get(tab.session.sessionId) : undefined;
+        // Retire only explicitly closed workspace tabs. Cached sessions remain
+        // recoverable, and an offline remote workspace is not a close event.
+        if (session && closedWorkspace && resolveSessionSceneWorkspace(session, [closedWorkspace])) continue;
         if (session) targets.set(session.sessionId, scenes.pendingTabId && tab.session
           // Keep the transaction's identity until it commits. Metadata may
           // acquire a workspace id while activation is awaiting the host.
@@ -93,8 +102,8 @@ export function startSessionSceneLifecycle(): () => void {
     }
   };
 
-  const unsubscribeSessions = flowChatStore.subscribe(reconcile);
-  const unsubscribeScenes = useSceneStore.subscribe(reconcile);
+  const unsubscribeSessions = flowChatStore.subscribe(() => reconcile());
+  const unsubscribeScenes = useSceneStore.subscribe(() => reconcile());
   const unsubscribeWorkspaces = workspaceManager.addEventListener(reconcile);
   reconcile();
 

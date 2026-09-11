@@ -11,6 +11,5 @@
   }
   .popup[data-state="entered"] { opacity: 1; translate: 0 0; pointer-events: auto; }
   .popup[data-state="exiting"] { transition-duration: 100ms; }
-  .popup [aria-expanded="true"] { background: var(--openbitfun-color-action-neutral-surface); }
   @media (prefers-reduced-motion: reduce) { .popup { translate: none; transition: none; } }
 }

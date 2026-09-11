@@ -2,21 +2,21 @@ import type { CloudAccountSession } from './CloudAccountClient';
 import { fromB64, toB64 } from './E2EEncryption';
 import { normalizeRelayUrl } from './pairingLink';
 
-const ACCOUNT_SESSION_STORAGE_KEY = 'openbitfun.mobile.account_session.v1';
-const ACCOUNT_SESSION_VERSION = 1;
+const ACCOUNT_SESSION_STORAGE_KEY = 'openbitfun.mobile.account_session.v2';
+const ACCOUNT_SESSION_VERSION = 2;
 
-interface PersistedAccountSessionV1 {
-  version: 1;
+interface PersistedAccountSessionV2 {
+  version: 2;
   relay_url: string;
   username: string;
   token: string;
   user_id: string;
-  master_key: string;
+  device_secret: string;
   controller_device_id: string;
 }
 
 /**
- * Account proof retained for the lifetime of the current browser tab.
+ * Legacy per-tab account proof, read when migrating to BrowserAccountStore.
  *
  * Passwords are never stored. The relay token and account master key are kept
  * in sessionStorage so a same-tab QR scan or reload can reuse an authenticated
@@ -29,7 +29,7 @@ export interface StoredCloudAccountSession {
   session: CloudAccountSession;
 }
 
-type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
+type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 function stringField(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -44,20 +44,20 @@ function storageOrNull(): StorageLike | null {
 }
 
 export function serializeCloudAccountSession(value: StoredCloudAccountSession): string {
-  const record: PersistedAccountSessionV1 = {
+  const record: PersistedAccountSessionV2 = {
     version: ACCOUNT_SESSION_VERSION,
     relay_url: value.relayUrl,
     username: value.username,
     token: value.session.token,
     user_id: value.session.userId,
-    master_key: toB64(value.session.masterKey),
+    device_secret: toB64(value.session.masterKey),
     controller_device_id: value.controllerDeviceId,
   };
   return JSON.stringify(record);
 }
 
 /**
- * Read the current shape and the short-lived unversioned camelCase shape used
+ * Read the v2 shape and the short-lived v2 camelCase aliases used
  * by development builds. Unknown or incomplete records are ignored in place;
  * callers must not delete data merely because a newer build cannot read it.
  */
@@ -65,13 +65,13 @@ export function deserializeCloudAccountSession(raw: string): StoredCloudAccountS
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     const version = parsed.version;
-    if (version !== undefined && version !== ACCOUNT_SESSION_VERSION) return null;
+    if (version !== ACCOUNT_SESSION_VERSION) return null;
 
     const relayUrl = normalizeRelayUrl(stringField(parsed.relay_url ?? parsed.relayUrl));
     const username = stringField(parsed.username);
     const token = stringField(parsed.token);
     const userId = stringField(parsed.user_id ?? parsed.userId);
-    const masterKeyBase64 = stringField(parsed.master_key ?? parsed.masterKey);
+    const masterKeyBase64 = stringField(parsed.device_secret);
     const controllerDeviceId = stringField(
       parsed.controller_device_id ?? parsed.controllerDeviceId,
     );
@@ -103,6 +103,12 @@ export function saveCloudAccountSession(
   } catch {
     // Private browsing and constrained webviews may reject browser storage.
   }
+}
+
+/** Explicit disconnect/sign-out only; failed requests must retain the record. */
+export function clearCloudAccountSession(storage: StorageLike | null = storageOrNull()): void {
+  try { storage?.removeItem(ACCOUNT_SESSION_STORAGE_KEY); }
+  catch { /* Browser storage may be unavailable. */ }
 }
 
 export function loadMatchingCloudAccountSession(

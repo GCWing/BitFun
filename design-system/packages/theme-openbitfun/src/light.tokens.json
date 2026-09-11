@@ -19,6 +19,16 @@
     }
   },
   "color": {
+    "composer": {
+      "border": { "$type": "color", "$value": "{color.field.border}" },
+      "contextBackground": { "$type": "color", "$value": "rgba(0, 0, 0, 0.03)" }
+    },
+    "numberBadge": {
+      "background": { "$type": "color", "$value": "{color.action.neutral.surfaceHover}" }
+    },
+    "actionCard": {
+      "background": { "$type": "color", "$value": "rgba(0, 0, 0, 0.03)" }
+    },
     "surface": {
       "canvas": { "$type": "color", "$value": "{ref.color.neutral.50}" },
       "panel": { "$type": "color", "$value": "{ref.color.neutral.0}" },
@@ -57,13 +67,15 @@
       }
     },
     "keyHint": {
-      "background": { "$type": "color", "$value": "{color.action.neutral.surface}" }
+      "content": { "$type": "color", "$value": "{color.content.secondary}" },
+      "background": { "$type": "color", "$value": "{color.action.neutral.surfaceHover}" }
     },
     "scrollbar": {
-      "thumb": { "$type": "color", "$value": "{color.action.neutral.surfaceHover}" },
+      "thumb": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" },
       "thumbHover": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" }
     },
     "content": {
+      "caption": { "$description": "Menu and navigation group captions; carries final opacity without attenuating primary text again.", "$type": "color", "$value": "rgba(0, 0, 0, 0.40)" },
       "primary": { "$type": "color", "$value": "rgba(0, 0, 0, 0.80)" },
       "secondary": { "$type": "color", "$value": "rgba(0, 0, 0, 0.60)" },
       "muted": { "$type": "color", "$value": "{ref.color.neutral.650}" },
@@ -175,6 +187,7 @@
       }
     },
     "field": {
+      "groupBackground": { "$description": "Grouped form tint; independent of opaque tertiary containers and transient subtle feedback.", "$type": "color", "$value": "rgba(0, 0, 0, 0.03)" },
       "borderActive": { "$description": "Input and SearchField editing border, distinct from the stronger generic focus indicator used by other controls.", "$type": "color", "$value": "{color.field.borderHover}" },
       "placeholder": { "$description": "Empty field hints and decorative adornments; distinct from general secondary prose.", "$type": "color", "$value": "rgba(0, 0, 0, 0.40)" },
       "background": { "$type": "color", "$value": "{ref.color.neutral.0}" },
@@ -191,7 +204,7 @@
       },
       "launcher": {
         "$description": "Shell-edge launcher states: neutral at rest, then cyan-tinted with cyan content on hover and press.",
-        "background": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" },
+        "background": { "$type": "color", "$value": "{color.action.neutral.surfaceHover}" },
         "backgroundHover": { "$type": "color", "$value": "color-mix(in srgb, {color.control.highlight.background} 20%, transparent)" },
         "backgroundPressed": { "$type": "color", "$value": "color-mix(in srgb, {color.control.highlight.background} 30%, transparent)" },
         "content": { "$type": "color", "$value": "{color.action.neutral.content}" },
@@ -200,7 +213,7 @@
         "contentDisabled": { "$type": "color", "$value": "{color.action.neutral.contentDisabled}" }
       },
       "switch": {
-        "track": { "$type": "color", "$value": "{ref.color.neutral.250}" },
+        "track": { "$type": "color", "$value": "{color.action.neutral.surfacePressed}" },
         "trackChecked": { "$type": "color", "$value": "{color.control.highlight.background}" },
         "thumb": { "$type": "color", "$value": "{ref.color.neutral.0}" }
       }
@@ -252,8 +265,8 @@
     "lg": { "$value": "0 8px 16px rgba(16, 26, 39, 0.09)" },
     "xl": { "$value": "0 12px 24px rgba(16, 26, 39, 0.11)" },
     "raised": { "$value": "{shadow.sm}" },
-    "composer": { "$value": "0 2px 6px rgba(0, 0, 0, 0.08)" },
-    "menu": { "$value": "0 4px 10px rgba(0, 0, 0, 0.12)" },
+    "composer": { "$value": "0 2px 12px rgba(0, 0, 0, 0.08)" },
+    "menu": { "$value": "0 4px 20px rgba(0, 0, 0, 0.12)" },
     "overlay": { "$value": "0 4px 20px rgba(0, 0, 0, 0.12)" },
     "accentGlow": {
       "$description": "Layered emphasis glow derived from the active accent.",

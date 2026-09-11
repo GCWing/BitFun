@@ -169,6 +169,29 @@
         "letterSpacing": { "$value": "{letterSpacing.normal}" }
       }
     },
+    "actionRow": {
+      "$description": "Single-line action leading: 16px at the default 13px type size, scaling with user typography.",
+      "lineHeight": { "$type": "number", "$value": 1.2307692307692308 }
+    },
+    "pageIntro": {
+      "fontFamily": { "$value": "{font.family.control}" },
+      "fontSize": { "$value": "{font.size.xl-plus}" },
+      "fontWeight": { "$value": "{font.weight.medium}" },
+      "lineHeight": { "$value": "{lineHeight.tight}" },
+      "letterSpacing": { "$value": "{letterSpacing.normal}" }
+    },
+    "statusPill": {
+      "$description": "Short status leading: 14px at 11px, scaling with typography.",
+      "lineHeight": { "$type": "number", "$value": 1.2727272727272727 }
+    },
+    "fieldHelper": {
+      "$description": "Field helper leading: 16px at the default 11px type size, scaling with user typography.",
+      "lineHeight": { "$type": "number", "$value": 1.4545454545454546 }
+    },
+    "formDescription": {
+      "$description": "Form-section description leading: 16px at the default 13px type size, scaling with user typography.",
+      "lineHeight": { "$type": "number", "$value": 1.2307692307692308 }
+    },
     "support": {
       "fontFamily": { "$value": "{font.family.control}" },
       "fontSize": { "$value": "{font.size.meta}" },
@@ -214,6 +237,13 @@
       }
     },
     "heading": {
+      "welcome": {
+        "fontFamily": { "$value": "{font.family.control}" },
+        "fontSize": { "$value": "{font.size.5xl}" },
+        "fontWeight": { "$value": "{font.weight.semibold}" },
+        "lineHeight": { "$value": "{lineHeight.tight}" },
+        "letterSpacing": { "$value": "{letterSpacing.normal}" }
+      },
       "navigation": {
         "fontFamily": { "$value": "{font.family.control}" },
         "fontSize": { "$value": "{font.size.xl-plus}" },
@@ -224,6 +254,14 @@
       "compactPage": {
         "fontFamily": { "$value": "{font.family.control}" },
         "fontSize": { "$value": "{font.size.2xl-plus}" },
+        "fontWeight": { "$value": "{font.weight.semibold}" },
+        "lineHeight": { "$value": "{lineHeight.tight}" },
+        "letterSpacing": { "$value": "{letterSpacing.normal}" }
+      },
+      "panel": {
+        "$description": "Compact panel titles, including VoiceCallPanel, use 18px between the 17px navigation and 20px compact-page roles.",
+        "fontFamily": { "$value": "{font.family.control}" },
+        "fontSize": { "$value": "{font.size.2xl}" },
         "fontWeight": { "$value": "{font.weight.semibold}" },
         "lineHeight": { "$value": "{lineHeight.tight}" },
         "letterSpacing": { "$value": "{letterSpacing.normal}" }
@@ -251,10 +289,10 @@
       },
       "dialog": {
         "fontFamily": { "$value": "{font.family.sans}" },
-        "fontSize": { "$value": "{font.size.3xl}" },
-        "fontWeight": { "$value": "{font.weight.semibold}" },
-        "lineHeight": { "$value": "{lineHeight.tight}" },
-        "letterSpacing": { "$value": "{letterSpacing.tight}" }
+        "fontSize": { "$value": "{font.size.3xl-plus}" },
+        "fontWeight": { "$value": "{font.weight.bold}" },
+        "lineHeight": { "$value": 1.2083333333 },
+        "letterSpacing": { "$value": "{letterSpacing.normal}" }
       },
       "display": {
         "fontFamily": { "$value": "{font.family.sans}" },
@@ -265,6 +303,13 @@
       }
     },
     "code": {
+      "meta": {
+        "fontFamily": { "$value": "{font.family.mono}" },
+        "fontSize": { "$value": "{font.size.meta}" },
+        "fontWeight": { "$value": "{font.weight.regular}" },
+        "lineHeight": { "$value": "{lineHeight.tight}" },
+        "letterSpacing": { "$value": "{letterSpacing.normal}" }
+      },
       "sm": {
         "fontFamily": { "$value": "{font.family.mono}" },
         "fontSize": { "$value": "{font.size.xs}" },
@@ -284,6 +329,10 @@
       "$description": "Single-property semantic modifiers for intentional deviations from a complete typography role.",
       "leading": {
         "none": { "lineHeight": { "$value": "{lineHeight.none}" } },
+        "tight": {
+          "$description": "Compact text leading for message bubbles: 18px at the default 15px body size, scaling with user typography.",
+          "lineHeight": { "$value": "{lineHeight.tight}" }
+        },
         "dense": { "lineHeight": { "$value": "{lineHeight.dense}" } },
         "snug": { "lineHeight": { "$value": "{lineHeight.snug}" } },
         "balanced": { "lineHeight": { "$value": "{lineHeight.balanced}" } },
@@ -448,29 +497,31 @@
     "chatComposer": {
       "$type": "dimension",
       "actionIconSize": { "$value": "14px" },
-      "compactGap": { "$value": "9px" },
-      "compactHeight": { "$value": "45px" },
-      "compactPaddingBlock": { "$value": "9px" },
-      "compactPaddingInline": { "$value": "9px" },
-      "compactTrackHeight": { "$value": "25px" },
-      "controlHeight": { "$value": "25px" }
+      "compactGap": { "$value": "{control.composer.surfaceGap}" },
+      "compactHeight": { "$value": "42px" },
+      "compactPaddingBlock": { "$value": "{control.composer.surfacePadding}" },
+      "compactPaddingInline": { "$value": "{control.composer.surfacePadding}" },
+      "compactTrackHeight": { "$value": "24px" },
+      "controlHeight": { "$value": "24px" }
     },
     "flowChat": {
       "$description": "Shared FlowChat rhythm for product and package-owned conversation surfaces.",
       "$type": "dimension",
-      "flowItemGap": { "$value": "0.42rem" },
+      "rowIconSize": { "$value": "{control.icon.sizeSm}" },
+      "rowIconGap": { "$value": "{space.1}" },
+      "flowItemGap": { "$value": "{space.2}" },
       "turnGap": { "$value": "{space.4}" },
-      "inlineGap": { "$value": "0.35rem" },
-      "controlGap": { "$value": "0.5rem" },
-      "controlPaddingBlock": { "$value": "0.35rem" },
+      "inlineGap": { "$value": "{space.1}" },
+      "controlGap": { "$value": "{space.2}" },
+      "controlPaddingBlock": { "$value": "{space.1}" },
       "controlPaddingInline": { "$value": "0.75rem" },
       "contentPaddingInline": { "$value": "3rem" },
       "contentPaddingInlineMobile": { "$value": "1.5rem" },
-      "cardGap": { "$value": "0.42rem" },
+      "cardGap": { "$value": "{control.flowChat.flowItemGap}" },
       "cardRadius": { "$value": "{radius.base}" },
       "cardPaddingBlock": { "$value": "0.625rem" },
       "cardPaddingInline": { "$value": "0.75rem" },
-      "cardExpandedPaddingBlock": { "$value": "0.5rem" },
+      "cardExpandedPaddingBlock": { "$value": "{space.2}" },
       "cardExpandedPaddingInline": { "$value": "0.625rem" },
       "codeBlockPaddingBlock": { "$value": "0.55rem" },
       "codeBlockPaddingInline": { "$value": "0.75rem" }
@@ -518,9 +569,11 @@
       "$type": "dimension",
       "gap": { "$value": "{space.2}" },
       "itemGap": { "$value": "6px" },
+      "itemGapSm": { "$value": "{space.1}" },
       "itemHeight": { "$value": "{control.height.md}" },
       "itemHeightSm": { "$value": "30px" },
       "itemIconSize": { "$value": "16px" },
+      "itemIconSizeSm": { "$value": "14px" },
       "itemPaddingInline": { "$value": "{space.4}" },
       "itemPaddingBlockSm": { "$value": "7px" },
       "itemPaddingInlineSm": { "$value": "{space.3}" },
@@ -530,14 +583,15 @@
     },
     "segmentedControl": {
       "$type": "dimension",
-      "gap": { "$value": "2px" },
+      "gap": { "$value": "{space.1}" },
       "padding": { "$value": "2px" },
       "paddingMd": { "$value": "3px" },
       "radius": { "$value": "{radius.pill}" },
-      "segmentHeight": { "$value": "22px" },
-      "segmentHeightMd": { "$value": "28px" },
+      "segmentHeight": { "$value": "24px" },
+      "segmentHeightMd": { "$value": "30px" },
       "pillSegmentHeight": { "$value": "24px" },
       "segmentPaddingInline": { "$value": "{space.2}" },
+      "segmentPaddingInlineMd": { "$value": "{space.3}" },
       "segmentGap": { "$value": "{space.1}" },
       "segmentRadius": { "$value": "{radius.pill}" },
       "pillSegmentRadius": { "$value": "{radius.sm}" },
@@ -545,6 +599,7 @@
       "iconSizeMd": { "$value": "14px" }
     },
     "composer": {
+      "contextBlur": { "$type": "dimension", "$value": "10px" },
       "$type": "dimension",
       "minBlockSize": { "$value": "120px" },
       "contextOffset": { "$value": "32px" },
@@ -562,12 +617,12 @@
       "$type": "dimension",
       "inlineGap": { "$value": "{space.1}" },
       "inlineIconSize": { "$value": "12px" },
-      "surfaceHeight": { "$value": "30px" },
+      "surfaceHeight": { "$value": "40px" },
       "surfaceGap": { "$value": "{space.2}" },
-      "surfacePaddingBlock": { "$value": "{space.1}" },
-      "surfacePaddingInlineStart": { "$value": "{space.2}" },
-      "surfacePaddingInlineEnd": { "$value": "3px" },
-      "surfaceRadius": { "$value": "{radius.base}" },
+      "surfacePaddingBlock": { "$value": "9px" },
+      "surfacePaddingInlineStart": { "$value": "{space.3}" },
+      "surfacePaddingInlineEnd": { "$value": "9px" },
+      "surfaceRadius": { "$value": "{radius.lg}" },
       "surfaceIconSize": { "$value": "14px" },
       "contentGap": { "$value": "{space.1}" },
       "dividerBlockSize": { "$value": "16px" }
@@ -576,24 +631,24 @@
       "$type": "dimension",
       "smMinBlockSize": { "$value": "54px" },
       "mdMinBlockSize": { "$value": "62px" },
-      "paddingBlock": { "$value": "{space.2}" },
+      "paddingBlock": { "$value": "{space.3}" },
       "paddingInline": { "$value": "{space.3}" },
       "gap": { "$value": "{space.2}" },
       "leadingSize": { "$value": "30px" },
       "iconSize": { "$value": "16px" },
       "contentGap": { "$value": "{space.1}" },
       "actionsGap": { "$value": "0px" },
-      "actionsPaddingInlineEnd": { "$value": "{space.2}" },
+      "actionsPaddingInlineEnd": { "$value": "{space.3}" },
       "radius": { "$value": "{radius.base}" }
     },
     "launcherButton": {
       "$description": "Geometry for a shell-edge launcher with an icon and short label.",
       "$type": "dimension",
-      "minInlineSize": { "$value": "104px" },
+      "minInlineSize": { "$value": "72px" },
       "blockSize": { "$value": "{control.height.md}" },
-      "paddingInline": { "$value": "14px" },
-      "gap": { "$value": "{space.2}" },
-      "iconSize": { "$value": "16px" },
+      "paddingInline": { "$value": "10px" },
+      "gap": { "$value": "{space.1}" },
+      "iconSize": { "$value": "12px" },
       "radius": { "$value": "{radius.lg}" }
     },
     "changeCount": {
@@ -606,7 +661,7 @@
     "statusPill": {
       "$type": "dimension",
       "gap": { "$value": "2px" },
-      "paddingBlock": { "$value": "3px" },
+      "paddingBlock": { "$value": "2px" },
       "paddingInline": { "$value": "6px" },
       "radius": { "$value": "{radius.pill}" },
       "iconSize": { "$value": "14px" }
@@ -637,6 +692,14 @@
   },
   "layout": {
     "$type": "dimension",
+    "searchDialog": {
+      "width": { "$value": "{overlay.dialog.maxInlineSizeXlarge}" },
+      "height": { "$value": "460px" },
+      "padding": { "$value": "{space.5}" },
+      "queryHeight": { "$value": "30px" },
+      "scopeGap": { "$value": "{space.5}" },
+      "resultsGap": { "$value": "30px" }
+    },
     "overflowText": {
       "fadeExtent": { "$value": "{space.4}" }
     },
@@ -716,7 +779,7 @@
       "surfacePadding": { "$value": "{space.2}" },
       "contentGap": { "$value": "{space.4}" },
       "sectionGap": { "$value": "{space.1}" },
-      "headingHeight": { "$value": "22px" },
+      "headingHeight": { "$value": "24px" },
       "headingPaddingInline": { "$value": "{space.2}" },
       "headingGap": { "$value": "{space.5}" },
       "headingActionSize": { "$value": "22px" },
@@ -855,7 +918,7 @@
       "maxInlineSizeSmall": { "$value": "420px" },
       "maxInlineSizeMedium": { "$value": "560px" },
       "maxInlineSizeLarge": { "$value": "600px" },
-      "maxInlineSizeXlarge": { "$value": "720px" },
+      "maxInlineSizeXlarge": { "$value": "800px" },
       "maxInlineSizeXxlarge": { "$value": "960px" },
       "maxInlineSizeWide": { "$value": "1200px" }
     }
@@ -926,7 +989,7 @@
     "modalActive": { "$value": 250 },
     "fullscreen": { "$value": 280 },
     "overlayHost": { "$value": 300 },
-    "tooltip": { "$value": 350 },
+    "tooltip": { "$value": 370 },
     "popover": { "$value": 360 },
     "toast": { "$value": 400 },
     "notification": { "$value": 400 },

@@ -7,6 +7,13 @@ plugin package sources. It reads a OpenBitFun-managed package whose
 (`dsh.bundle.patch` -> `cordis.patch.yml` rows) and/or profile bundle references
 (`dsh.profile.bundles`) as projection-only plugin sources.
 
+`hook_source` separately discovers home/profile Cordis patches and workspace
+composition files. It follows explicit Claude Code/Codex bridge `configPath`
+references using the selected launch workspace for relative paths. It never
+composes a profile or executes plugins. Bridge events remain native-only;
+unresolved paths, opaque bundle composition, and malformed sources are visible
+diagnostics. Keep these semantics out of the OpenCode adapter and native registry.
+
 It does not execute Cordis plugins, install npm packages, or depend on a
 user-local `dsh` CLI. Execution of dsh bundles belongs to future Plugin Host /
 external-ACP work, not this adapter boundary.
@@ -38,5 +45,6 @@ requires its own consumer evidence before that path is shared.
 
 ## Verification
 
+- `cargo test --locked -p openbitfun-dsh-adapter --lib hook_source::tests`
 - `cargo test --locked -p openbitfun-dsh-adapter --test dsh_source_adapter`
 - `cargo test --locked -p openbitfun-core --no-default-features --features plugin-runtime --lib plugin_runtime::tests`

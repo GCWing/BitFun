@@ -147,6 +147,9 @@ internal object MobileDesignGeometry {
     val ComposerModelSelectorRowRadius = 9.dp
     val ComposerModelSelectorRowGap = 6.dp
     val SheetTopRadius = 28.dp
+    val LoginSheetMaxWidth = 560.dp
+    val LoginSheetOuterMargin = 8.dp
+    val LoginSheetBodyMinHeight = 142.dp
     val SheetSideRadius = 28.dp
     val SheetHorizontalPadding = 20.dp
     val SheetHeaderHeight = 56.dp

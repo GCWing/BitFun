@@ -118,27 +118,27 @@ export default function architectureUnitTest() {
       expect(shell.backAction(AppRoute.RemoteHome)).assertEqual(AppNavigationBackAction.CloseSidebar);
       shell.state.setSidebarVisible(false);
       shell.replaceRoute(AppRoute.GeneralChat, 'session-1');
-      expect(shell.currentRoute()).assertEqual(AppRoute.GeneralChat);
-      expect(shell.isGeneralChatVisible()).assertTrue();
+      expect(shell.currentRoute()).assertEqual(AppRoute.RemoteHome);
+      expect(shell.isGeneralChatVisible()).assertFalse();
     });
 
     it('replaces conversation sources without growing cross-source history', 0, () => {
       const shell = new AppShellViewModel();
       shell.pushRoute(AppRoute.GeneralChat, 'general-1');
       shell.pushRoute(AppRoute.RemoteHome);
-      expect(shell.navigationStack.getAllPathName().length).assertEqual(2);
+      expect(shell.navigationStack.getAllPathName().length).assertEqual(0);
 
       shell.replaceRouteWithoutAnimation(AppRoute.RemoteChat, 'remote-1');
       expect(shell.currentRoute()).assertEqual(AppRoute.RemoteChat);
       expect(shell.navigationStack.getAllPathName().length).assertEqual(1);
 
       shell.replaceRouteWithoutAnimation(AppRoute.ChatHome);
-      expect(shell.currentRoute()).assertEqual(AppRoute.ChatHome);
+      expect(shell.currentRoute()).assertEqual(AppRoute.RemoteHome);
       expect(shell.navigationStack.getAllPathName().length).assertEqual(0);
 
       shell.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
       expect(shell.currentRoute()).assertEqual(AppRoute.RemoteHome);
-      expect(shell.navigationStack.getAllPathName().length).assertEqual(1);
+      expect(shell.navigationStack.getAllPathName().length).assertEqual(0);
     });
 
     it('keeps same-route state updates from rebuilding navigation', 0, () => {
@@ -146,7 +146,7 @@ export default function architectureUnitTest() {
       shell.pushRoute(AppRoute.RemoteHome);
       shell.replaceRouteWithoutAnimation(AppRoute.RemoteHome);
       expect(shell.currentRoute()).assertEqual(AppRoute.RemoteHome);
-      expect(shell.navigationStack.getAllPathName().length).assertEqual(1);
+      expect(shell.navigationStack.getAllPathName().length).assertEqual(0);
     });
 
     // Switching sessions is a state change, not a navigation. Treating the
@@ -159,7 +159,7 @@ export default function architectureUnitTest() {
       shell.pushRoute(AppRoute.RemoteChat, 'session-a');
       shell.replaceRouteWithoutAnimation(AppRoute.RemoteChat, 'session-b');
       expect(shell.currentRoute()).assertEqual(AppRoute.RemoteChat);
-      expect(shell.navigationStack.getAllPathName().length).assertEqual(2);
+      expect(shell.navigationStack.getAllPathName().length).assertEqual(1);
     });
 
     it('keeps wide layout geometry pure and deterministic', 0, () => {

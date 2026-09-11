@@ -48,7 +48,7 @@ describe('NavPanel layout styles', () => {
     const sectionHeaderBlock = extractBlock(stylesheet, '&__section-header');
     const itemsBlock = extractBlock(stylesheet, '&__items');
     const topActionExpandBlock = extractBlock(stylesheet, '&__top-action-expand');
-    const topActionSublistBlock = extractBlock(stylesheet, '&__top-action-sublist');
+    const topActionSublistBlock = extractBlock(stylesheet, '.openbitfun-nav-panel__top-action-sublist-inner');
 
     expect(itemsBlock).toContain('padding: 2px var(--openbitfun-space-1);');
     expect(itemsBlock).toContain('gap: calc(var(--openbitfun-space-1) / 2);');

@@ -433,7 +433,7 @@ async fn acp_stdio_preserves_mode_and_history_across_restart_then_closes_active_
     );
     assert_eq!(
         current_config_value(&loaded_with_fallback, "mode"),
-        Some(&json!("agentic")),
+        Some(&json!("Standard")),
         "an unavailable persisted mode must be migrated to an executable fallback"
     );
     let (fallback_prompt, _) = second

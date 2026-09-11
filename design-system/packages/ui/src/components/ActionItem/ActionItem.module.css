@@ -16,12 +16,12 @@
 
   .root:not([data-disabled="true"]):hover,
   .root:not([data-disabled="true"]):has(.trigger[data-openbitfun-preview-state="hover"]) {
-    background: var(--openbitfun-color-action-neutral-surface);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 
   .root:not([data-disabled="true"]):has(.trigger:active),
   .root:not([data-disabled="true"]):has(.trigger[data-openbitfun-preview-state="active"]) {
-    background: var(--openbitfun-color-action-neutral-surface-pressed);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 
   .root:not([data-disabled="true"]):has(.trigger:active) .label,
@@ -98,7 +98,7 @@
     font-family: var(--openbitfun-type-label-md-font-family);
     font-size: var(--openbitfun-type-label-md-font-size);
     font-weight: var(--openbitfun-type-label-md-font-weight);
-    line-height: var(--openbitfun-type-body-sm-line-height);
+    line-height: var(--openbitfun-type-action-row-line-height);
     letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
     white-space: nowrap;
   }

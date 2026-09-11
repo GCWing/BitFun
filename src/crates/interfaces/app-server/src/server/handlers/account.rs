@@ -4,7 +4,7 @@ use agent_client_protocol::{Builder, HandleDispatchFrom};
 use openbitfun_app_server_protocol::account::*;
 
 use super::capability::management_handler;
-use crate::management::{AppManagementService, ACCOUNT_CAPABILITY, SETTINGS_SYNC_CAPABILITY};
+use crate::management::{AppManagementService, ACCOUNT_CAPABILITY};
 use crate::role::{AppClient, AppServer};
 
 pub(in crate::server) fn builder(
@@ -12,7 +12,25 @@ pub(in crate::server) fn builder(
 ) -> Builder<AppServer, impl HandleDispatchFrom<AppClient>> {
     AppServer
         .builder()
-        .name("account and settings sync handlers")
+        .name("account handlers")
+        .on_receive_request(
+            management_handler!(
+                management,
+                ACCOUNT_CAPABILITY,
+                AccountGitHubStartRequest,
+                account_github_start
+            ),
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            management_handler!(
+                management,
+                ACCOUNT_CAPABILITY,
+                AccountGitHubPollRequest,
+                account_github_poll
+            ),
+            agent_client_protocol::on_receive_request!(),
+        )
         .on_receive_request(
             management_handler!(
                 management,
@@ -35,53 +53,8 @@ pub(in crate::server) fn builder(
             management_handler!(
                 management,
                 ACCOUNT_CAPABILITY,
-                AccountFinalizeLoginRequest,
-                account_finalize_login
-            ),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            management_handler!(
-                management,
-                ACCOUNT_CAPABILITY,
                 AccountLogoutRequest,
                 account_logout
-            ),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            management_handler!(
-                management,
-                SETTINGS_SYNC_CAPABILITY,
-                SettingsSyncStartRequest,
-                settings_sync_start
-            ),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            management_handler!(
-                management,
-                SETTINGS_SYNC_CAPABILITY,
-                SettingsSyncSnapshotRequest,
-                settings_sync_snapshot
-            ),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            management_handler!(
-                management,
-                SETTINGS_SYNC_CAPABILITY,
-                SettingsSyncCancelRequest,
-                settings_sync_cancel
-            ),
-            agent_client_protocol::on_receive_request!(),
-        )
-        .on_receive_request(
-            management_handler!(
-                management,
-                SETTINGS_SYNC_CAPABILITY,
-                SettingsSyncLocalChangedRequest,
-                settings_sync_local_changed
             ),
             agent_client_protocol::on_receive_request!(),
         )

@@ -131,9 +131,21 @@ impl TelegramBotApi {
         Ok(())
     }
 
-    /// Send a local file to a Telegram chat as a document attachment.
-    pub async fn send_file_as_document(&self, chat_id: i64, file_path: &str) -> Result<()> {
-        let content = super::read_workspace_file(file_path, MAX_TELEGRAM_FILE_BYTES, None).await?;
+    /// The session supplies bytes; the bot transport never resolves local paths.
+    pub async fn send_artifact(
+        &self,
+        chat_id: i64,
+        content: super::WorkspaceFileContent,
+    ) -> Result<()> {
+        if content.bytes.len() as u64 > MAX_TELEGRAM_FILE_BYTES {
+            return Err(anyhow!("Telegram file exceeds the upload limit"));
+        }
+        let photo = telegram_photo_eligible(&content);
+        let (method, field) = if photo {
+            ("sendPhoto", "photo")
+        } else {
+            ("sendDocument", "document")
+        };
 
         let part = reqwest::multipart::Part::bytes(content.bytes)
             .file_name(content.name.clone())
@@ -141,20 +153,29 @@ impl TelegramBotApi {
 
         let form = reqwest::multipart::Form::new()
             .text("chat_id", chat_id.to_string())
-            .part("document", part);
+            .part(field, part);
 
         let client = crate::reqwest_client();
         let resp = client
-            .post(self.api_url("sendDocument"))
+            .post(self.api_url(method))
             .multipart(form)
             .send()
             .await?;
 
         if !resp.status().is_success() {
             let body = resp.text().await.unwrap_or_default();
-            return Err(anyhow!("telegram sendDocument failed: {body}"));
+            return Err(anyhow!("Telegram {method} failed: {body}"));
         }
-        debug!("Telegram document sent to chat {chat_id}: {}", content.name);
+        let body: serde_json::Value = resp.json().await?;
+        if body.get("ok").and_then(|value| value.as_bool()) != Some(true) {
+            return Err(anyhow!(
+                "Telegram {method} rejected: {}",
+                body.get("description")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("invalid response")
+            ));
+        }
+        debug!("Telegram artifact sent to chat {chat_id}: {}", content.name);
         Ok(())
     }
 
@@ -353,4 +374,26 @@ mod tests {
         assert_eq!(chunks[0].len(), 4000);
         assert_eq!(chunks[1], "a");
     }
+}
+
+// https://core.telegram.org/bots/api#sendphoto — larger/unusual images retain
+// original bytes as documents, including SVG and animated GIF artifacts.
+fn telegram_photo_eligible(content: &super::WorkspaceFileContent) -> bool {
+    if !matches!(content.mime_type, "image/png" | "image/jpeg")
+        || content.bytes.len() > 10 * 1024 * 1024
+    {
+        return false;
+    }
+    let Ok(reader) =
+        image::ImageReader::new(std::io::Cursor::new(&content.bytes)).with_guessed_format()
+    else {
+        return false;
+    };
+    let Ok((width, height)) = reader.into_dimensions() else {
+        return false;
+    };
+    width > 0
+        && height > 0
+        && u64::from(width) + u64::from(height) <= 10000
+        && u64::from(width.max(height)) <= 20 * u64::from(width.min(height))
 }

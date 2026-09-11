@@ -74,7 +74,12 @@ export const SSHAuthPromptDialog: React.FC<SSHAuthPromptDialogProps> = ({
   const passwordRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setPassword('');
+      setPassphrase('');
+      setVerificationCode('');
+      return;
+    }
     setAuthMethod(defaultAuthMethod);
     setUsername(initialUsername);
     setPassword('');

@@ -1,3 +1,4 @@
+import { ResourceFileContext } from '@/infrastructure/api/ResourceFileContext';
 import { Extension } from '@tiptap/core';
 import { Plugin } from '@tiptap/pm/state';
 import type { EditorState } from '@tiptap/pm/state';
@@ -62,6 +63,7 @@ class InlineAiPreviewPluginView {
     }
 
     this.root.render(
+      <ResourceFileContext.Provider value={previewState.fileAccess ?? null}>
       <InlineAiPreviewBlock
         status={previewState.status}
         response={previewState.response}
@@ -73,6 +75,7 @@ class InlineAiPreviewPluginView {
         onReject={previewState.onReject}
         onRetry={previewState.onRetry}
       />
+      </ResourceFileContext.Provider>
     );
   }
 

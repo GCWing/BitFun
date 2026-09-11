@@ -143,7 +143,7 @@
   }
 
   &__text-item {
-    margin-bottom: 8px;
+    margin-bottom: var(--openbitfun-control-flow-chat-flow-item-gap);
     
     // Ensure FlowTextBlock styles render correctly.
     .flow-text-block {
@@ -151,7 +151,7 @@
   }
 
   &__thinking-item {
-    margin-bottom: 8px;
+    margin-bottom: var(--openbitfun-control-flow-chat-flow-item-gap);
   }
 
   &__thinking-item--expanded {
@@ -177,7 +177,7 @@
   }
 
   &__tool-item {
-    margin-bottom: 8px;
+    margin-bottom: var(--openbitfun-control-flow-chat-flow-item-gap);
     
     // Hide tool card action buttons and expanded content.
     .tool-card__actions,

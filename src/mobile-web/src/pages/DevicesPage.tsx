@@ -2,7 +2,7 @@
  * Devices Page — list same-account devices and pick the control target.
  *
  * The mobile stays a limited companion surface: switching only retargets
- * RelayHttpClient.pairedDeviceId (device RPC data plane) and resets the
+ * RelayHttpClient.targetDeviceId (device RPC data plane) and resets the
  * per-device UI state. Workspace/Session/Chat then talk to the new peer
  * through the same limited command set.
  */
@@ -20,7 +20,7 @@ import {
 } from '@openbitfun/ui/mobile';
 import {
   RelayHttpClient,
-  isDelegatedIdentityChangedError,
+  isAccountIdentityChangedError,
 } from '../services/RelayHttpClient';
 import { useI18n } from '../i18n';
 import { useMobileStore } from '../services/store';
@@ -31,16 +31,16 @@ interface DeviceInfo {
   device_name: string;
   online: boolean;
   last_seen_at?: number | null;
-  room_route?: boolean;
 }
 
-const PAIRED_ROOM_DEVICE_ID = '__openbitfun_paired_room__';
 
 interface Props {
   client: RelayHttpClient;
   onBack: () => void;
   onDeviceSelected?: () => void;
   accountLanding?: boolean;
+  autoSelect?: boolean;
+  onSignOut?: () => void;
   preferredDeviceId?: string;
 }
 
@@ -76,12 +76,12 @@ const NoIdentityIcon = () => (
   </svg>
 );
 
-const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBack, accountLanding = false, preferredDeviceId }) => {
+const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBack, accountLanding = false, autoSelect = true, onSignOut, preferredDeviceId }) => {
   const { t, formatRelativeTime } = useI18n();
   const { connectionHealth, setControlTarget, resetForDeviceSwitch } = useMobileStore();
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
-  const [identityReady, setIdentityReady] = useState(client.hasDelegatedIdentity);
-  const [identityChecking, setIdentityChecking] = useState(!client.hasDelegatedIdentity);
+  const [identityReady, setIdentityReady] = useState(client.hasAccountIdentity);
+  const [identityChecking, setIdentityChecking] = useState(false);
   const [loading, setLoading] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,26 +94,18 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
     const listedDevices = devices.filter((device) => (
     device.device_id !== client.controllerDeviceId
   )).sort((left, right) => {
-    const leftCurrent = left.device_id === client.pairedDeviceId;
-    const rightCurrent = right.device_id === client.pairedDeviceId;
+    const leftCurrent = left.device_id === client.targetDeviceId;
+    const rightCurrent = right.device_id === client.targetDeviceId;
     if (leftCurrent !== rightCurrent) return leftCurrent ? -1 : 1;
     if (left.online !== right.online) return left.online ? -1 : 1;
     return (left.device_name || left.device_id).localeCompare(right.device_name || right.device_id);
     });
-    if (client.isPaired && client.pairedDeviceId === null) {
-      listedDevices.unshift({
-        device_id: PAIRED_ROOM_DEVICE_ID,
-        device_name: '',
-        online: connectionHealth !== 'unreachable',
-        room_route: true,
-      });
-    }
     return listedDevices;
-  }, [client, client.controllerDeviceId, client.pairedDeviceId, connectionHealth, devices]);
+  }, [client, client.controllerDeviceId, client.targetDeviceId, connectionHealth, devices]);
 
   const friendlyError = useCallback((value: unknown, fallbackKey: string) => {
     const message = String((value as { message?: string })?.message || value);
-    if (message.includes('HTTP 401') || message.includes('No delegated identity')) {
+    if (message.includes('HTTP 401') || message.includes('Sign in with GitHub')) {
       return t(accountLanding ? 'pairing.accountSessionExpired' : 'devices.authorizationExpired');
     }
     if (message.includes('HTTP 404')) return t('devices.deviceUnavailable');
@@ -134,7 +126,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
   }, []);
 
   const refreshDevices = useCallback(async () => {
-    if (!client.hasDelegatedIdentity) return;
+    if (!client.hasAccountIdentity) return;
     const requestId = ++devicesRequestRef.current;
     const isCurrent = () => (
       mountedRef.current
@@ -151,9 +143,9 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
       // RelayHttpClient fences every response against its committed identity.
       // A concurrent account refresh therefore makes this request stale rather
       // than user-visible, while a successful 401 refresh + retry remains valid.
-      if (isDelegatedIdentityChangedError(e)) return;
+      if (isAccountIdentityChangedError(e)) return;
       const message = String((e as { message?: string })?.message || e);
-      if (message.includes('No delegated identity')) {
+      if (message.includes('Sign in with GitHub')) {
         setIdentityReady(false);
         setDevices([]);
       } else {
@@ -162,36 +154,11 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
     }
   }, [client, friendlyError]);
 
-  // Acquire the delegated identity lazily: the desktop may have logged into
-  // its account after this mobile session was paired. Force-refresh so a
-  // desktop account switch is reflected without re-scanning.
-  const ensureIdentity = useCallback(async (force = false) => {
-    const requestId = ++identityRequestRef.current;
-    setIdentityChecking(true);
-    setError(null);
-    let granted = false;
-    try {
-      granted = await client.requestDelegatedIdentity({ force: force || !client.hasDelegatedIdentity });
-    } catch (e: unknown) {
-      granted = false;
-      if (mountedRef.current && identityRequestRef.current === requestId) {
-        setError(friendlyError(e, 'devices.identityFailed'));
-      }
-    }
-    if (mountedRef.current && identityRequestRef.current === requestId) {
-      setIdentityReady(granted);
-      setIdentityChecking(false);
-      return granted;
-    }
-    return false;
-  }, [client, friendlyError]);
-
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setInterval> | undefined;
     const init = async () => {
-      const granted = await ensureIdentity(false);
-      if (!granted || cancelled || !mountedRef.current) return;
+      if (cancelled || !mountedRef.current) return;
       setLoading(true);
       await refreshDevices();
       if (cancelled || !mountedRef.current) return;
@@ -203,28 +170,26 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
       cancelled = true;
       if (timer) clearInterval(timer);
     };
-  }, [ensureIdentity, refreshDevices]);
+  }, [refreshDevices]);
 
   const handleManualRefresh = useCallback(async () => {
     if (loading || switchingId) return;
-    // Force refresh so desktop account switches are picked up immediately.
-    const granted = await ensureIdentity(true);
-    if (!granted) return;
+
     setLoading(true);
     await refreshDevices();
     if (mountedRef.current) setLoading(false);
-  }, [ensureIdentity, loading, refreshDevices, switchingId]);
+  }, [loading, refreshDevices, switchingId]);
 
   const selectDevice = useCallback(async (d: DeviceInfo, probe = true) => {
     if (!d.online || switchingId) return;
-    if (client.pairedDeviceId === d.device_id) return;
+    if (client.targetDeviceId === d.device_id) return;
     const requestId = ++switchRequestRef.current;
-    const accountEpoch = client.delegatedAccountEpoch;
+    const accountEpoch = client.accountEpoch;
     let expectedTargetEpoch = client.controlTargetEpoch;
     const isCurrent = () => (
       mountedRef.current
       && switchRequestRef.current === requestId
-      && client.delegatedAccountEpoch === accountEpoch
+      && client.accountEpoch === accountEpoch
       && client.controlTargetEpoch === expectedTargetEpoch
     );
     setSwitchingId(d.device_id);
@@ -244,20 +209,19 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
           throw new Error(ping.error || t('devices.switchFailed'));
         }
       }
-      client.setPairedDeviceId(d.device_id);
+      client.setTargetDeviceId(d.device_id);
       expectedTargetEpoch = client.controlTargetEpoch;
       resetForDeviceSwitch();
       setControlTarget({
         deviceId: d.device_id,
         deviceName: d.device_name,
-        isHome: d.device_id === client.homeDeviceId,
       });
       onDeviceSelected();
     } catch (e: unknown) {
       if (!isCurrent()) return;
-      if (isDelegatedIdentityChangedError(e)) return;
+      if (isAccountIdentityChangedError(e)) return;
       const message = String((e as { message?: string })?.message || e);
-      if (message.includes('No delegated identity')) {
+      if (message.includes('Sign in with GitHub')) {
         setIdentityReady(false);
         setDevices([]);
       } else {
@@ -273,21 +237,20 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
   // Keep the online/scanned-device shortcut after account UI entry, without
   // making discovery failures undo authentication or retry in a render loop.
   useEffect(() => {
-    if (!accountLanding || !identityReady || identityChecking || loading
+    if (!accountLanding || !autoSelect || !identityReady || identityChecking || loading
       || switchingId || automaticSelectionAttemptedRef.current) return;
     const target = selectAccountDevice(devices, client.controllerDeviceId, preferredDeviceId);
     if (!target) return;
     automaticSelectionAttemptedRef.current = true;
     void selectDevice(target, false);
-  }, [accountLanding, client, devices, identityChecking, identityReady, loading, preferredDeviceId, selectDevice, switchingId]);
+  }, [accountLanding, autoSelect, client, devices, identityChecking, identityReady, loading, preferredDeviceId, selectDevice, switchingId]);
 
   const renderDeviceList = () => (
       <div className="devices-page__list">
         {sortedDevices.map((d) => {
-          const isCurrent = d.room_route || client.pairedDeviceId === d.device_id;
-          const isHome = client.homeDeviceId === d.device_id;
+          const isCurrent = client.targetDeviceId === d.device_id;
           const isSwitching = switchingId === d.device_id;
-          const clickable = !d.room_route && d.online && !isCurrent && !switchingId;
+          const clickable = d.online && !isCurrent && !switchingId;
           return (
             <MobileListRow
               key={d.device_id}
@@ -304,20 +267,14 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
               label={(
                 <span className="devices-page__device-name-row">
                   <span className="devices-page__device-name">
-                    {d.room_route
-                      ? t('devices.pairedDesktopName')
-                      : d.device_name || t('devices.unknownDevice')}
+                    {d.device_name || t('devices.unknownDevice')}
                   </span>
                   {isCurrent && (
                     <MobileBadge className="devices-page__badge devices-page__badge--current" tone="success">
                       {t('devices.current')}
                     </MobileBadge>
                   )}
-                  {isHome && !isCurrent && (
-                    <MobileBadge className="devices-page__badge">
-                      {t('devices.pairedDesktop')}
-                    </MobileBadge>
-                  )}
+
                 </span>
               )}
               supportingText={(
@@ -328,9 +285,6 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
                     : d.last_seen_at
                       ? t('devices.lastSeen', { time: formatRelativeTime(d.last_seen_at * 1000) })
                       : t('devices.offline')}
-                  {!d.room_route && (
-                    <span className="devices-page__device-id">{d.device_id.slice(0, 8)}</span>
-                  )}
                 </span>
               )}
               trailing={isSwitching ? (
@@ -366,7 +320,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
           <MobileCard appearance="elevated" className="devices-page__empty-card">
             <MobileStatus
               action={<MobileButton className="devices-page__retry-btn" onClick={handleManualRefresh}>{t('devices.retry')}</MobileButton>}
-              description={t('devices.noDelegatedIdentity')}
+              description={t('devices.authorizationExpired')}
               icon={<NoIdentityIcon />}
             />
           </MobileCard>
@@ -393,7 +347,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
     <div className="devices-page">
       <MobilePageHeader
         className="devices-page__header"
-        leading={accountLanding ? <MobileButton appearance="plain" size="sm" onClick={onBack}>{t('sessions.disconnect')}</MobileButton> : <MobileIconButton
+        leading={accountLanding ? <MobileButton appearance="plain" size="sm" onClick={onBack}>{t('devices.signOut')}</MobileButton> : <MobileIconButton
           appearance="floating"
           className="devices-page__back-btn"
           icon={<BackIcon />}
@@ -401,7 +355,9 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
           aria-label={t('common.back')}
         />}
         title={t('devices.title')}
-        actions={<MobileIconButton
+        actions={<>
+          {!accountLanding && onSignOut && <MobileButton appearance="plain" size="sm" onClick={onSignOut}>{t('devices.signOut')}</MobileButton>}
+          <MobileIconButton
           appearance="floating"
           className="devices-page__refresh-btn"
           icon={<RefreshIcon />}
@@ -410,10 +366,10 @@ const DevicesPage: React.FC<Props> = ({ client, onBack, onDeviceSelected = onBac
           disabled={!!switchingId}
           aria-label={t('devices.refresh')}
           title={t('devices.refresh')}
-        />}
+        /></>}
       />
 
-      {accountLanding && <MobileBanner>{t('devices.accountReady')}</MobileBanner>}
+      {accountLanding && <p className="devices-page__description">{t('devices.accountReady')}</p>}
       {error && <MobileBanner className="devices-page__error" tone="danger">{error}</MobileBanner>}
 
       <div className="devices-page__body">

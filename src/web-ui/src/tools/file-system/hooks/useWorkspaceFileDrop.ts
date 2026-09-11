@@ -1,6 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { createLogger } from '@/shared/utils/logger';
-import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
+import type { WorkspaceInfo } from '@/shared/types';
 import {
   isDragPositionOverElement,
   resolveDropTargetDirectoryFromDragPosition,
@@ -13,6 +13,7 @@ const log = createLogger('useWorkspaceFileDrop');
 const DROP_DEDUPE_MS = 500;
 
 export interface UseWorkspaceFileDropOptions {
+  workspace: WorkspaceInfo | null;
   workspacePath?: string;
   panelRef: RefObject<HTMLElement | null>;
   enabled?: boolean;
@@ -23,6 +24,7 @@ export interface UseWorkspaceFileDropOptions {
 }
 
 export function useWorkspaceFileDrop({
+  workspace: currentWorkspace,
   workspacePath,
   panelRef,
   enabled = true,
@@ -31,7 +33,6 @@ export function useWorkspaceFileDrop({
   onComplete,
   onError,
 }: UseWorkspaceFileDropOptions): void {
-  const { workspace: currentWorkspace } = useCurrentWorkspace();
   const lastEnterPathsRef = useRef<string[]>([]);
   const lastDropTargetRef = useRef<string | null>(null);
   const isDragOverPanelRef = useRef(false);

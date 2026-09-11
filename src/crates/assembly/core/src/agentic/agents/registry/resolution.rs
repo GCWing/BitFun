@@ -96,6 +96,6 @@ impl AgentRegistry {
     }
 
     pub fn default_agent_type(&self) -> &str {
-        "agentic"
+        "Standard"
     }
 }

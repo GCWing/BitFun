@@ -35,7 +35,7 @@ import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
 import { useSceneManager } from '@/app/hooks/useSceneManager';
 import { flowChatSessionConfigForCurrentWorkspace } from '@/app/utils/projectSessionWorkspace';
-import { MarketAccountControls } from '@/features/market-account';
+import { AccountIdentityControls } from '@/features/market-account';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import type {
   MiniAppMeta,
@@ -59,7 +59,7 @@ import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useI18n } from '@/infrastructure/i18n';
-import { useMarketAccount } from '@/infrastructure/market-account';
+import { useAccountIdentity } from '@/infrastructure/account-identity';
 import { useNotification } from '@/shared/notification-system';
 import { isRemoteWorkspace } from '@/shared/types';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
@@ -116,7 +116,7 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
   const { openScene, activateScene, closeScene, openTabs } = useSceneManager();
   const { t, formatNumber, currentLanguage } = useI18n('scenes/miniapp');
   const miniAppActivities = useMiniAppActivity();
-  const { me } = useMarketAccount();
+  const { me } = useAccountIdentity();
 
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<MiniAppCategory>('all');
@@ -760,7 +760,7 @@ const MiniAppLibraryView: React.FC<MiniAppLibraryViewProps> = ({ tabs }) => {
         subtitle={t('subtitle')}
         actions={(
           <div className="miniapp-gallery__header-actions">
-            <MarketAccountControls
+            <AccountIdentityControls
               loginOpen={loginOpen}
               onLoginOpenChange={setLoginOpen}
               onIdentityChanged={refreshPersonalizedDetail}

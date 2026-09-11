@@ -1,0 +1,12 @@
+/* Mobile-only layout adaptation; visual tokens still come from the shared theme. */
+.gomoku .board { touch-action: pan-y; }
+@media (max-width: 720px) {
+  .gomoku { height: auto; min-height: 100vh; }
+  .gomoku .topbar { flex-wrap: wrap; gap: 12px; }
+  .gomoku .layout { flex: none; overflow: visible; grid-template-rows: auto auto; }
+  .gomoku .board-wrap { min-width: 0; }
+  .gomoku .board-frame { width: 100%; }
+  .gomoku .sidepanel { flex-direction: column; overflow: visible; }
+  .gomoku .sidepanel .card { min-width: 0; }
+  .gomoku .seg__btn, .gomoku .btn { min-height: 44px; }
+}

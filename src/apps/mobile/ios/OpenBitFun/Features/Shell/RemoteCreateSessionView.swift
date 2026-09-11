@@ -1,3 +1,4 @@
+import OpenBitFunMobileCore
 import SwiftUI
 import OSLog
 
@@ -7,6 +8,8 @@ struct RemoteCreateSessionView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var speech = SpeechInputController()
     @State private var instruction = ""
+    @State private var harnessProfile = HarnessProfile.standard
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedWorkspacePath = ""
     @State private var selectedModelID: String?
     @State private var pickerKind: RemoteCreateSelectionKind? = ProcessInfo.processInfo.arguments.contains(
@@ -91,7 +94,10 @@ struct RemoteCreateSessionView: View {
             reconcileSelectedWorkspace()
             selectedModelID = model.modelOptions.first(where: \.selected)?.id ?? model.modelOptions.first?.id
         }
+        .onDisappear { speech.stop() }
+        .onChange(of: scenePhase) { if $0 != .active { speech.stop() } }
         .onChange(of: model.remoteTargetEpoch) { _ in
+            speech.stop()
             selectedWorkspacePath = ""
         }
         .onChange(of: model.remoteWorkspaces) { _ in
@@ -188,6 +194,19 @@ struct RemoteCreateSessionView: View {
             .frame(minHeight: MobileDesignGeometry.composerExpandedInputRowHeight)
 
             HStack(spacing: 8) {
+                if !selectedWorkspacePath.isEmpty,
+                   HarnessProfilePolicy.shared.supported(capabilities: model.remoteHostCapabilities) {
+                    Menu {
+                        ForEach([HarnessProfile.minimal, .standard, .ultimate], id: \.name) { profile in
+                            Button { harnessProfile = profile } label: {
+                                HarnessProfileLabel(model: model, profile: profile)
+                            }
+                        }
+                    } label: {
+                        HarnessProfileLabel(model: model, profile: harnessProfile)
+                    }
+                    .disabled(model.remoteCreateSubmitting)
+                }
                 if let selectedModel {
                     Button { pickerKind = .model } label: {
                         HStack(spacing: 4) {
@@ -217,9 +236,7 @@ struct RemoteCreateSessionView: View {
                             ProgressView()
                                 .tint(OpenBitFunTheme.contentOnAction)
                         } else {
-                            Image(systemName: instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                ? (speech.isListening ? "stop.fill" : "mic.fill")
-                                : "arrow.up")
+                            Image(systemName: speech.isListening ? "stop.fill" : (instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "mic.fill" : "arrow.up"))
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(canSubmit ? OpenBitFunTheme.contentOnAction : OpenBitFunTheme.ink)
                         }
@@ -281,7 +298,7 @@ struct RemoteCreateSessionView: View {
     private func retryCreate() {
         if model.remoteCreateError != nil {
             model.createRemoteSession(
-                agentType: selectedWorkspacePath.isEmpty ? "Claw" : "code",
+                agentType: selectedWorkspacePath.isEmpty ? "Claw" : HarnessProfilePolicy.shared.creationAgent(profile: harnessProfile, capabilities: model.remoteHostCapabilities),
                 title: "",
                 instruction: instruction,
                 modelID: selectedModelID,
@@ -295,6 +312,7 @@ struct RemoteCreateSessionView: View {
     }
 
     private func primaryAction() {
+        if speech.isListening { speech.stop(); return }
         let value = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
         log.info("Remote create primary action invoked: hasInput=\(!value.isEmpty, privacy: .public) connected=\(model.remoteConnected, privacy: .public) busy=\(model.busy, privacy: .public) submitting=\(model.remoteCreateSubmitting, privacy: .public)")
         if !value.isEmpty {
@@ -303,7 +321,7 @@ struct RemoteCreateSessionView: View {
                 return
             }
             model.createRemoteSession(
-                agentType: selectedWorkspacePath.isEmpty ? "Claw" : "code",
+                agentType: selectedWorkspacePath.isEmpty ? "Claw" : HarnessProfilePolicy.shared.creationAgent(profile: harnessProfile, capabilities: model.remoteHostCapabilities),
                 title: "",
                 instruction: value,
                 modelID: selectedModelID,
@@ -564,5 +582,24 @@ struct RemoteCreateSelectionAnchorKey: PreferenceKey {
         nextValue: () -> [RemoteCreateSelectionKind: Anchor<CGRect>]
     ) {
         value.merge(nextValue(), uniquingKeysWith: { _, next in next })
+    }
+}
+
+struct HarnessProfileLabel: View {
+    @ObservedObject var model: MobileAppModel
+    let profile: HarnessProfile
+    private var density: Int { profile == .minimal ? 1 : (profile == .ultimate ? 3 : 2) }
+    var body: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 2) {
+                ForEach(0..<density, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 2).fill(OpenBitFunTheme.ink)
+                        .frame(width: 4, height: CGFloat(8 + index * 5))
+                }
+            }.frame(width: 22, height: 22)
+            Text(model.localized(profile == .minimal ? "极简" : (profile == .ultimate ? "极致" : "标准")))
+                .font(MobileDesignTypography.titleSmall.font)
+                .foregroundStyle(OpenBitFunTheme.ink)
+        }
     }
 }

@@ -75,10 +75,6 @@
       transform: translateY(-1px);
     }
 
-    &:active {
-      transform: scale(0.97);
-    }
-
     &:focus-visible {
       outline: none;
       border-color: var(--openbitfun-color-border-strong);

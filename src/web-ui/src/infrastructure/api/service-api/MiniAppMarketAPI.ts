@@ -1,3 +1,4 @@
+import { accountIdentityAPI } from './AccountIdentityAPI';
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type {
@@ -184,45 +185,10 @@ export class MiniAppMarketAPI {
     }
   }
 
-  async authStart(): Promise<DesktopAuthStart> {
-    try {
-      return await api.invoke('miniapp_market_auth_start', {});
-    } catch (error) {
-      throw createTauriCommandError('miniapp_market_auth_start', error);
-    }
-  }
-
-  async authPoll(transaction: DesktopAuthStart): Promise<'pending' | 'authorized' | 'expired'> {
-    try {
-      const response = await api.invoke<{ status: 'pending' | 'authorized' | 'expired' }>(
-        'miniapp_market_auth_poll',
-        {
-          request: {
-            transactionId: transaction.transactionId,
-          },
-        },
-      );
-      return response.status;
-    } catch (error) {
-      throw createTauriCommandError('miniapp_market_auth_poll', error);
-    }
-  }
-
-  async me(): Promise<MarketMe | null> {
-    try {
-      return await api.invoke('miniapp_market_me', {});
-    } catch (error) {
-      throw createTauriCommandError('miniapp_market_me', error);
-    }
-  }
-
-  async logout(): Promise<void> {
-    try {
-      await api.invoke('miniapp_market_logout', {});
-    } catch (error) {
-      throw createTauriCommandError('miniapp_market_logout', error);
-    }
-  }
+  authStart = () => accountIdentityAPI.authStart();
+  authPoll = (transaction: DesktopAuthStart) => accountIdentityAPI.authPoll(transaction);
+  me = () => accountIdentityAPI.me();
+  logout = () => accountIdentityAPI.logout();
 
   async setRating(slug: string, value?: number): Promise<{
     average: number;
@@ -362,7 +328,7 @@ export class MiniAppMarketAPI {
   }
 
   onAccountChanged(handler: () => void): () => void {
-    return api.listen('miniapp-market-account-changed', handler);
+    return accountIdentityAPI.onAccountChanged(handler);
   }
 }
 

@@ -74,22 +74,23 @@ test("Menu styling uses only public surface, geometry, action, and scrollbar tok
 
   assert.match(styles, /--openbitfun-overlay-menu-inline-size/);
   assert.match(styles, /--openbitfun-overlay-menu-item-height/);
-  assert.match(styles, /\.list\s*\{[^}]*gap: calc\(var\(--openbitfun-space-1\) \/ 2\)/);
-  assert.match(styles, /\.items\s*\{[^}]*gap: calc\(var\(--openbitfun-space-1\) \/ 2\)/);
-  assert.match(styles, /\.separator\s*\{[^}]*margin-block: calc\(/);
+  assert.match(styles, /\.list\s*\{[^}]*gap: 0/);
+  assert.match(styles, /\.items\s*\{[^}]*gap: 0/);
+  assert.match(styles, /\.separator\s*\{[^}]*margin-block: var\(--openbitfun-overlay-menu-section-gap\)/);
   assert.match(styles, /--openbitfun-color-surface-panel/);
   assert.match(styles, /--openbitfun-shadow-menu/);
   assert.match(styles, /--openbitfun-overlay-menu-scrollbar-gap/);
   assert.doesNotMatch(styles, /#[0-9a-f]{3,8}/i);
 });
 
-test("Menu reserves space inside its scroll viewport for focus rings on all edges", async () => {
+test("Menu keeps focus rings inside items without adding a permanent gutter", async () => {
   const styles = await readFile(new URL("../src/components/Menu/Menu.module.css", import.meta.url), "utf8");
   const scrollStyles = await readFile(new URL("../src/components/ScrollArea/ScrollArea.module.css", import.meta.url), "utf8");
   const itemStyles = await readFile(new URL("../src/components/ActionItem/ActionItem.module.css", import.meta.url), "utf8");
-  assert.match(styles, /\.list\s*\{[^}]*padding:\s*var\(--openbitfun-focus-width\)/);
+  assert.match(styles, /\.list\s*\{[^}]*padding:\s*0/);
   assert.match(itemStyles, /\.root:has\(\.trigger:focus-visible\)\s*\{[^}]*box-shadow:\s*0 0 0 var\(--openbitfun-focus-width\)/);
-  // Keep clipping and scrolling; the content, not the viewport, owns the gutter.
+  assert.match(styles, /\.item:has\(> \[data-openbitfun-part="trigger"\]:focus-visible\)\s*\{[^}]*box-shadow:\s*inset 0 0 0 var\(--openbitfun-focus-width\)/);
+  // Keep clipping and scrolling; the item owns its focus indicator.
   assert.match(scrollStyles, /data-openbitfun-orientation="vertical"\]\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto/);
   assert.doesNotMatch(styles, /overflow[^:]*:\s*visible/);
 });
@@ -101,7 +102,7 @@ test("Menu keeps equal item insets while its scrollbar stays on the surface edge
   assert.match(styles, /\.viewport\s*\{[^}]*padding-inline-end:\s*var\(--openbitfun-overlay-menu-scrollbar-gap\);[^}]*scrollbar-gutter:\s*auto/);
   assert.match(
     styles,
-    /\.list\s*\{[^}]*padding-inline-end:\s*calc\(\s*var\(--openbitfun-overlay-menu-surface-padding\)\s*\+ var\(--openbitfun-focus-width\)\s*- var\(--openbitfun-overlay-menu-scrollbar-gap\)\s*\)/,
+    /\.list\s*\{[^}]*padding-inline-end:\s*calc\(\s*var\(--openbitfun-overlay-menu-surface-padding\)\s*- var\(--openbitfun-overlay-menu-scrollbar-gap\)\s*\)/,
   );
   assert.doesNotMatch(styles, /scrollbar-gutter:\s*stable/);
 });

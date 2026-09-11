@@ -148,6 +148,7 @@ export const forbiddenManifestDependencyRules = [
   ...[
     ['openbitfun-claude-code-adapter', 'claude-code-adapter'],
     ['openbitfun-codex-adapter', 'codex-adapter'],
+    ['openbitfun-pi-adapter', 'pi-adapter'],
   ].map(([dependencyName, crateName]) => ({
     dependencyNames: [dependencyName],
     scanRoots: ['src/apps', 'src/crates', 'OpenBitFun-Installer/src-tauri'],
@@ -165,6 +166,8 @@ export const forbiddenManifestDependencyRules = [
     workspaceManifestPath: 'Cargo.toml',
     allowManifestPaths: [
       'src/crates/adapters/static-hook-support/Cargo.toml',
+      'src/crates/adapters/dsh-adapter/Cargo.toml',
+      'src/crates/adapters/pi-adapter/Cargo.toml',
       'src/crates/adapters/opencode-adapter/Cargo.toml',
       'src/crates/adapters/claude-code-adapter/Cargo.toml',
       'src/crates/adapters/codex-adapter/Cargo.toml',

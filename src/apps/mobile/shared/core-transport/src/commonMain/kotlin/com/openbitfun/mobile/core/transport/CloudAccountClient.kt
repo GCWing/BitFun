@@ -1,8 +1,7 @@
 package com.openbitfun.mobile.core.transport
 
 import com.openbitfun.mobile.core.crypto.CloudAccountCipher
-import com.openbitfun.mobile.core.crypto.CloudAccountKdfParams
-import com.openbitfun.mobile.core.crypto.PlatformArgon2id
+import com.openbitfun.mobile.core.crypto.DeviceIdentity
 import com.openbitfun.mobile.core.protocol.CommandStatus
 import com.openbitfun.mobile.core.protocol.EncryptedPayload
 import com.openbitfun.mobile.core.protocol.RelayJson
@@ -29,9 +28,10 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonObject
 import kotlinx.coroutines.CancellationException
 import kotlin.io.encoding.Base64
-import kotlin.random.Random
+import kotlin.uuid.Uuid
+import kotlin.uuid.ExperimentalUuidApi
 
-public const val DEFAULT_CLOUD_RELAY_URL: String = "https://remote.openbitfun.com/relay"
+public const val DEFAULT_CLOUD_RELAY_URL: String = "https://remote.openbitfun.com/v/1.0.0"
 
 /** Device kinds the relay accepts; mirrors `relay-service/src/db.rs::DEVICE_KINDS`. */
 private const val DEVICE_KIND_DESKTOP = "desktop"
@@ -120,23 +120,6 @@ public data class CloudAccountDevice public constructor(
     public val deviceKind: String? = null,
 )
 
-/**
- * The account's settings, decrypted, still as the desktop wrote them.
- *
- * Kept as text rather than parsed here: the blob is the desktop's whole
- * configuration document and this layer has no business knowing its schema —
- * only that the relay stored it sealed and that the master key opens it.
- *
- * [plaintext] is redacted from [toString] because that document carries the
- * user's provider API keys.
- */
-public data class CloudSettingsBlob public constructor(
-    public val plaintext: String,
-    public val version: Long,
-) {
-    override fun toString(): String = "CloudSettingsBlob(plaintext=<redacted>, version=$version)"
-}
-
 public class CloudAccountClient internal constructor(
     private val client: HttpClient,
     private val log: TransportLog = TransportLog.None,
@@ -147,53 +130,35 @@ public class CloudAccountClient internal constructor(
             it.trim().lowercase()
         }
 
-    public suspend fun login(
-        relayUrl: String,
-        username: String,
-        password: String,
-        deviceId: String,
-        deviceName: String,
-    ): CloudAccountSession {
-        val relay = relayUrl.trim().ifEmpty { DEFAULT_CLOUD_RELAY_URL }.trimEnd('/')
-        val user = username.trim()
-        if (user.isEmpty() || user.length > 128 || password.isEmpty() || password.length > 1024) {
-            throw CloudAccountException(CloudAccountFailure.INVALID_CREDENTIALS)
-        }
-        val challenge = request(
-            relay,
-            "/api/auth/login/challenge",
-            HttpMethod.Post,
-            LoginChallengeRequest.serializer(),
-            LoginChallengeRequest(user),
-            AccountChallenge.serializer(),
-            "",
-            RELAY_DEFAULT_TIMEOUT_MS,
-        )
-        val paramsWire = try {
-            RelayJson.decodeFromString(Argon2ParamsWire.serializer(), challenge.argon2Params)
-        } catch (_: Throwable) {
-            throw CloudAccountException(CloudAccountFailure.MALFORMED_RESPONSE)
-        }
-        val params = CloudAccountKdfParams(paramsWire.m, paramsWire.t, paramsWire.p)
-        val salt = decode(challenge.salt)
-        val kdfSalt = decode(challenge.kdfSalt)
-        val kek = PlatformArgon2id.derive(password, salt, params)
-        val masterKey = unwrapMasterKey(kek, challenge.wrappedMasterKey)
-        val proof = PlatformArgon2id.derive(password, kdfSalt, params)
-        val auth = request(
-            relay,
-            "/api/auth/login",
-            HttpMethod.Post,
-            LoginRequest.serializer(),
-            LoginRequest(user, Base64.Default.encode(proof), deviceId, deviceName, DEVICE_KIND_MOBILE),
-            AccountAuthResponse.serializer(),
-            "",
-            RELAY_DEFAULT_TIMEOUT_MS,
-        )
-        if (auth.token.isEmpty() || auth.userId.isEmpty()) {
-            throw CloudAccountException(CloudAccountFailure.MALFORMED_RESPONSE)
-        }
-        return CloudAccountSession(auth.token, auth.userId, masterKey)
+    public suspend fun startAuthorization(relayUrl: String): GitHubAuthorization = request(
+        relayUrl, "/api/auth/github/start", HttpMethod.Post,
+        JsonObject.serializer(), JsonObject(emptyMap()), GitHubAuthorization.serializer(), "", RELAY_DEFAULT_TIMEOUT_MS,
+    ).also {
+        val url = io.ktor.http.Url(it.authorizationUrl)
+        require(url.protocol.name == "https" && url.host == "github.com" && url.encodedPath == "/login/oauth/authorize" && url.port == 443 && url.user == null && url.password == null)
+    }
+
+    public suspend fun pollAuthorization(relayUrl: String, start: GitHubAuthorization): GitHubAuthorizationPoll = request(
+        relayUrl, "/api/auth/github/poll", HttpMethod.Post,
+        GitHubPollRequest.serializer(), GitHubPollRequest(start.transactionId, start.transactionSecret),
+        GitHubAuthorizationPoll.serializer(), "", RELAY_DEFAULT_TIMEOUT_MS,
+    )
+
+    @OptIn(ExperimentalUuidApi::class)
+    public suspend fun login(relayUrl: String, accessToken: String, deviceId: String, deviceName: String, deviceSecret: ByteArray): CloudAccountSession {
+        require(accessToken.isNotBlank())
+        require(deviceSecret.size == 32) { "Invalid device key." }
+        val secret = deviceSecret.copyOf()
+        try {
+            val auth = request(
+                relayUrl, "/api/auth/login", HttpMethod.Post,
+                LoginRequest.serializer(), LoginRequest(accessToken, deviceId, deviceName, DEVICE_KIND_MOBILE,
+                    Base64.Default.encode(DeviceIdentity.publicKey(secret)), Uuid.random().toString()),
+                AccountAuthResponse.serializer(), "", RELAY_DEFAULT_TIMEOUT_MS,
+            )
+            if (auth.token.isBlank() || auth.userId.isBlank()) throw CloudAccountException(CloudAccountFailure.MALFORMED_RESPONSE)
+            return CloudAccountSession(auth.token, auth.userId, secret)
+        } catch (cause: Throwable) { secret.fill(0); throw cause }
     }
 
     /**
@@ -209,7 +174,7 @@ public class CloudAccountClient internal constructor(
         selfDeviceId: String = "",
     ): List<CloudAccountDevice> =
         requestWithoutBody(
-            relayUrl.trim().ifEmpty { DEFAULT_CLOUD_RELAY_URL }.trimEnd('/'),
+            relayUrl,
             "/api/devices",
             HttpMethod.Get,
             ListSerializer(AccountDeviceWire.serializer()),
@@ -229,52 +194,6 @@ public class CloudAccountClient internal constructor(
             )
         }
 
-    /**
-     * The account's encrypted settings, or null when the account has none.
-     *
-     * "None" has two spellings on this endpoint and both mean the same thing to
-     * a caller: a relay that has never been given a settings document answers
-     * 404, and one that holds an empty row answers 200 with nothing sealed in
-     * it. `CloudAccountClient.ets` folds both into `undefined` rather than an
-     * error, because an account that has simply not synced yet is an ordinary
-     * state and not a failure anyone can act on.
-     *
-     * Anything else — an expired token, a relay that is down, a body that will
-     * not decrypt — still throws, so a caller can tell "you have no models" from
-     * "I could not find out".
-     */
-    public suspend fun fetchSettings(relayUrl: String, session: CloudAccountSession): CloudSettingsBlob? {
-        val entry = try {
-            requestWithoutBody(
-                relayUrl.trim().ifEmpty { DEFAULT_CLOUD_RELAY_URL }.trimEnd('/'),
-                "/api/sync/settings",
-                HttpMethod.Get,
-                SyncSettingsWire.serializer(),
-                session.token,
-                RELAY_DEFAULT_TIMEOUT_MS,
-            )
-        } catch (error: CloudAccountException) {
-            if (error.statusCode == HTTP_NOT_FOUND) return null
-            throw error
-        }
-        if (entry.encryptedData.isEmpty() || entry.nonce.isEmpty()) return null
-        val plaintext = try {
-            CloudAccountCipher.decrypt(
-                decode(entry.encryptedData),
-                session.masterKey,
-                decode(entry.nonce),
-            ).decodeToString()
-        } catch (error: CloudAccountException) {
-            throw error
-        } catch (cause: Throwable) {
-            // Neither the body nor the reason it would not open: this blob is
-            // the user's provider credentials.
-            log.error("account settings undecryptable version=${entry.version}")
-            throw CloudAccountException(CloudAccountFailure.MALFORMED_RESPONSE, null, cause)
-        }
-        return CloudSettingsBlob(plaintext, entry.version)
-    }
-
     public suspend fun <T : CommandStatus> deviceRpc(
         relayUrl: String,
         session: CloudAccountSession,
@@ -285,11 +204,15 @@ public class CloudAccountClient internal constructor(
     ): T {
         val target = targetDeviceId.trim()
         if (target.isEmpty()) throw CloudAccountException(CloudAccountFailure.MALFORMED_RESPONSE)
-        val nonce = Random.Default.nextBytes(12)
+        val peer = requestWithoutBody(relayUrl,
+            "/api/devices/" + encodePathSegment(target) + "/key", HttpMethod.Get,
+            DeviceKeyWire.serializer(), session.token, RELAY_DEFAULT_TIMEOUT_MS)
+        val messageKey = DeviceIdentity.messageKey(session.masterKey, decode(peer.publicKey))
+        val nonce = DeviceIdentity.randomBytes(12)
         val plain = RelayJson.encodeToString(RemoteCommand.serializer(), command).encodeToByteArray()
-        val encrypted = CloudAccountCipher.encrypt(plain, session.masterKey, nonce)
+        val encrypted = CloudAccountCipher.encrypt(plain, messageKey, nonce)
         val response = request(
-            relayUrl.trim().ifEmpty { DEFAULT_CLOUD_RELAY_URL }.trimEnd('/'),
+            relayUrl,
             "/api/devices/" + encodePathSegment(target) + "/rpc",
             HttpMethod.Post,
             EncryptedPayload.serializer(),
@@ -301,7 +224,7 @@ public class CloudAccountClient internal constructor(
         val decoded = try {
             CloudAccountCipher.decrypt(
                 decode(response.encryptedData),
-                session.masterKey,
+                messageKey,
                 decode(response.nonce),
             ).decodeToString()
         } catch (error: CloudAccountException) {
@@ -315,22 +238,6 @@ public class CloudAccountClient internal constructor(
         } catch (cause: Throwable) {
             log.error("device rpc undecodable cmd=${command.cmd} bytes=${decoded.length} ${decodeDetail(cause)}")
             throw CloudAccountException(CloudAccountFailure.MALFORMED_RESPONSE, null, cause)
-        }
-    }
-
-    private suspend fun unwrapMasterKey(kek: ByteArray, wrapped: String): ByteArray {
-        val parts = wrapped.split('.')
-        if (parts.size != 2 || kek.size != 32) {
-            throw CloudAccountException(CloudAccountFailure.MALFORMED_RESPONSE)
-        }
-        return try {
-            CloudAccountCipher.decrypt(decode(parts[0]), kek, decode(parts[1])).also { masterKey ->
-                if (masterKey.size != 32) throw CloudAccountException(CloudAccountFailure.MALFORMED_RESPONSE)
-            }
-        } catch (error: CloudAccountException) {
-            throw error
-        } catch (_: Throwable) {
-            throw CloudAccountException(CloudAccountFailure.AUTHENTICATION)
         }
     }
 
@@ -364,7 +271,7 @@ public class CloudAccountClient internal constructor(
         timeoutMs: Long,
     ): Response {
         val response = try {
-            client.request(relayUrl + path) {
+            client.request(requireNotNull(normalizeAccountRelayUrl(relayUrl)) + path) {
                 this.method = method
                 contentType(ContentType.Application.Json)
                 accept(ContentType.Application.Json)
@@ -396,7 +303,23 @@ public class CloudAccountClient internal constructor(
         }
     }
 
+    /** GitHub public metadata only: never attach the relay token or master key. */
+    public suspend fun githubProfile(userId: String): GitHubProfile? {
+        if (userId.isEmpty() || userId.first() == '0' || !userId.all { it in '0'..'9' }) return null
+        val response = client.request("https://api.github.com/user/$userId") {
+            method = HttpMethod.Get
+            accept(ContentType.Application.Json)
+            headers.append("User-Agent", "OpenBitFun-Mobile")
+        }
+        if (response.status.value != 200) return null
+        val profile = RelayJson.decodeFromString<GitHubProfile>(response.bodyAsText())
+        return profile.takeIf { it.userId == userId && Regex("[A-Za-z0-9][A-Za-z0-9-]{0,38}").matches(it.username) }
+            ?.let { it.copy(avatarUrl = it.avatarUrl?.takeIf { url -> url.startsWith("https://avatars.githubusercontent.com/") }) }
+    }
+
     public companion object {
+        public fun generateDeviceSecret(): ByteArray = DeviceIdentity.generateSecret()
+
         public fun create(): CloudAccountClient = CloudAccountClient(relayHttpClient(), TransportLog.None)
 
         public fun create(log: TransportLog): CloudAccountClient = CloudAccountClient(relayHttpClient(), log)
@@ -408,17 +331,7 @@ public class CloudAccountClient internal constructor(
     }
 }
 
-/**
- * Command transport over a signed-in account, i.e. `POST /api/devices/{id}/rpc`.
- *
- * The envelope differs from [RoomRemoteCommandTransport]'s — the key is the
- * account's master key rather than a pairing handshake's — but everything above
- * a transport is written against one contract, so the two failure vocabularies
- * are reconciled here rather than left for each caller to learn: a
- * [CloudAccountException] becomes the [RelayFailure] that says the same thing,
- * and a desktop that answered `{"resp":"error"}` is a rejection rather than a
- * reply, exactly as it is on the paired path.
- */
+/** Device-to-device commands encrypted using authenticated X25519 public keys. */
 public class AccountDeviceCommandTransport public constructor(
     private val client: CloudAccountClient,
     private val relayUrl: String,
@@ -438,8 +351,8 @@ public class AccountDeviceCommandTransport public constructor(
         command: RemoteCommand,
         timeoutMs: Long,
     ): T {
-        val label = "cmd=${command.cmd} request=${shortRequestId(command.requestId.orEmpty())} " +
-            "device=${shortRoomId(targetDeviceId)}"
+        val label = "cmd=${command.cmd} request=${command.requestId.orEmpty().take(12)} " +
+            "device=${targetDeviceId.take(12)}"
         log.info("command start $label")
 
         val response = try {
@@ -461,7 +374,7 @@ public class AccountDeviceCommandTransport public constructor(
 }
 
 private fun CloudAccountFailure.asRelayFailure(): RelayFailure = when (this) {
-    CloudAccountFailure.INVALID_CREDENTIALS, CloudAccountFailure.AUTHENTICATION -> RelayFailure.PairRejected
+    CloudAccountFailure.INVALID_CREDENTIALS, CloudAccountFailure.AUTHENTICATION -> RelayFailure.AuthenticationRequired
     CloudAccountFailure.RATE_LIMITED -> RelayFailure.RateLimited
     CloudAccountFailure.RELAY_UNAVAILABLE -> RelayFailure.RelayUnavailable(HTTP_SERVER_ERROR)
     CloudAccountFailure.NETWORK -> RelayFailure.NetworkUnreachable
@@ -477,45 +390,36 @@ private fun CloudAccountFailure.asRelayFailure(): RelayFailure = when (this) {
 private const val HTTP_SERVER_ERROR = 500
 
 @Serializable
-private data class LoginChallengeRequest(val username: String)
-
+public data class GitHubAuthorization(
+    public val transactionId: String,
+    public val transactionSecret: String,
+    public val authorizationUrl: String,
+    public val expiresAt: Long,
+    public val pollIntervalSeconds: Int,
+) {
+    override fun toString(): String = "GitHubAuthorization(<redacted>)"
+}
+@Serializable
+private data class GitHubPollRequest(val transactionId: String, val transactionSecret: String)
+@Serializable
+public data class GitHubAuthorizationPoll(public val status: String, public val tokens: GitHubTokens? = null)
+@Serializable
+public data class GitHubTokens(public val accessToken: String) {
+    override fun toString(): String = "GitHubTokens(<redacted>)"
+}
 @Serializable
 private data class LoginRequest(
-    val username: String,
-    @SerialName("password_hash") val passwordHash: String,
+    @SerialName("access_token") val accessToken: String,
     @SerialName("device_id") val deviceId: String,
     @SerialName("device_name") val deviceName: String,
     @SerialName("device_kind") val deviceKind: String,
+    @SerialName("public_key") val publicKey: String,
+    @SerialName("request_id") val requestId: String,
 )
-
-@Serializable
-private data class AccountChallenge(
-    val salt: String,
-    @SerialName("kdf_salt") val kdfSalt: String,
-    @SerialName("argon2_params") val argon2Params: String,
-    @SerialName("wrapped_master_key") val wrappedMasterKey: String,
-)
-
-@Serializable
-private data class Argon2ParamsWire(val m: Int, val t: Int, val p: Int)
-
 @Serializable
 private data class AccountAuthResponse(val token: String, @SerialName("user_id") val userId: String)
-
-/**
- * Defaults on every field: the relay answers this endpoint with an empty object
- * for an account that has never synced, and that has to read as "nothing here"
- * rather than as a malformed response.
- */
 @Serializable
-private data class SyncSettingsWire(
-    @SerialName("encrypted_data") val encryptedData: String = "",
-    val nonce: String = "",
-    val version: Long = 0,
-)
-
-/** The relay's "this account has no settings document", not an error. */
-private const val HTTP_NOT_FOUND = 404
+private data class DeviceKeyWire(@SerialName("public_key") val publicKey: String)
 
 @Serializable
 private data class AccountDeviceWire(
@@ -566,4 +470,13 @@ private fun encodePathSegment(value: String): String = value.encodeToByteArray()
     val character = unsigned.toChar()
     if (character.isLetterOrDigit() || character in "-._~") character.toString()
     else "%" + unsigned.toString(16).uppercase().padStart(2, '0')
+}
+
+@Serializable
+public data class GitHubProfile(
+    @SerialName("id") private val id: Long,
+    @SerialName("login") public val username: String,
+    @SerialName("avatar_url") public val avatarUrl: String? = null,
+) {
+    public val userId: String get() = id.toString()
 }

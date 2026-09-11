@@ -215,7 +215,11 @@ public class ChatTimelineStore public constructor() {
 
     public fun applySnapshot(snapshot: ChatSessionSnapshot) {
         setCursor(snapshot.cursor)
-        if (snapshot.newMessages.isNotEmpty()) mergePersistedMessages(snapshot.newMessages)
+        if (snapshot.messageSnapshot != null) {
+            setPersistedMessages(snapshot.messageSnapshot)
+        } else if (snapshot.newMessages.isNotEmpty()) {
+            mergePersistedMessages(snapshot.newMessages)
+        }
         setActiveTurn(snapshot.activeTurn)
         snapshot.modelCatalog?.let { catalog ->
             setModelCatalog(catalog, selectedModelIdForCatalog(catalog, state.selectedModelId))

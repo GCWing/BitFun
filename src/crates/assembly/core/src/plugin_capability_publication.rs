@@ -1,5 +1,5 @@
 use crate::agentic::agents::{
-    external_subagent_runtime_key, get_agent_registry, shared_coding_mode_tools, ExploreAgent,
+    external_subagent_runtime_key, get_agent_registry, standard_harness_tools, ExploreAgent,
     ExternalProvidedAgent, ExternalSubagentModelBinding, ExternalSubagentRegistration,
     ExternalSubagentRoute,
 };
@@ -317,7 +317,7 @@ fn native_tool_baseline(
         use crate::agentic::agents::Agent;
         ExploreAgent::new().default_tools()
     } else {
-        shared_coding_mode_tools()
+        standard_harness_tools()
     }
 }
 

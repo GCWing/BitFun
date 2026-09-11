@@ -399,10 +399,14 @@ impl ConfigManager {
             return Err(contract_error);
         }
 
-        let config: GlobalConfig = serde_json::from_value(config_value).map_err(|error| {
+        let mut config: GlobalConfig = serde_json::from_value(config_value).map_err(|error| {
             OpenBitFunError::config(format!("Failed to deserialize config file: {error}"))
         })?;
-        let validation_result = self.providers.validate_config(&config).await?;
+        let mut diagnostics =
+            openbitfun_config_contracts::normalization::recover_persisted_config(&mut config);
+        let validation_result = self
+            .validate_recovered_config(&mut config, &mut diagnostics)
+            .await?;
         if !validation_result.valid {
             return Err(invalid_config_error(
                 "Invalid configuration file",
@@ -411,9 +415,55 @@ impl ConfigManager {
         }
 
         self.config = config;
-        self.load_diagnostics.clear();
+        self.load_diagnostics = diagnostics;
         debug!("Loaded OpenBitFun config from file without rewriting it");
         Ok(())
+    }
+
+    // Catalog/provider-dependent reasoning checks cannot run in the offline
+    // importer. Preserve unusable model records and surface a diagnostic while
+    // allowing the remaining configuration to load. Each retry disables at
+    // least one enabled model; unrelated validation errors remain errors.
+    async fn validate_recovered_config(
+        &self,
+        config: &mut GlobalConfig,
+        diagnostics: &mut Vec<super::types::ConfigDiagnostic>,
+    ) -> OpenBitFunResult<super::types::ConfigValidationResult> {
+        loop {
+            let result = self.providers.validate_config(config).await?;
+            let mut recovered = false;
+            for error in &result.errors {
+                let Some(index) = error
+                    .path
+                    .strip_prefix("ai.models[")
+                    .and_then(|path| path.split_once(']'))
+                    .and_then(|(index, _)| index.parse::<usize>().ok())
+                else {
+                    continue;
+                };
+                let Some(model) = config
+                    .ai
+                    .models
+                    .get_mut(index)
+                    .filter(|model| model.enabled)
+                else {
+                    continue;
+                };
+                model.enabled = false;
+                diagnostics.push(super::types::ConfigDiagnostic {
+                    path: error.path.clone(),
+                    message: error.message.clone(),
+                    code: "CONFIG_MODEL_DISABLED".into(),
+                    severity: super::types::ConfigDiagnosticSeverity::Warning,
+                    recoverability: super::types::ConfigDiagnosticRecoverability::ModelDisabled,
+                });
+                recovered = true;
+            }
+            if !recovered {
+                return Ok(result);
+            }
+            diagnostics.extend(reconcile_model_references(config).diagnostics);
+        }
     }
 
     async fn try_repair_sparse_installer_config(
@@ -1032,6 +1082,54 @@ mod tests {
             );
             assert!(!handoff_path.exists());
         }
+    }
+
+    #[tokio::test]
+    async fn existing_config_recovers_semantics_without_rewriting_source() {
+        let temp = tempfile::tempdir().unwrap();
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            temp.path().join("recovery"),
+        ));
+        path_manager.initialize_user_directories().await.unwrap();
+        let mut config = GlobalConfig::default();
+        config.ai.stream_idle_timeout_secs = Some(0);
+        config.ai.default_models.primary = Some("missing".into());
+        config.ai.agent_model_defaults.subagents.default_selection =
+            super::super::types::SubagentModelSelection::fixed("missing-model");
+        config.app.logging.level = "invalid".into();
+        config.ai.models.push(super::super::types::AIModelConfig {
+            id: "broken".into(),
+            name: "Broken".into(),
+            provider: "openai".into(),
+            enabled: true,
+            context_window: Some(1),
+            api_key: "retained-secret".into(),
+            ..Default::default()
+        });
+        let original = serde_json::to_vec(&config).unwrap();
+        tokio::fs::write(path_manager.app_config_file(), &original)
+            .await
+            .unwrap();
+        let manager = ConfigManager::new(manager_settings(path_manager.clone()))
+            .await
+            .unwrap();
+        assert!(!manager.config.ai.models[0].enabled);
+        assert_eq!(manager.config.ai.models[0].api_key, "retained-secret");
+        assert!(
+            manager
+                .providers
+                .validate_config(&manager.config)
+                .await
+                .unwrap()
+                .valid
+        );
+        assert!(!manager.load_diagnostics.is_empty());
+        assert_eq!(
+            tokio::fs::read(path_manager.app_config_file())
+                .await
+                .unwrap(),
+            original
+        );
     }
 
     #[tokio::test]

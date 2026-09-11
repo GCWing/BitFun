@@ -50,10 +50,6 @@
       opacity: 1;
     }
 
-    &:active:not(:disabled) {
-      transform: scale(0.97);
-    }
-
     &:focus-visible {
       border-color: color-mix(in srgb, var(--openbitfun-color-accent-hover) 40%, transparent);
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--openbitfun-color-accent-default) 20%, transparent);

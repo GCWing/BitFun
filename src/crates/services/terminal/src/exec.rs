@@ -23,6 +23,8 @@ use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 const DEFAULT_YIELD_TIME_MS: u64 = 10_000;
+pub(crate) const EXEC_TERMINAL_SIZE: openbitfun_runtime_ports::ExecTerminalSize =
+    openbitfun_runtime_ports::ExecTerminalSize { cols: 80, rows: 24 };
 const MAX_RETAINED_OUTPUT_BYTES: usize = 1024 * 1024;
 const MAX_EXEC_SESSIONS: usize = 64;
 const MAX_COMPLETED_EXEC_SESSIONS: usize = 64;
@@ -1097,8 +1099,8 @@ async fn spawn_exec_process(
 async fn spawn_pty_process(request: &ExecCommandRequest) -> TerminalResult<ExecProcess> {
     let pty_system = native_pty_system();
     let pair = pty_system.openpty(PtySize {
-        rows: 24,
-        cols: 80,
+        rows: EXEC_TERMINAL_SIZE.rows,
+        cols: EXEC_TERMINAL_SIZE.cols,
         pixel_width: 0,
         pixel_height: 0,
     })?;

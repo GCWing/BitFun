@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { VoiceParticleAudioReader } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import {
   DEFAULT_REALTIME_OUTPUT_SAMPLE_RATE,
@@ -57,10 +58,11 @@ export interface RealtimeVoiceCallController {
   disabled: boolean;
   phase: RealtimeVoiceCallPhase;
   muted: boolean;
-  audioLevel: number;
+  readAudio: VoiceParticleAudioReader;
   userTranscript: string;
   assistantTranscript: string;
   status: string;
+  notice: string;
   taskSessionId: string | null;
   taskPhase: VoiceTaskProgressPhase | null;
   taskProgressText: string;
@@ -214,10 +216,10 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
   const [voiceCallConfig, setVoiceCallConfig] = useState<SpeechRealtimeConfig | null>(null);
   const [phase, setPhase] = useState<RealtimeVoiceCallPhase>('idle');
   const [muted, setMuted] = useState(false);
-  const [audioLevel, setAudioLevel] = useState(0);
   const [userTranscript, setUserTranscript] = useState('');
   const [assistantTranscript, setAssistantTranscript] = useState('');
   const [status, setStatus] = useState('');
+  const [notice, setNotice] = useState('');
   const [taskSessionId, setTaskSessionId] = useState<string | null>(null);
   const [taskPhase, setTaskPhase] = useState<VoiceTaskProgressPhase | null>(null);
   const [taskProgressText, setTaskProgressText] = useState('');
@@ -245,6 +247,12 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
   useEffect(() => {
     mutedRef.current = muted;
   }, [muted]);
+
+  const readAudio = useCallback<VoiceParticleAudioReader>(() => ({
+    user: mutedRef.current ? null : recorderRef.current?.readFrequencyData?.() ?? null,
+    assistant: playerRef.current?.readFrequencyData() ?? null,
+    assistantSpeaking: playerRef.current?.isPlaying() ?? false,
+  }), []);
 
   const openSettings = useCallback(() => {
     useSettingsStore.getState().openDestination({
@@ -316,6 +324,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
     spokenProgressQueueRef.current = queued.catch(error => {
       log.warn('Failed to speak OpenBitFun task update after retry', { sessionId, error });
       setStatus(t('voiceCall.call.status.audioPlaybackFailed'));
+      setNotice(t('voiceCall.call.status.audioPlaybackFailed'));
     });
     return queued;
   }, [t]);
@@ -371,6 +380,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
     void speechAPI.speakRealtimeText(sessionId, spokenText).catch(error => {
       log.error('Failed to request realtime assistant audio retry', { sessionId, error });
       setStatus(t('voiceCall.call.status.audioPlaybackFailed'));
+      setNotice(t('voiceCall.call.status.audioPlaybackFailed'));
     });
   }, [t]);
 
@@ -393,7 +403,6 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
     if (recorder) await recorder.stop().catch(() => undefined);
     await pendingAudioRef.current.catch(() => undefined);
     if (player) await player.close().catch(() => undefined);
-    setAudioLevel(0);
   }, [clearAssistantSpeechFallbackTimer]);
 
   /**
@@ -781,9 +790,16 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
           assistantAudioBytesRef.current += event.audioBase64.length;
           clearAssistantSpeechFallbackTimer();
           setStatus(t('voiceCall.call.status.speaking'));
-          void playerRef.current.enqueue(event.audioBase64).catch(error => {
+          const player = playerRef.current;
+          void player.enqueue(event.audioBase64).then(() => {
+            if (playerRef.current === player && sessionRef.current?.sessionId === session.sessionId) {
+              setNotice('');
+            }
+          }).catch(error => {
+            if (playerRef.current !== player || sessionRef.current?.sessionId !== session.sessionId) return;
             log.error('Failed to play realtime assistant audio', { error });
             setStatus(t('voiceCall.call.status.audioPlaybackFailed'));
+            setNotice(t('voiceCall.call.status.audioPlaybackFailed'));
           });
         }
         break;
@@ -857,6 +873,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
       setTaskProgressText('');
       setTaskSessionId(null);
       setStatus('');
+      setNotice('');
       callTargetRef.current = null;
     });
   }, [cleanupMedia, phase, t]);
@@ -905,6 +922,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
     setUserTranscript('');
     setAssistantTranscript('');
     setStatus(t('voiceCall.call.status.connecting'));
+    setNotice('');
 
     let preparedPlayer: RealtimePcmPlayer;
     try {
@@ -970,7 +988,7 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
           chunkDurationMs: AUDIO_CHUNK_DURATION_MS,
           audioContext: preparedPlayer.getAudioContext(),
           microphoneDeviceId: controllerConfig.microphoneDeviceId || undefined,
-          onLevel: level => setAudioLevel(Math.max(0, Math.min(1, level))),
+          analyzeFrequency: true,
           onDeviceEnded: () => {
             if (sessionRef.current?.sessionId !== session.sessionId) return;
             activeCallIdRef.current += 1;
@@ -1049,16 +1067,20 @@ export function useRealtimeVoiceCallController(disabled = false): RealtimeVoiceC
     disabled,
     phase,
     muted,
-    audioLevel,
+    readAudio,
     userTranscript,
     assistantTranscript,
     status,
+    notice,
     taskSessionId,
     taskPhase,
     taskProgressText,
     start,
     end,
-    toggleMute: () => setMuted(previous => !previous),
+    toggleMute: () => {
+      mutedRef.current = !mutedRef.current;
+      setMuted(mutedRef.current);
+    },
     openSettings,
   };
 }

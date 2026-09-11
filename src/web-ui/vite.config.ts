@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
@@ -17,6 +18,7 @@ import {
 import { resolveDevServerPorts } from '../../scripts/dev-server-ports.mjs';
 
 const host = process.env.TAURI_DEV_HOST;
+const requireFromWebUi = createRequire(path.join(__dirname, 'package.json'));
 const { port: devPort, hmrPort } = resolveDevServerPorts();
 const designSystemUiSourceDirectory = path.resolve(
   __dirname,
@@ -168,6 +170,12 @@ export default defineConfig(({ mode, command }) => {
     resolve: {
       dedupe: ['react', 'react-dom'],
       alias: [
+        // @xterm/headless 6.1.0-beta.141 advertises a missing lib/xterm.mjs.
+        // Resolve its published ESM entry for both dev optimization and builds.
+        {
+          find: /^@xterm\/headless$/,
+          replacement: requireFromWebUi.resolve('@xterm/headless/lib-headless/xterm-headless.mjs'),
+        },
         ...createDesignSystemSourceAliases(command),
         { find: "@/shared", replacement: path.resolve(__dirname, "./src/shared") },
         { find: "@/core", replacement: path.resolve(__dirname, "./src/core") },

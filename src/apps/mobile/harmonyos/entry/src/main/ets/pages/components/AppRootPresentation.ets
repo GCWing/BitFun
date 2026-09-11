@@ -132,6 +132,8 @@ export struct AppRootPresentation {
         shellState: this.shellState,
         useWideLayout: this.isWideLayout(),
         settingsPlacement: this.settingsPlacement,
+        compactAccountLogin: this.shellState.settingsMode === 'account' &&
+          this.remotePageState.accountUserId.trim().length === 0,
         connectPlacement: this.connectPlacement,
         content: () => { this.NavigationContent(); },
         sidebar: () => { this.SidebarContent(); },
@@ -170,7 +172,7 @@ export struct AppRootPresentation {
   @Builder
   NavigationContent() {
     Stack() {
-      Navigation(this.navigationStack) { this.RouteContent(AppRoute.ChatHome) }
+      Navigation(this.navigationStack) { this.RouteContent(AppRoute.RemoteHome) }
         .id('openbitfunHomeNavigation')
         .width('100%').height('100%').hideTitleBar(true)
         .mode(NavigationMode.Stack)

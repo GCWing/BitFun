@@ -122,6 +122,85 @@ describe('MEditorErrorBoundary', () => {
     expect(container.querySelector('.m-editor-source-block-action')).not.toBeNull();
   });
 
+  it('edits a native block beside partially bold strikethrough without opening document source', async () => {
+    const markdown = '# Report\n\n- ~~**Remaining**: implementation and tests~~ **Done**\n\nOrdinary text.';
+    const { ref, onSave } = await renderEditor(markdown);
+    expect(getEditor().getJSON().content?.map(node => node.type)).toEqual(['heading', 'bulletList', 'paragraph']);
+    expect(container.querySelector('.m-editor-source-block-action')).toBeNull();
+    expect(ref.current?.getValue()).toBe(markdown);
+    act(() => {
+      getEditor().commands.setTextSelection(getEditor().state.doc.content.size - 1);
+      getEditor().commands.insertContent(' Added.');
+    });
+    expect(ref.current?.getValue()).toBe(`${markdown} Added.`);
+    act(() => container.querySelector('.tiptap')!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }),
+    ));
+    expect(onSave).toHaveBeenLastCalledWith(`${markdown} Added.`);
+    act(() => { ref.current?.undo?.(); });
+    expect(ref.current?.getValue()).toBe(markdown);
+    act(() => { ref.current?.redo?.(); });
+    expect(ref.current?.getValue()).toBe(`${markdown} Added.`);
+  });
+
+  it('retains link metadata, literal syntax and code spaces across edits, save, undo and reload', async () => {
+    const markdown = '# Before\n\n[label](<https://example.com/a b> "a & title")\n\n\\# literal\n\n``  padded  ``\n\nAfter';
+    const { ref, onSave, setDocumentValue } = await renderEditor(markdown);
+    const assertContent = () => {
+      expect(container.querySelector('.m-editor-source-block-action')).toBeNull();
+      expect(container.querySelector('a')?.getAttribute('title')).toBe('a & title');
+      expect(container.querySelector('code')?.textContent).toBe(' padded ');
+      expect(getEditor().getJSON().content?.map(n => n.type)).toEqual(['heading', 'paragraph', 'paragraph', 'paragraph', 'paragraph']);
+    };
+    assertContent();
+    act(() => {
+      getEditor().commands.setTextSelection(getEditor().state.doc.content.size - 1);
+      getEditor().commands.insertContent(' updated');
+    });
+    const saved = ref.current!.getValue();
+    expect(saved).toContain('"a & title"');
+    expect(saved).toContain('\\# literal');
+    act(() => container.querySelector('.tiptap')!.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true })));
+    expect(onSave).toHaveBeenLastCalledWith(saved);
+    act(() => { ref.current?.undo?.(); });
+    expect(ref.current?.getValue()).toBe(markdown);
+    act(() => { ref.current?.redo?.(); });
+    expect(ref.current?.getValue()).toBe(saved);
+    await act(async () => setDocumentValue('# Other document'));
+    await act(async () => setDocumentValue(saved));
+    assertContent();
+    expect(getEditor().getText()).toContain('After updated');
+  });
+
+  it('preserves the built-in underline mark after editing and reloading', async () => {
+    const { ref, setDocumentValue } = await renderEditor('Before <u>underlined</u> after.');
+    expect(container.querySelector('u')?.textContent).toBe('underlined');
+    act(() => {
+      getEditor().commands.setTextSelection(getEditor().state.doc.content.size - 1);
+      getEditor().commands.insertContent(' updated');
+    });
+    const saved = ref.current!.getValue();
+    await act(async () => setDocumentValue('# Other document'));
+    await act(async () => setDocumentValue(saved));
+    expect(container.querySelector('u')?.textContent).toBe('underlined');
+    expect(getEditor().getJSON().content?.[0].type).toBe('paragraph');
+    expect(getEditor().getText()).toBe('Before underlined after. updated');
+  });
+
+  it('limits a source-backed fallback to its block when editing and saving neighbors', async () => {
+    const block = 'Text <b><strong>nested</strong></b> after.';
+    const markdown = '# Before\n\n'+block+'\n\nAfter';
+    const { ref } = await renderEditor(markdown);
+    expect(getEditor().getJSON().content?.map(n => n.type)).toEqual(['heading', 'renderOnlyBlock', 'paragraph']);
+    act(() => {
+      getEditor().commands.setTextSelection(getEditor().state.doc.content.size - 1);
+      getEditor().commands.insertContent(' updated');
+    });
+    expect(ref.current?.getValue()).toBe(markdown+' updated');
+    act(() => { ref.current?.undo?.(); });
+    expect(ref.current?.getValue()).toBe(markdown);
+  });
+
   it('edits an embedded block, saves with the document shortcut, and supports undo/redo', async () => {
     const { ref, onDirtyChange, onSave } = await renderEditor();
     const action = container.querySelector<HTMLButtonElement>('.m-editor-source-block-action')!;

@@ -1,6 +1,5 @@
 package com.openbitfun.mobile.app.ui.shell
 
-import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,7 +33,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -48,37 +46,30 @@ import com.openbitfun.mobile.app.state.MobileSurface
 import com.openbitfun.mobile.app.state.SettingsMode
 import com.openbitfun.mobile.app.state.rememberAppShellState
 import com.openbitfun.mobile.app.ui.account.AccountScreen
-import com.openbitfun.mobile.app.ui.chat.GeneralChatScreen
 import com.openbitfun.mobile.app.ui.common.AdaptiveModalSurface
 import com.openbitfun.mobile.app.ui.remote.AccountRemoteScreen
 import com.openbitfun.mobile.app.ui.remote.ConnectAccountDeviceScreen
 import com.openbitfun.mobile.app.ui.remote.FilePreviewSurface
+import com.openbitfun.mobile.app.ui.remote.DisconnectedRemoteHome
 import com.openbitfun.mobile.app.ui.remote.PairingScreen
 import com.openbitfun.mobile.app.ui.settings.GeneralSettingsScreen
 import com.openbitfun.mobile.app.ui.settings.SettingsScreen
 import com.openbitfun.mobile.app.ui.shell.sidebar.AppSidebar
 import com.openbitfun.mobile.app.viewmodel.AccountViewModel
-import com.openbitfun.mobile.app.viewmodel.GeneralChatViewModel
-import com.openbitfun.mobile.app.viewmodel.PairingViewModel
 import com.openbitfun.mobile.core.feature.account.AccountIntent
 import com.openbitfun.mobile.core.feature.account.AccountUiState
 import com.openbitfun.mobile.core.feature.connection.ConnectionPhase
 import com.openbitfun.mobile.core.feature.connection.RemoteControlPresenter
 import com.openbitfun.mobile.core.feature.connection.RemoteControlSource
 import com.openbitfun.mobile.core.feature.connection.allowsRemoteCommands
-import com.openbitfun.mobile.core.feature.connection.connectionPhase
-import com.openbitfun.mobile.core.feature.generalchat.GeneralChatIntent
 import com.openbitfun.mobile.core.feature.layout.ConversationLayoutPolicy
 import com.openbitfun.mobile.core.feature.layout.AdaptiveLayoutInput
 import com.openbitfun.mobile.core.feature.layout.FilePreviewPlacement
 import com.openbitfun.mobile.core.feature.layout.FilePreviewPlacementPolicy
 import com.openbitfun.mobile.core.feature.layout.SettingsPlacementPolicy
 import com.openbitfun.mobile.core.feature.layout.SettingsSheetKind
-import com.openbitfun.mobile.core.feature.pairing.PairingIntent
-import com.openbitfun.mobile.core.feature.pairing.PairingUiState
 import com.openbitfun.mobile.core.feature.session.RemoteSessionUiState
 import com.openbitfun.mobile.core.feature.session.RemoteSessionIntent
-import com.openbitfun.mobile.core.feature.shell.SidebarSessionRow
 import com.openbitfun.mobile.core.feature.workspace.RemoteFilePreviewUiState
 import com.openbitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
 import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceIntent
@@ -137,35 +128,44 @@ internal fun MobileScreen() {
     var compactDrawerOpen by rememberSaveable { mutableStateOf(false) }
     val shell = rememberAppShellState()
 
-    val pairingViewModel: PairingViewModel = viewModel(factory = PairingViewModel.Factory)
     val accountViewModel: AccountViewModel = viewModel(factory = AccountViewModel.Factory)
-    val generalChatViewModel: GeneralChatViewModel =
-        viewModel(factory = GeneralChatViewModel.Factory)
-    val pairingState by pairingViewModel.state.collectAsStateWithLifecycle()
-    val pairingWorkspaceState by pairingViewModel.workspaceState.collectAsStateWithLifecycle()
     val accountWorkspaceState by accountViewModel.workspaceState.collectAsStateWithLifecycle()
     val accountState by accountViewModel.state.collectAsStateWithLifecycle()
-    val pairingRemoteState by pairingViewModel.remoteState.collectAsStateWithLifecycle()
     val accountRemoteState by accountViewModel.remoteState.collectAsStateWithLifecycle()
     val accountPhase by accountViewModel.connectionPhase.collectAsStateWithLifecycle()
-    val generalChatState by generalChatViewModel.state.collectAsStateWithLifecycle()
-    val pairingPhase: ConnectionPhase = pairingState.connectionPhase()
     val readyAccount = accountState as? AccountUiState.Ready
-    val accountUserId = readyAccount?.userId
-    LaunchedEffect(pairingState) {
-        if (pairingState is PairingUiState.Paired) shell.closeRemoteScanner()
+    val linkContext = androidx.compose.ui.platform.LocalContext.current
+    var pendingDeviceLink by rememberSaveable { mutableStateOf<String?>(null) }
+    val connectDeviceLink: (String) -> Unit = { url ->
+        val result = com.openbitfun.mobile.core.feature.account.resolveAccountDeviceLink(url, accountState)
+        when (result.status) {
+            com.openbitfun.mobile.core.feature.account.AccountDeviceLinkStatus.READY -> {
+                pendingDeviceLink = null
+                accountViewModel.selectDevice(result.deviceId!!)
+                shell.closeRemoteConnect()
+            }
+            com.openbitfun.mobile.core.feature.account.AccountDeviceLinkStatus.SIGN_IN_REQUIRED -> {
+                pendingDeviceLink = url
+                accountViewModel.dispatch(com.openbitfun.mobile.core.feature.account.AccountIntent.SelectRelay(result.relayUrl!!))
+                shell.closeRemoteConnect()
+                shell.openAccount()
+            }
+            else -> {
+                pendingDeviceLink = null
+                android.widget.Toast.makeText(linkContext,
+                    linkContext.getString(if (result.status == com.openbitfun.mobile.core.feature.account.AccountDeviceLinkStatus.INVALID)
+                        R.string.account_device_link_invalid else R.string.account_device_link_unavailable),
+                    android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    LaunchedEffect(readyAccount) {
+        if (readyAccount != null) pendingDeviceLink?.let(connectDeviceLink)
     }
 
-    // Which desktop this phone is driving is the one fact neither store holds on
-    // its own: the pairing store knows a room, the account store knows a device,
-    // and only together do they make one connection with a provenance. The
-    // shared presenter decides which of the two wins, so the sheet renders it
-    // rather than working it out a second time.
-    val controlSummary = remember(pairingState, pairingPhase, readyAccount, accountPhase) {
+    val accountUserId = readyAccount?.userId
+    val controlSummary = remember(readyAccount, accountPhase) {
         RemoteControlPresenter.summarize(
-            pairingPhase = pairingPhase,
-            pairedRoomLabel = (pairingState as? PairingUiState.Paired)
-                ?.workspace?.roomLabel.orEmpty(),
             accountDeviceId = readyAccount?.selectedDeviceId.orEmpty(),
             accountDeviceName = readyAccount?.selectedDeviceName.orEmpty(),
             accountPhase = accountPhase,
@@ -173,19 +173,16 @@ internal fun MobileScreen() {
     }
     val phase = controlSummary.phase
     val activeWorkspaceState = when (controlSummary.source) {
-        RemoteControlSource.QR_PAIRING -> pairingWorkspaceState
         RemoteControlSource.ACCOUNT_DEVICE -> accountWorkspaceState
         RemoteControlSource.NONE -> RemoteWorkspaceUiState.Idle
     }
     val activeRemoteState = when (controlSummary.source) {
-        RemoteControlSource.QR_PAIRING -> pairingRemoteState
         RemoteControlSource.ACCOUNT_DEVICE -> accountRemoteState
         RemoteControlSource.NONE -> RemoteSessionUiState.Idle
     }
 
     fun dispatchActiveWorkspace(intent: RemoteWorkspaceIntent) {
         when (controlSummary.source) {
-            RemoteControlSource.QR_PAIRING -> pairingViewModel.dispatchWorkspace(intent)
             RemoteControlSource.ACCOUNT_DEVICE -> accountViewModel.dispatchWorkspace(intent)
             RemoteControlSource.NONE -> Unit
         }
@@ -193,61 +190,8 @@ internal fun MobileScreen() {
 
     fun dispatchActiveSession(intent: RemoteSessionIntent) {
         when (controlSummary.source) {
-            RemoteControlSource.QR_PAIRING -> pairingViewModel.dispatchSession(intent)
             RemoteControlSource.ACCOUNT_DEVICE -> accountViewModel.dispatchSession(intent)
             RemoteControlSource.NONE -> Unit
-        }
-    }
-
-    // The export labels belong to whichever surface asked for one, so they are
-    // read here: the drawer can export a conversation the content area is not
-    // showing, and the sheet that hands it over is the shell's.
-    val untitledTitle = stringResource(R.string.sidebar_untitled)
-    val userLabel = stringResource(R.string.general_chat_role_user)
-    val assistantLabel = stringResource(R.string.general_chat_role_assistant)
-    val context = LocalContext.current
-
-    // Handing the export to the share sheet is the platform half of the intent;
-    // clearing it immediately keeps a rotation from re-opening the chooser. At
-    // the shell rather than in the chat screen so that exporting from the drawer
-    // works while the remote surface is the one on screen.
-    LaunchedEffect(generalChatState.export) {
-        val export = generalChatState.export ?: return@LaunchedEffect
-        val share = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TITLE, export.title)
-            putExtra(Intent.EXTRA_SUBJECT, export.title)
-            putExtra(Intent.EXTRA_TEXT, export.markdown)
-        }
-        context.startActivity(Intent.createChooser(share, export.title))
-        generalChatViewModel.dispatch(GeneralChatIntent.ClearExport)
-    }
-
-    // The account's models follow whoever is signed in. Keyed on the user id
-    // rather than on the whole state so that a device-list refresh does not
-    // re-fetch the settings blob, and so that signing out hands over null —
-    // which is what drops the previous account's models rather than leaving one
-    // user's providers listed for the next.
-    LaunchedEffect(accountUserId) {
-        generalChatViewModel.bindCloudSettings(
-            accountUserId?.let { accountViewModel.cloudSettingsSource() },
-        )
-    }
-
-    // Handed over whole: which rows are pinned, recent or archived, and which the
-    // search leaves standing, is `SidebarPresentation`'s answer inside the drawer.
-    // Filtering here would decide it twice and let the archive count drift.
-    val sidebarSessions = remember(generalChatState.sessions) {
-        generalChatState.sessions.map { session ->
-            SidebarSessionRow(
-                id = session.id,
-                title = session.title,
-                status = session.status,
-                pinned = session.pinned,
-                createdAt = session.createdAt,
-                updatedAt = session.updatedAt,
-                messageCount = session.messageCount,
-            )
         }
     }
 
@@ -294,6 +238,7 @@ internal fun MobileScreen() {
         adaptiveLayoutInput,
         SettingsSheetKind.SETTINGS,
     )
+    val connectPlacement = SettingsPlacementPolicy.resolve(adaptiveLayoutInput, SettingsSheetKind.CONNECT)
     val sessionDetailsPlacement = SettingsPlacementPolicy.resolve(
         adaptiveLayoutInput,
         SettingsSheetKind.SESSION_DETAILS,
@@ -347,18 +292,11 @@ internal fun MobileScreen() {
             workspaceState = activeWorkspaceState,
             remoteActive = shell.surface == MobileSurface.REMOTE,
             remoteSelectedSessionId = shell.remoteSessionId,
-            sessions = sidebarSessions,
-            // Only while general chat is on screen: the highlight names
-            // what the content area is showing, not what the store last
-            // opened behind the remote surface.
-            selectedSessionId = generalChatState.sessionId
-                .takeIf { shell.surface == MobileSurface.GENERAL_CHAT },
             query = shell.sidebarQuery,
             searchOpen = shell.searchOpen,
             onQueryChange = shell::search,
             onToggleSearch = shell::toggleSearch,
             onScanDesktop = {
-                pairingViewModel.dispatch(PairingIntent.Disconnect)
                 // The sidebar row opens the choose-connection page, not the
                 // camera: ML Kit's scanner is a full-screen system activity, so
                 // launching it from the drawer would leave the user no way to
@@ -380,10 +318,10 @@ internal fun MobileScreen() {
                 shell.openRemoteSession(sessionId)
                 closeDrawer()
             },
-            onCreateRemoteInWorkspace = { path ->
+            onCreateRemoteInWorkspace = { path, agentType ->
                 dispatchActiveSession(
                     RemoteSessionIntent.CreateSession(
-                        agentType = "code",
+                        agentType = agentType,
                         title = "",
                         instruction = "",
                         modelId = null,
@@ -398,32 +336,6 @@ internal fun MobileScreen() {
                 shell.show(MobileSurface.REMOTE)
                 shell.closeRemoteSession()
                 closeDrawer()
-            },
-            onNewChat = {
-                generalChatViewModel.dispatch(GeneralChatIntent.NewSession)
-                shell.show(MobileSurface.GENERAL_CHAT)
-                closeDrawer()
-            },
-            onOpenSession = { session ->
-                generalChatViewModel.dispatch(GeneralChatIntent.SelectSession(session.id))
-                shell.show(MobileSurface.GENERAL_CHAT)
-                closeDrawer()
-            },
-            onArchiveSession = { id, archived ->
-                generalChatViewModel.dispatch(GeneralChatIntent.ArchiveSession(id, archived))
-            },
-            onExportSession = { session ->
-                generalChatViewModel.dispatch(
-                    GeneralChatIntent.ExportSession(
-                        session.id,
-                        untitledTitle,
-                        userLabel,
-                        assistantLabel,
-                    ),
-                )
-            },
-            onDeleteSession = { id ->
-                generalChatViewModel.dispatch(GeneralChatIntent.DeleteSession(id))
             },
             onDeleteRemoteSession = { id -> dispatchActiveSession(RemoteSessionIntent.DeleteSession(id)) },
             onOpenSettings = {
@@ -458,39 +370,7 @@ internal fun MobileScreen() {
         ) { insets ->
             Box(Modifier.padding(insets)) {
                 when (shell.surface) {
-                    MobileSurface.GENERAL_CHAT -> GeneralChatScreen(
-                        modifier = Modifier,
-                        modelServicePlacement = settingsPlacement,
-                        onOpenSidebar = if (showMenu) {
-                            { compactDrawerOpen = true }
-                        } else {
-                            null
-                        },
-                    )
-                    MobileSurface.REMOTE -> if (shell.remoteScanRequested) {
-                        PairingScreen(
-                            modifier = Modifier,
-                            settingsPlacement = settingsPlacement,
-                            sessionDetailsPlacement = sessionDetailsPlacement,
-                            viewSettingsPlacement = remoteViewSettingsPlacement,
-                            onOpenRemoteSettings = { shell.openSettings(SettingsMode.REMOTE) },
-                            onOpenSidebar = if (showMenu) {
-                                { compactDrawerOpen = true }
-                            } else {
-                                null
-                            },
-                            onBack = {
-                                shell.closeRemoteScanner()
-                                shell.show(MobileSurface.GENERAL_CHAT)
-                            },
-                            onOpenAccount = {
-                                shell.closeRemoteScanner()
-                                shell.openAccount()
-                            },
-                            compact = !wide,
-                            startScanning = true,
-                        )
-                    } else when (controlSummary.source) {
+                    MobileSurface.REMOTE -> when (controlSummary.source) {
                         RemoteControlSource.ACCOUNT_DEVICE -> AccountRemoteScreen(
                             remoteState = accountRemoteState,
                             workspaceState = accountWorkspaceState,
@@ -527,60 +407,23 @@ internal fun MobileScreen() {
                             modifier = Modifier,
                         )
 
-                        RemoteControlSource.QR_PAIRING -> PairingScreen(
-                            modifier = Modifier,
-                            settingsPlacement = settingsPlacement,
-                            sessionDetailsPlacement = sessionDetailsPlacement,
-                            viewSettingsPlacement = remoteViewSettingsPlacement,
-                            onOpenRemoteSettings = { shell.openSettings(SettingsMode.REMOTE) },
-                            onOpenSidebar = if (showMenu) {
-                                { compactDrawerOpen = true }
-                            } else {
-                                null
-                            },
-                            onBack = { shell.show(MobileSurface.GENERAL_CHAT) },
-                            onOpenAccount = { shell.openAccount() },
-                            compact = !wide,
-                            requestedSessionId = shell.remoteSessionId,
-                            creatingSession = shell.remoteCreating,
-                            onOpenSession = shell::openRemoteSession,
-                            onCreateSession = shell::createRemoteSession,
-                            onRemoteHome = shell::closeRemoteSession,
-                        )
-
                         RemoteControlSource.NONE -> if (readyAccount != null) {
                             ConnectAccountDeviceScreen(
                                 state = readyAccount,
-                                onBack = { shell.show(MobileSurface.GENERAL_CHAT) },
+                                onBack = { shell.openRemoteConnect() },
                                 onRefresh = { accountViewModel.dispatch(AccountIntent.RefreshDevices) },
                                 onSelect = accountViewModel::selectDevice,
                                 onOpenScanner = {
-                                    pairingViewModel.dispatch(PairingIntent.Disconnect)
                                     shell.openRemoteScanner()
                                 },
                                 modifier = Modifier,
                             )
                         } else {
-                            PairingScreen(
-                                modifier = Modifier,
-                                settingsPlacement = settingsPlacement,
-                                sessionDetailsPlacement = sessionDetailsPlacement,
-                                viewSettingsPlacement = remoteViewSettingsPlacement,
-                                onOpenRemoteSettings = { shell.openSettings(SettingsMode.REMOTE) },
-                                onOpenSidebar = if (showMenu) {
-                                    { compactDrawerOpen = true }
-                                } else {
-                                    null
-                                },
-                                onBack = { shell.show(MobileSurface.GENERAL_CHAT) },
-                                onOpenAccount = { shell.openAccount() },
-                                compact = !wide,
-                                requestedSessionId = shell.remoteSessionId,
-                                creatingSession = shell.remoteCreating,
-                                onOpenSession = shell::openRemoteSession,
-                                onCreateSession = shell::createRemoteSession,
-                                onRemoteHome = shell::closeRemoteSession,
+                            DisconnectedRemoteHome(
+                                onOpenSidebar = if (showMenu) { { compactDrawerOpen = true } } else null,
+                                onConnect = shell::openRemoteConnect,
                             )
+
                         }
                     }
                 }
@@ -680,16 +523,6 @@ internal fun MobileScreen() {
                 modifier = contentModifier,
                 accountUserId = accountUserId,
                 accountUsername = readyAccount?.username.orEmpty(),
-                config = generalChatState.config,
-                models = generalChatState.models,
-                activeModelId = generalChatState.activeModelId,
-                configFailure = generalChatState.configFailure,
-                connectionTest = generalChatState.connectionTest,
-                onChatIntent = generalChatViewModel::dispatch,
-                onSaveConfig = { intent ->
-                    generalChatViewModel.dispatch(intent)
-                    generalChatViewModel.state.value.configFailure == null
-                },
                 onOpenAccount = shell::openAccount,
                 onClose = shell::dismissSettings,
             )
@@ -703,12 +536,10 @@ internal fun MobileScreen() {
                 // asking the other one would answer for a connection this
                 // page is not describing, or for none at all.
                 remoteState = when (controlSummary.source) {
-                    RemoteControlSource.QR_PAIRING -> pairingRemoteState
                     RemoteControlSource.ACCOUNT_DEVICE -> accountRemoteState
                     RemoteControlSource.NONE -> RemoteSessionUiState.Idle
                 },
                 onSessionIntent = when (controlSummary.source) {
-                    RemoteControlSource.QR_PAIRING -> pairingViewModel::dispatchSession
                     RemoteControlSource.ACCOUNT_DEVICE -> accountViewModel::dispatchSession
                     RemoteControlSource.NONE -> {
                         {}
@@ -716,15 +547,12 @@ internal fun MobileScreen() {
                 },
                 onClose = shell::dismissSettings,
                 onOpenAccount = shell::openAccount,
-                onDisconnect = { pairingViewModel.dispatch(PairingIntent.Disconnect) },
+                onDisconnect = { accountViewModel.disconnectDevice() },
                 onReconnect = {
                     // A room is re-checked where it stands; a device is asked
                     // for again, which is the same command its row in the
                     // account sends. Neither re-pairs behind the user's back.
                     when (controlSummary.source) {
-                        RemoteControlSource.QR_PAIRING ->
-                            pairingViewModel.dispatch(PairingIntent.Verify)
-
                         RemoteControlSource.ACCOUNT_DEVICE -> {
                             val deviceId = readyAccount?.selectedDeviceId
                             if (deviceId != null) {
@@ -737,13 +565,40 @@ internal fun MobileScreen() {
                 },
                 onConnectByLink = {
                     shell.dismissSettings()
-                    pairingViewModel.dispatch(PairingIntent.Disconnect)
                     shell.openRemoteScanner()
                 },
             )
         }
     }
 
+    AdaptiveModalSurface(
+        visible = shell.remoteConnectOpen,
+        edgeToEdgeContent = true,
+        placement = connectPlacement,
+        onDismissRequest = shell::closeRemoteConnect,
+    ) { sheetModifier ->
+        if (readyAccount != null && !shell.remoteScanRequested) {
+            ConnectAccountDeviceScreen(
+                state = readyAccount,
+                onBack = shell::closeRemoteConnect,
+                onRefresh = { accountViewModel.dispatch(AccountIntent.RefreshDevices) },
+                onSelect = { shell.closeRemoteConnect(); accountViewModel.selectDevice(it) },
+                onOpenScanner = shell::openRemoteScanner,
+                modifier = sheetModifier,
+            )
+        } else PairingScreen(
+            onDeviceLink = connectDeviceLink,
+            modifier = sheetModifier,
+            settingsPlacement = settingsPlacement,
+            sessionDetailsPlacement = sessionDetailsPlacement,
+            viewSettingsPlacement = remoteViewSettingsPlacement,
+            onOpenRemoteSettings = { shell.openSettings(SettingsMode.REMOTE) },
+            onBack = shell::closeRemoteConnect,
+            onOpenAccount = { shell.closeRemoteConnect(); shell.openAccount() },
+            startScanning = shell.remoteScanRequested,
+
+        )
+    }
     AdaptiveModalSurface(
         visible = shell.showSettings,
         placement = settingsPlacement,
@@ -752,6 +607,8 @@ internal fun MobileScreen() {
     )
     AdaptiveModalSurface(
         visible = shell.showAccount,
+        fitContent = readyAccount == null,
+        edgeToEdgeContent = readyAccount != null,
         placement = settingsPlacement,
         onDismissRequest = shell::dismissAccount,
     ) { modifier ->

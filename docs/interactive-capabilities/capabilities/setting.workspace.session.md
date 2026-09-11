@@ -11,12 +11,14 @@ title_en: "Session & workspace settings"
 
 > 设置 / Setting
 
-控制会话标题生成、工作区加速搜索和与项目上下文相关的行为。
+控制默认 Agent Harness、会话标题生成、工作区加速搜索和与项目上下文相关的行为。
 
-Control session-title generation, accelerated workspace search, and project-context behavior.
+Control the default Agent Harness, session-title generation, accelerated workspace search, and project-context behavior.
 
 ## 完整功能清单 / Everything included
 
+- **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 让普通新会话跟随 ChatInput 上次选择，或固定使用指定 Harness
+  - Make regular new sessions follow the last ChatInput selection or use a fixed Harness
 - **Agent 可直接控制 / Direct Agent control** · 启用或停用根据会话内容自动生成标题
   - Enable or disable automatic titles generated from session content
 - **Agent 可定位入口，需交互完成 / Agent opens; interaction required** · 让标题模型继承主模型、快速模型或使用指定模型
@@ -34,8 +36,8 @@ Control session-title generation, accelerated workspace search, and project-cont
    Open Settings
 2. 进入“工作区 > 会话与工作区”
    Go to Workspace > Session & Workspace
-3. 调整标题或搜索选项
-   Tune title or search controls
+3. 调整默认 Harness、标题或搜索选项
+   Tune the default Harness, title, or search controls
 
 入口 / Entry: OpenBitFun 设置
 
@@ -54,6 +56,10 @@ Control session-title generation, accelerated workspace search, and project-cont
 
 ## 可以直接对 Agent 说 / Try saying
 
+- “让新会话跟随 ChatInput 上一次选择的 Harness”
+  - “Make new sessions follow the last Harness selected in ChatInput”
+- “把新会话固定为 Ultimate Harness”
+  - “Fix Ultimate as the Harness for new sessions”
 - “关闭自动生成会话标题”
   - “Turn off automatic session titles”
 - “启用工作区加速搜索”

@@ -695,7 +695,7 @@ mod tests {
             .create_session_with_id(
                 Some("parent-session".to_string()),
                 "Parent".to_string(),
-                "agentic".to_string(),
+                "Standard".to_string(),
                 config.clone(),
             )
             .await

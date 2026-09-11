@@ -1,0 +1,84 @@
+// Shared list presentation for installed skills and reusable skill groups.
+// Each collection owns its columns and scroll region.
+@mixin surface {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+  border-radius: var(--openbitfun-radius-lg);
+  background: transparent;
+  isolation: isolate;
+}
+
+@mixin header {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  align-items: center;
+  padding: var(--openbitfun-space-3) var(--openbitfun-space-4);
+  border-block-end: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+  background: var(--openbitfun-color-surface-tertiary);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-meta-font-size);
+  font-weight: var(--openbitfun-type-meta-font-weight);
+  line-height: var(--openbitfun-type-meta-line-height);
+}
+
+@mixin count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--openbitfun-radius-pill);
+  background: var(--openbitfun-color-action-neutral-surface-hover);
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-micro-font-size);
+  font-weight: var(--openbitfun-type-label-sm-font-weight);
+}
+
+@mixin row {
+  position: relative;
+  isolation: isolate;
+  flex-shrink: 0;
+  align-items: center;
+  min-block-size: 88px;
+  padding: var(--openbitfun-space-4);
+  border-block-end: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+  background: transparent;
+  transition: background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+
+  &:last-child {
+    border-block-end: 0;
+  }
+
+  &:not([aria-disabled='true']):is(:hover, :focus-within) {
+    background: var(--openbitfun-color-action-neutral-surface-hover);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+@mixin open-target {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  inline-size: 100%;
+  block-size: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: var(--openbitfun-focus-width) solid var(--openbitfun-color-focus-ring);
+    outline-offset: calc(-1 * var(--openbitfun-focus-width));
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+}

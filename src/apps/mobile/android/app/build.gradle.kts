@@ -26,7 +26,7 @@ android {
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = "1.0.0-beta"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -76,7 +76,11 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.google.code.scanner)
+    implementation("androidx.camera:camera-camera2:1.4.2")
+    implementation("androidx.camera:camera-lifecycle:1.4.2")
+    implementation("androidx.camera:camera-view:1.4.2")
+    // Bundle QR recognition so pairing also works without Play Services downloads.
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
     implementation(libs.androidx.window)
 
     testImplementation("junit:junit:4.13.2")

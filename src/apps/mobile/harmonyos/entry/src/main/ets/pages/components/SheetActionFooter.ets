@@ -13,6 +13,7 @@ export struct SheetActionFooter {
   @Param label: string = '';
   @Param primary: boolean = false;
   @Param isEnabled: boolean = true;
+  @Param elevated: boolean = true;
   @Event onAction: () => void = () => {};
 
   build() {
@@ -23,6 +24,7 @@ export struct SheetActionFooter {
           style: this.primary ? AppActionStyle.Primary : AppActionStyle.Secondary,
           actionHeight: SHEET_ACTION_HEIGHT,
           isEnabled: this.isEnabled,
+          elevated: this.elevated,
           onAction: this.onAction
         })
         .layoutWeight(1)

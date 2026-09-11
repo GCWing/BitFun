@@ -3,5 +3,5 @@ export {
   SceneChromeContribution,
   SceneChromeHost,
   SceneChromeProvider,
-  useSceneChromeContext,
 } from './SceneChrome';
+export { useSceneChromeContext } from './sceneChromeContext';

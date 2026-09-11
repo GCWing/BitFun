@@ -143,7 +143,7 @@
     padding-inline: var(--openbitfun-space-3);
     border-radius: var(--openbitfun-radius-sm);
     color: var(--openbitfun-color-content-muted);
-    background: var(--openbitfun-color-surface-raised);
+    background: transparent;
     font-size: var(--openbitfun-type-body-sm-font-size);
   }
 

@@ -1,21 +1,16 @@
 package com.openbitfun.mobile.core.feature.directory
 
 import com.openbitfun.mobile.core.domain.RemoteSession
+import com.openbitfun.mobile.core.domain.RecentWorkspace
 import com.openbitfun.mobile.core.feature.account.AccountStore
-import com.openbitfun.mobile.core.feature.session.RemoteSessionFailureReason
-import com.openbitfun.mobile.core.feature.session.RemoteSessionIntent
 import com.openbitfun.mobile.core.feature.session.RemoteSessionStore
-import com.openbitfun.mobile.core.feature.session.RemoteSessionUiState
-import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceIntent
 import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceStore
-import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -38,6 +33,8 @@ public class DeviceDirectoryStore internal constructor(
     private val loads = mutableMapOf<String, Job>()
     private val generations = mutableMapOf<String, Long>()
     private val epochs = mutableMapOf<String, Long>()
+    private val workspaceLoads = mutableMapOf<String, Job>()
+    private val workspaceGenerations = mutableMapOf<String, Long>()
 
     public fun dispatch(intent: DeviceDirectoryIntent) {
         when (intent) {
@@ -46,6 +43,12 @@ public class DeviceDirectoryStore internal constructor(
             is DeviceDirectoryIntent.Expand -> expand(intent.deviceId)
             is DeviceDirectoryIntent.Collapse -> collapse(intent.deviceId)
             is DeviceDirectoryIntent.Retry -> retry(intent.deviceId)
+            is DeviceDirectoryIntent.SetWorkspaceExpanded -> setWorkspaceExpanded(
+                intent.deviceId,
+                intent.path,
+                intent.expanded,
+            )
+            is DeviceDirectoryIntent.RetryWorkspace -> retryWorkspace(intent.deviceId, intent.path)
             DeviceDirectoryIntent.Stop -> stop()
         }
     }
@@ -86,11 +89,25 @@ public class DeviceDirectoryStore internal constructor(
     public fun stop() {
         for (job in loads.values) job.cancel()
         loads.clear()
+        for (job in workspaceLoads.values) job.cancel()
+        workspaceLoads.clear()
         for (id in devices.keys) {
             invalidate(id)
             invalidateEpoch(id)
+            invalidateDeviceWorkspaces(id)
             if (devices[id]?.status == DeviceDirectoryStatus.LOADING) {
                 devices[id] = devices.getValue(id).copy(status = DeviceDirectoryStatus.IDLE, error = null)
+            }
+            devices[id]?.let { entry ->
+                devices[id] = entry.copy(
+                    workspaceDirectory = entry.workspaceDirectory.map { workspace ->
+                        if (workspace.status == WorkspaceDirectoryStatus.LOADING) {
+                            workspace.copy(status = WorkspaceDirectoryStatus.IDLE)
+                        } else {
+                            workspace
+                        }
+                    },
+                )
             }
         }
         publish()
@@ -100,6 +117,7 @@ public class DeviceDirectoryStore internal constructor(
 
     private fun sync(incoming: List<DeviceDirectoryDevice>) {
         val ids = linkedSetOf<String>()
+        val added = linkedSetOf<String>()
         val updated = linkedMapOf<String, DeviceDirectoryEntry>()
         for (device in incoming) {
             val id = device.deviceId.trim()
@@ -108,10 +126,12 @@ public class DeviceDirectoryStore internal constructor(
             val existing = devices[id]
             if (existing == null) {
                 invalidateEpoch(id)
+                added += id
             } else if (existing.online && !device.online) {
                 invalidate(id)
                 invalidateEpoch(id)
                 loads.remove(id)?.cancel()
+                cancelDeviceWorkspaceLoads(id)
                 slots.remove(id)?.let(::stopSlot)
             }
             updated[id] = if (existing == null) {
@@ -121,6 +141,8 @@ public class DeviceDirectoryStore internal constructor(
                     deviceName = device.deviceName,
                     online = device.online,
                     expanded = if (device.online) existing.expanded else false,
+                    workspaceDirectory = if (device.online) existing.workspaceDirectory else
+                        existing.workspaceDirectory.map { it.copy(expanded = false) },
                     status = if (device.online) {
                         existing.status
                     } else if (existing.workspaces.isNotEmpty() || existing.sessions.isNotEmpty()) {
@@ -135,13 +157,15 @@ public class DeviceDirectoryStore internal constructor(
         val removed = devices.keys - ids
         devices.clear()
         devices.putAll(updated)
-        publish()
         for (id in removed) {
             invalidate(id)
             invalidateEpoch(id)
             loads.remove(id)?.cancel()
+            cancelDeviceWorkspaceLoads(id)
             slots.remove(id)?.let(::stopSlot)
         }
+        for (id in added) hydrateFromCache(id)
+        publish()
     }
 
     private fun load(deviceId: String) {
@@ -163,7 +187,9 @@ public class DeviceDirectoryStore internal constructor(
         val id = deviceId.trim()
         if (id.isEmpty()) return
         val entry = devices[id] ?: return
-        devices[id] = entry.copy(expanded = true)
+        for ((otherId, other) in devices) {
+            devices[otherId] = other.copy(expanded = otherId == id)
+        }
         publish()
         if (entry.status == DeviceDirectoryStatus.READY) return
         if (entry.online) load(id)
@@ -194,6 +220,67 @@ public class DeviceDirectoryStore internal constructor(
         startLoad(id, slot, expanded)
     }
 
+    private fun setWorkspaceExpanded(deviceId: String, path: String, expanded: Boolean) {
+        val id = deviceId.trim()
+        val normalizedPath = normalizeWorkspacePath(path)
+        val entry = devices[id] ?: return
+        if (normalizedPath.isEmpty()) return
+        updateWorkspaceState(id, normalizedPath) { it.copy(expanded = expanded) }
+        if (!expanded || !entry.online) return
+        val state = devices[id]?.workspace(normalizedPath)
+        if (state?.status != WorkspaceDirectoryStatus.READY) loadWorkspaceSessions(id, normalizedPath, false)
+    }
+
+    private fun retryWorkspace(deviceId: String, path: String) {
+        val id = deviceId.trim()
+        val normalizedPath = normalizeWorkspacePath(path)
+        val entry = devices[id] ?: return
+        if (normalizedPath.isEmpty() || !entry.online) return
+        updateWorkspaceState(id, normalizedPath) { it.copy(expanded = true) }
+        loadWorkspaceSessions(id, normalizedPath, true)
+    }
+
+    private fun loadWorkspaceSessions(deviceId: String, path: String, force: Boolean) {
+        val key = workspaceKey(deviceId, path)
+        if (workspaceLoads[key]?.isActive == true) return
+        val entry = devices[deviceId] ?: return
+        if (!entry.online) return
+        val existing = entry.workspace(path)
+        if (!force && existing?.status == WorkspaceDirectoryStatus.READY) return
+        val slot = slotFor(deviceId) ?: run {
+            updateWorkspaceState(deviceId, path) { it.copy(status = WorkspaceDirectoryStatus.FAILED) }
+            return
+        }
+        val generation = nextWorkspaceGeneration(key)
+        updateWorkspaceState(deviceId, path) { it.copy(status = WorkspaceDirectoryStatus.LOADING) }
+        val job = scope.launch {
+            try {
+                val loaded = slot.sessionStore.sessionsForWorkspace(path)
+                if (!isCurrentWorkspace(key, generation) || devices[deviceId]?.online != true) return@launch
+                val current = devices[deviceId] ?: return@launch
+                val merged = replaceWorkspaceSessions(current.sessions, path, loaded)
+                slot.sessionStore.persistDirectorySessions(merged)
+                devices[deviceId] = current.copy(
+                    sessions = merged,
+                    workspaceDirectory = updateWorkspaceList(current.workspaceDirectory, path) {
+                        it.copy(status = WorkspaceDirectoryStatus.READY)
+                    },
+                )
+                publish()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                if (isCurrentWorkspace(key, generation)) {
+                    updateWorkspaceState(deviceId, path) { it.copy(status = WorkspaceDirectoryStatus.FAILED) }
+                }
+            } finally {
+                if (workspaceLoads[key] === coroutineContext[Job]) workspaceLoads.remove(key)
+            }
+        }
+        workspaceLoads[key] = job
+        if (!job.isActive && workspaceLoads[key] === job) workspaceLoads.remove(key)
+    }
+
     private fun slotFor(id: String): DeviceSlot? {
         slots[id]?.let { return it }
         val sessionStore = factory.createSessionStore(scope, id) ?: return null
@@ -210,6 +297,40 @@ public class DeviceDirectoryStore internal constructor(
         val slot = DeviceSlot(sessionStore, workspaceStore)
         slots[id] = slot
         return slot
+    }
+
+    private fun hydrateFromCache(id: String) {
+        val current = devices[id] ?: return
+        val slot = try {
+            slotFor(id)
+        } catch (_: Throwable) {
+            null
+        } ?: return
+        val cachedWorkspaces = slot.workspaceStore.cachedCatalog()
+        val cachedSessions = slot.sessionStore.cachedSessions()
+        if (cachedWorkspaces.isEmpty() && cachedSessions.isEmpty()) return
+        val sessions = if (cachedSessions.isEmpty()) current.sessions else cachedSessions
+        val workspaces = when {
+            cachedWorkspaces.isNotEmpty() -> cachedWorkspaces
+            current.workspaces.isNotEmpty() -> current.workspaces
+            else -> workspacesFromSessions(sessions)
+        }
+        val workspaceDirectory = syncWorkspaceDirectory(current.workspaceDirectory, workspaces).map { workspace ->
+            if (sessions.any { session ->
+                    normalizeWorkspacePath(session.workspacePath.orEmpty()) == normalizeWorkspacePath(workspace.path)
+                }
+            ) {
+                workspace.copy(status = WorkspaceDirectoryStatus.READY)
+            } else {
+                workspace
+            }
+        }
+        devices[id] = current.copy(
+            status = if (current.status == DeviceDirectoryStatus.IDLE) DeviceDirectoryStatus.CACHED else current.status,
+            workspaces = workspaces,
+            sessions = sessions,
+            workspaceDirectory = workspaceDirectory,
+        )
     }
 
     private fun startLoad(id: String, slot: DeviceSlot, previous: DeviceDirectoryEntry) {
@@ -238,68 +359,135 @@ public class DeviceDirectoryStore internal constructor(
 
     private suspend fun runLoad(id: String, slot: DeviceSlot, generation: Long) {
         if (!isCurrent(id, generation)) return
-        slot.sessionStore.dispatch(RemoteSessionIntent.Load)
-        slot.workspaceStore.dispatch(RemoteWorkspaceIntent.Load)
-        val sessionState = slot.sessionStore.state.first(::sessionSettled)
-        if (!isCurrent(id, generation)) return
-        val workspaceState = slot.workspaceStore.state.first(::workspaceSettled)
-        if (!isCurrent(id, generation)) return
-        projectResult(id, generation, sessionState, workspaceState)
-    }
-
-    private fun sessionSettled(state: RemoteSessionUiState): Boolean = when (state) {
-        is RemoteSessionUiState.Failed -> true
-        is RemoteSessionUiState.Ready -> !state.busy
-        else -> false
-    }
-
-    private fun workspaceSettled(state: RemoteWorkspaceUiState): Boolean = when (state) {
-        is RemoteWorkspaceUiState.Ready -> true
-        is RemoteWorkspaceUiState.Failed -> true
-        else -> false
-    }
-
-    private fun projectResult(
-        id: String,
-        generation: Long,
-        sessionState: RemoteSessionUiState,
-        workspaceState: RemoteWorkspaceUiState,
-    ) {
-        if (!isCurrent(id, generation)) return
-        val current = devices[id] ?: return
-        // A device that went offline while its load was in flight must not come
-        // back as READY with stale data; it stays in whatever offline state
-        // `sync` left it in and the in-flight result is dropped.
-        if (!current.online) return
-        val workspaces = (workspaceState as? RemoteWorkspaceUiState.Ready)?.workspaces.orEmpty()
-        val sessions = (sessionState as? RemoteSessionUiState.Ready)?.sessions.orEmpty()
-        val sessionFailed = sessionState as? RemoteSessionUiState.Failed
-        val workspaceFailed = workspaceState as? RemoteWorkspaceUiState.Failed
-        devices[id] = if (sessionFailed == null && workspaceFailed == null) {
-            current.copy(
+        try {
+            val workspaces = slot.workspaceStore.directoryCatalog()
+            if (!isCurrent(id, generation)) return
+            val current = devices[id] ?: return
+            // A device that went offline while its request was in flight stays
+            // in the offline state established by sync; the late result is stale.
+            if (!current.online) return
+            devices[id] = current.copy(
                 status = DeviceDirectoryStatus.READY,
                 error = null,
                 workspaces = workspaces,
-                sessions = sessions,
+                workspaceDirectory = syncWorkspaceDirectory(current.workspaceDirectory, workspaces),
             )
-        } else {
-            current.copy(
+            publish()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            if (!isCurrent(id, generation)) return
+            val current = devices[id] ?: return
+            if (!current.online) return
+            devices[id] = current.copy(
                 status = DeviceDirectoryStatus.FAILED,
-                error = sessionFailed?.let { mapSessionFailure(it.reason) } ?: DeviceDirectoryFailure.LOAD_FAILED,
-                workspaces = workspaces,
-                sessions = sessions,
+                error = DeviceDirectoryFailure.LOAD_FAILED,
+            )
+            publish()
+        }
+    }
+
+    private fun replaceWorkspaceSessions(
+        sessions: List<RemoteSession>,
+        path: String,
+        replacement: List<RemoteSession>,
+    ): List<RemoteSession> {
+        val normalizedPath = normalizeWorkspacePath(path)
+        val replacementIds = replacement.mapTo(mutableSetOf()) { it.id }
+        val kept = sessions.filter { session ->
+            session.id !in replacementIds && normalizeWorkspacePath(session.workspacePath.orEmpty()) != normalizedPath
+        }
+        return replacement + kept
+    }
+
+    /** Keeps the pre-workspace-cache upgrade path useful by rebuilding its minimum catalog. */
+    private fun workspacesFromSessions(sessions: List<RemoteSession>): List<RecentWorkspace> {
+        val inferred = linkedMapOf<String, RecentWorkspace>()
+        for (session in sessions) {
+            val path = session.workspacePath.orEmpty().trim()
+            val normalized = normalizeWorkspacePath(path)
+            if (normalized.isEmpty() || normalized in inferred) continue
+            inferred[normalized] = RecentWorkspace(
+                path = path,
+                name = session.workspaceName?.takeIf(String::isNotBlank)
+                    ?: normalized.substringAfterLast('/').ifEmpty { normalized },
+                lastOpened = session.updatedAt,
+                kind = "",
             )
         }
+        return inferred.values.toList()
+    }
+
+    private fun syncWorkspaceDirectory(
+        current: List<WorkspaceDirectoryEntry>,
+        workspaces: List<RecentWorkspace>,
+    ): List<WorkspaceDirectoryEntry> = workspaces.map { workspace ->
+        current.firstOrNull { normalizeWorkspacePath(it.path) == normalizeWorkspacePath(workspace.path) }
+            ?.copy(path = workspace.path)
+            ?: WorkspaceDirectoryEntry(workspace.path, false, WorkspaceDirectoryStatus.IDLE)
+    }
+
+    private fun updateWorkspaceList(
+        current: List<WorkspaceDirectoryEntry>,
+        path: String,
+        transform: (WorkspaceDirectoryEntry) -> WorkspaceDirectoryEntry,
+    ): List<WorkspaceDirectoryEntry> {
+        var found = false
+        val updated = current.map { entry ->
+            if (normalizeWorkspacePath(entry.path) == normalizeWorkspacePath(path)) {
+                found = true
+                transform(entry)
+            } else {
+                entry
+            }
+        }.toMutableList()
+        if (!found) updated += transform(WorkspaceDirectoryEntry(path, false, WorkspaceDirectoryStatus.IDLE))
+        return updated
+    }
+
+    private fun updateWorkspaceState(
+        deviceId: String,
+        path: String,
+        transform: (WorkspaceDirectoryEntry) -> WorkspaceDirectoryEntry,
+    ) {
+        val current = devices[deviceId] ?: return
+        devices[deviceId] = current.copy(
+            workspaceDirectory = updateWorkspaceList(current.workspaceDirectory, path, transform),
+        )
         publish()
     }
 
-    private fun mapSessionFailure(reason: RemoteSessionFailureReason): DeviceDirectoryFailure = when (reason) {
-        RemoteSessionFailureReason.NETWORK -> DeviceDirectoryFailure.NETWORK
-        RemoteSessionFailureReason.TIMEOUT -> DeviceDirectoryFailure.TIMEOUT
-        RemoteSessionFailureReason.RATE_LIMITED -> DeviceDirectoryFailure.RATE_LIMITED
-        RemoteSessionFailureReason.NO_WORKSPACE -> DeviceDirectoryFailure.NO_WORKSPACE
-        RemoteSessionFailureReason.REMOTE_REJECTED -> DeviceDirectoryFailure.REJECTED
-        else -> DeviceDirectoryFailure.LOAD_FAILED
+    private fun workspaceKey(deviceId: String, path: String): String =
+        "$deviceId\u0001${normalizeWorkspacePath(path)}"
+
+    private fun normalizeWorkspacePath(path: String): String {
+        val trimmed = path.trim()
+        val normalized = trimmed.trimEnd('/')
+        return normalized.ifEmpty { trimmed }
+    }
+
+    private fun nextWorkspaceGeneration(key: String): Long {
+        val next = (workspaceGenerations[key] ?: 0L) + 1L
+        workspaceGenerations[key] = next
+        return next
+    }
+
+    private fun isCurrentWorkspace(key: String, generation: Long): Boolean =
+        workspaceGenerations[key] == generation
+
+    private fun invalidateDeviceWorkspaces(deviceId: String) {
+        val prefix = "$deviceId\u0001"
+        workspaceGenerations.keys.filter { it.startsWith(prefix) }.forEach { key ->
+            workspaceGenerations[key] = (workspaceGenerations[key] ?: 0L) + 1L
+        }
+    }
+
+    private fun cancelDeviceWorkspaceLoads(deviceId: String) {
+        val prefix = "$deviceId\u0001"
+        workspaceLoads.keys.filter { it.startsWith(prefix) }.forEach { key ->
+            workspaceLoads.remove(key)?.cancel()
+            workspaceGenerations[key] = (workspaceGenerations[key] ?: 0L) + 1L
+        }
     }
 
     private fun nextGeneration(id: String): Long {

@@ -1,0 +1,238 @@
+@use './SkillsList' as skills-list;
+
+.skill-groups {
+  --skill-groups-inline-inset: var(--openbitfun-space-6);
+  display: flex;
+  flex: 1;
+  min-block-size: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.skill-groups__sections {
+  flex: 1;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--openbitfun-space-6);
+  // Keep the toolbar gap outside the viewport so sticky headers meet its clip edge.
+  margin-block-start: var(--openbitfun-space-2);
+  padding-block: 0 var(--openbitfun-space-6);
+  padding-inline: var(--skill-groups-inline-inset) calc(var(--skill-groups-inline-inset) + var(--openbitfun-space-1));
+}
+
+.skill-groups__section {
+  flex: none;
+  min-inline-size: 0;
+}
+
+.skill-groups__section-title {
+  min-inline-size: 0;
+  margin: 0;
+  font: inherit;
+}
+
+.skill-groups__list {
+  @include skills-list.surface;
+  // Keep rounded clipping without taking scroll ownership away from ScrollArea.
+  overflow: clip;
+}
+
+.skill-groups__list-header,
+.skill-groups__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 0.4fr) 96px;
+  grid-template-areas: 'identity members actions';
+  column-gap: var(--openbitfun-space-4);
+  min-inline-size: 0;
+}
+
+.skill-groups__list-header {
+  @include skills-list.header;
+  position: sticky;
+  inset-block-start: 0;
+}
+
+.skill-groups__list-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--openbitfun-space-2);
+  min-inline-size: 0;
+}
+
+.skill-groups__count {
+  @include skills-list.count;
+  flex: none;
+}
+
+.skill-groups__column-label {
+  white-space: nowrap;
+
+  &--actions {
+    text-align: end;
+  }
+}
+
+.skill-groups__row {
+  @include skills-list.row;
+}
+
+.skill-groups__open {
+  @include skills-list.open-target;
+}
+
+.skill-groups__identity,
+.skill-groups__meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--openbitfun-space-1);
+  min-inline-size: 0;
+}
+
+.skill-groups__identity {
+  grid-area: identity;
+}
+
+.skill-groups__name {
+  color: var(--openbitfun-color-content-primary);
+  font-size: var(--openbitfun-type-label-md-font-size);
+  font-weight: var(--openbitfun-type-label-selected-font-weight);
+  line-height: var(--openbitfun-type-label-md-line-height);
+}
+
+.skill-groups__preview,
+.skill-groups__meta,
+.skill-groups__empty,
+.skill-groups__notice,
+.skill-group-editor__meta {
+  color: var(--openbitfun-color-content-muted);
+  font-size: var(--openbitfun-type-label-sm-font-size);
+}
+
+.skill-groups__meta {
+  grid-area: members;
+  align-items: flex-start;
+  font-variant-numeric: tabular-nums;
+}
+
+.skill-groups__actions {
+  grid-area: actions;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  min-inline-size: 0;
+}
+
+.skill-groups__empty {
+  padding: var(--openbitfun-space-4);
+}
+
+.skill-groups__notice {
+  margin: var(--openbitfun-space-2) var(--skill-groups-inline-inset);
+}
+
+.skill-group-editor {
+  display: flex;
+  min-block-size: 0;
+  flex-direction: column;
+  gap: var(--openbitfun-space-3);
+}
+
+.skill-group-editor__field,
+.skill-group-editor__identity {
+  display: flex;
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: var(--openbitfun-space-1);
+  font-size: var(--openbitfun-type-label-md-font-size);
+}
+
+.skill-group-editor__toolbar,
+.skill-group-editor__footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--openbitfun-space-3);
+}
+
+.skill-group-editor__members {
+  min-block-size: 80px;
+  max-block-size: min(360px, 42vh);
+  border-block: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+}
+
+.skill-group-editor__member {
+  padding-block: var(--openbitfun-space-3);
+  color: var(--openbitfun-color-content-primary);
+  overflow-wrap: anywhere;
+
+  & + & {
+    border-block-start: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+  }
+}
+
+.skill-group-editor__selection {
+  inline-size: 100%;
+}
+
+.skill-group-editor__member-title {
+  font-family: var(--openbitfun-type-heading-card-font-family);
+  font-size: var(--openbitfun-type-heading-card-font-size);
+  font-weight: var(--openbitfun-type-heading-card-font-weight);
+  line-height: var(--openbitfun-type-heading-card-line-height);
+  letter-spacing: var(--openbitfun-type-heading-card-letter-spacing);
+}
+
+.skill-group-editor__member-description {
+  color: var(--openbitfun-color-content-muted);
+  font-family: var(--openbitfun-type-support-font-family);
+  font-size: var(--openbitfun-type-support-font-size);
+  font-weight: var(--openbitfun-type-support-font-weight);
+  line-height: var(--openbitfun-type-support-line-height);
+  letter-spacing: var(--openbitfun-type-support-letter-spacing);
+}
+
+.skill-group-editor__error {
+  margin: 0;
+  font-size: var(--openbitfun-type-label-sm-font-size);
+}
+
+.skill-group-editor__footer {
+  justify-content: flex-end;
+}
+
+@container skills-content (max-width: 680px) {
+  .skill-groups {
+    --skill-groups-inline-inset: var(--openbitfun-space-4);
+  }
+
+  .skill-groups__list-header {
+    display: flex;
+  }
+
+  .skill-groups__column-label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .skill-groups__row {
+    grid-template-columns: minmax(0, 1fr) 96px;
+    grid-template-areas:
+      'identity actions'
+      'members members';
+    row-gap: var(--openbitfun-space-2);
+  }
+}
+
+@container skills-content (max-width: 480px) {
+  .skill-groups__row {
+    grid-template-areas:
+      'identity identity'
+      'members actions';
+  }
+}

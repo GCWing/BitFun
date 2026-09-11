@@ -1,4 +1,5 @@
 import { invoke } from './transport.js';
+import { reportRows } from './report.mjs';
 
 async function loadTranslations() {
   try {
@@ -96,10 +97,6 @@ function row(title, detail) {
   small.textContent = detail;
   item.append(strong, small);
   return item;
-}
-
-function transferLabel(result) {
-  return result.state === 'verified' ? text.imported : text.staged;
 }
 
 function groupLabel(id) {
@@ -202,11 +199,8 @@ function render(view) {
 
   const reportSummary = document.getElementById('report-summary');
   if (view.report) {
-    reportSummary.replaceChildren(...view.report.domainResults.flatMap((result) => [
-      row(result.domain, `${result.imported} ${transferLabel(result)}, ${result.skipped} ${text.skipped}, ${result.warnings.filter((item) => item.severity !== 'info').length} ${text.warnings}`),
-      ...[...new Set(result.warnings.filter((item) => item.severity !== 'info').map((item) => item.code))]
-        .map((code) => row(result.domain, text[code] || code)),
-    ]));
+    reportSummary.replaceChildren(...reportRows(view.report, view.workspaceCounts, text)
+      .map(([title, detail]) => row(title, detail)));
   }
   show('report-card', !view.running && (Boolean(view.report) || view.status === 'cancelled'));
   const canExportDiagnostics = ['failed_recoverable', 'failed_manual_action_required'].includes(view.status);

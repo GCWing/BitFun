@@ -6,6 +6,7 @@ import { INK, LINE } from './Theme';
 /** Standard top-right dismissal header for modal and replace-in-place Sheet pages. */
 @ComponentV2
 export struct SheetCloseHeader {
+  @Param uniformGlyph: boolean = false;
   @Param title: string = '';
   @Param showDivider: boolean = false;
   @Param isEnabled: boolean = true;
@@ -25,6 +26,7 @@ export struct SheetCloseHeader {
       Blank()
       SheetCloseButton({
         isEnabled: this.isEnabled,
+        uniformGlyph: this.uniformGlyph,
         onClose: this.onClose
       })
     }

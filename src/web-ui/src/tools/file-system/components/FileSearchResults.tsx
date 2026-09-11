@@ -13,6 +13,7 @@ import { ContextType } from '@/shared/context-menu-system/types/context.types';
 import type { MenuItem } from '@/shared/context-menu-system/types/menu.types';
 import { addFileMentionToChat, type FileMentionTarget } from '@/shared/utils/chatContext';
 import { openFileInBestTarget } from '@/shared/utils/tabUtils';
+import type { ContentResourceScope } from '@/shared/types/contentResource';
 import './FileSearchResults.scss';
 
 const INITIAL_DISPLAY_COUNT = 50;
@@ -24,6 +25,7 @@ interface FileSearchResultsProps {
   onFileSelect: (filePath: string, fileName: string) => void;
   onFolderNavigate?: (folderPath: string, folderName: string) => void;
   workspacePath?: string;
+  resourceScope?: ContentResourceScope;
   className?: string;
 }
 
@@ -306,6 +308,7 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
   onFileSelect,
   onFolderNavigate,
   workspacePath,
+  resourceScope,
   className = ''
 }) => {
   const { t } = useI18n('tools');
@@ -409,9 +412,10 @@ export const FileSearchResults: React.FC<FileSearchResultsProps> = ({
       filePath: target.path,
       fileName: target.name,
       workspacePath,
+      scope: resourceScope,
       ...(lineNumber ? { jumpToLine: lineNumber, jumpToColumn: 1 } : {}),
     }, { source: 'project-nav' });
-  }, [workspacePath]);
+  }, [workspacePath, resourceScope]);
 
   const handleFileClick = useCallback((target: SearchResultTarget) => {
     if (target.isDirectory) {

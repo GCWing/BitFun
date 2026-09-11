@@ -88,6 +88,7 @@ describe('SessionUsageModal', () => {
     act(() => root.unmount());
     container.remove();
     closeSessionUsageModal();
+    vi.useRealTimers();
   });
 
   it('renders nothing until there is a report to show', () => {
@@ -114,6 +115,19 @@ describe('SessionUsageModal', () => {
     expect(isChatPopupActive()).toBe(false);
     // The afterEach unmount would otherwise run against a torn-down root.
     root = createRoot(container);
+  });
+
+  it('keeps the report visible during closing instead of unmounting immediately', () => {
+    vi.useFakeTimers();
+    showReport();
+    const surface = document.querySelector<HTMLElement>('[data-testid="session-usage-modal"]')!;
+    const contents = surface.textContent;
+    act(() => closeSessionUsageModal());
+    expect(surface.isConnected).toBe(true);
+    expect(surface.dataset.state).toBe('exiting');
+    expect(surface.textContent).toBe(contents);
+    act(() => vi.advanceTimersByTime(180));
+    expect(surface.isConnected).toBe(false);
   });
 
   it('hands over to the panel rather than competing with it', async () => {

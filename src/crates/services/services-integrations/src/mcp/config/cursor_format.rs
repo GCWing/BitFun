@@ -92,6 +92,11 @@ pub fn config_to_cursor_format(config: &MCPServerConfig) -> serde_json::Value {
 
     if let Some(oauth) = &config.oauth {
         cursor_config.insert("oauth".to_string(), serde_json::json!(oauth));
+        if let Some(enabled) = config.oauth_enabled {
+            cursor_config.insert("oauthEnabled".to_string(), serde_json::json!(enabled));
+        }
+    } else if let Some(enabled) = config.oauth_enabled {
+        cursor_config.insert("oauth".to_string(), serde_json::json!(enabled));
     }
 
     if let Some(xaa) = &config.xaa {
@@ -244,7 +249,12 @@ pub fn parse_cursor_format(config: &serde_json::Value) -> Vec<MCPServerConfig> {
                         .get("oauth")
                         .cloned()
                         .and_then(|value| serde_json::from_value(value).ok()),
-                    oauth_enabled: None,
+                    // Boolean shorthand controls discovery; an object carries
+                    // OAuth options. Do not discard an explicit opt-out.
+                    oauth_enabled: obj
+                        .get("oauth")
+                        .and_then(|value| value.as_bool())
+                        .or_else(|| obj.get("oauthEnabled").and_then(|value| value.as_bool())),
                     xaa: obj
                         .get("xaa")
                         .cloned()

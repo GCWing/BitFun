@@ -43,6 +43,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.openbitfun.mobile.app.ui.remote.ProjectCreateControl
+import com.openbitfun.mobile.core.feature.session.HarnessProfilePolicy
 import com.openbitfun.mobile.app.R
 import com.openbitfun.mobile.core.feature.account.AccountDeviceUi
 import com.openbitfun.mobile.core.feature.connection.ConnectionPhase
@@ -76,30 +78,13 @@ internal fun SidebarRemoteWorkspaceSection(
     onSelectDevice: (String) -> Unit,
     onOpenSession: (String) -> Unit,
     onOpenActions: (RemoteSidebarSessionRow, IntRect) -> Unit,
-    onCreateInWorkspace: (String) -> Unit,
+    onCreateInWorkspace: (String, String) -> Unit,
     onOpenWorkspace: (String) -> Unit,
 ) {
     val connected = ConnectionStatusPresenter.canReachSessions(connectionPhase)
     val addConnectionLabel = stringResource(R.string.sidebar_add_connection)
-    val transientDeviceKey = remember(deviceName) { "qr:$deviceName" }
-    val projectedDevices = remember(devices, controlSource, deviceName) {
-        if (
-            controlSource == RemoteControlSource.QR_PAIRING &&
-            deviceName.isNotBlank() &&
-            devices.none { it.name == deviceName }
-        ) {
-            listOf(AccountDeviceUi(transientDeviceKey, deviceName, true, null)) + devices
-        } else {
-            devices
-        }
-    }
-    val activeDeviceId = when (controlSource) {
-        RemoteControlSource.QR_PAIRING -> projectedDevices.firstOrNull {
-            it.id == transientDeviceKey || it.name == deviceName
-        }?.id
-        RemoteControlSource.ACCOUNT_DEVICE -> selectedDeviceId
-        RemoteControlSource.NONE -> null
-    }
+    val projectedDevices = devices
+    val activeDeviceId = if (controlSource == RemoteControlSource.ACCOUNT_DEVICE) selectedDeviceId else null
     var expandedDeviceIds by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var visibleDeviceCount by rememberSaveable { mutableStateOf(DEVICES_PER_BATCH) }
     var cachedRemoteStates by remember {
@@ -183,8 +168,6 @@ internal fun SidebarRemoteWorkspaceSection(
             projectedDevices.take(visibleDeviceCount).forEach { device ->
                 val expanded = device.id in expandedDeviceIds
                 val active = device.id == activeDeviceId
-                val transient = controlSource == RemoteControlSource.QR_PAIRING &&
-                    device.id == activeDeviceId
                 val cachedRemote = cachedRemoteStates[device.id]
                 val cachedWorkspace = cachedWorkspaceStates[device.id]
                 val shownRemote = if (active) {
@@ -219,7 +202,7 @@ internal fun SidebarRemoteWorkspaceSection(
                             } else {
                                 expandedDeviceIds + device.id
                             }
-                        } else if (device.online && !transient) {
+                        } else if (device.online) {
                             activeDeviceId?.let { currentId ->
                                 (remoteState as? RemoteSessionUiState.Ready)?.let { ready ->
                                     cachedRemoteStates = cachedRemoteStates + (currentId to ready)
@@ -279,7 +262,7 @@ private fun SidebarActiveDeviceBody(
     onOpenSession: (String) -> Unit,
     onOpenActions: (RemoteSidebarSessionRow, IntRect) -> Unit,
     canActOnSessions: Boolean,
-    onCreateInWorkspace: (String) -> Unit,
+    onCreateInWorkspace: (String, String) -> Unit,
     onOpenWorkspace: (String) -> Unit,
 ) {
     val readyWorkspace = workspaceState
@@ -394,20 +377,16 @@ private fun SidebarActiveDeviceBody(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    Box(
-                        modifier = Modifier
-                            .size(width = 30.dp, height = 40.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable(role = Role.Button) { onCreateInWorkspace(path) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.ic_symbol_square_and_pencil),
-                            contentDescription = stringResource(R.string.sidebar_new_in_workspace),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
+                    var createMenuOpen by remember(path) { mutableStateOf(false) }
+                    ProjectCreateControl(
+                        enabled = canActOnSessions && connected,
+                        supportsHarnessProfiles = HarnessProfilePolicy.supported(workspaceState?.hostCapabilities.orEmpty()),
+                        path = path,
+                        expanded = createMenuOpen,
+                        onToggle = { createMenuOpen = !createMenuOpen },
+                        onDismiss = { createMenuOpen = false },
+                        onCreateAgent = { agent -> createMenuOpen = false; onCreateInWorkspace(path, agent) },
+                    )
                     Icon(
                         painterResource(
                             if (collapsed) R.drawable.ic_symbol_chevron_right

@@ -288,6 +288,9 @@ export const mobileTokens = {
     "composer_model_selector_row_radius": 9,
     "composer_model_selector_row_gap": 6,
     "sheet_top_radius": 28,
+    "login_sheet_max_width": 560,
+    "login_sheet_outer_margin": 8,
+    "login_sheet_body_min_height": 142,
     "sheet_side_radius": 28,
     "sheet_horizontal_padding": 20,
     "sheet_header_height": 56,
@@ -512,6 +515,30 @@ export const mobileComponents = {
         "structure"
       ],
       "platformNotes": "Use each platform's native modal lifecycle, accessibility focus, and back gesture; placement comes from the shared adaptive policy and visual geometry comes from these tokens."
+    },
+    "account_login_sheet": {
+      "purpose": "Offers GitHub sign-in in a compact bottom sheet without empty full-screen space.",
+      "anatomy": [
+        "close_header",
+        "title",
+        "supporting_copy",
+        "optional_error",
+        "primary_action"
+      ],
+      "states": [
+        "signed_out",
+        "authorizing",
+        "error"
+      ],
+      "tokens": [
+        "sheet_top_radius",
+        "sheet_horizontal_padding",
+        "sheet_header_height",
+        "sheet_action_height",
+        "display_medium",
+        "body_medium"
+      ],
+      "platformNotes": "Use a bottom-aligned modal paper on compact and wide hosts: width min(available width - 16, 560), 8-unit margins outside system safe areas, 28-unit circular corners, no button or panel shadow. Header 56, top-aligned body at least 142, footer 10 + 48 + 24 give a 280-unit default height. Body grows for localized text, accessibility text and errors; oversized content scrolls. Close glyph uses round-capped 1.5-unit diagonal strokes from (2,2) to (16,16) and (16,2) to (2,16) within an 18-unit box, centered in a 48-unit target. Account profiles retain their separate adaptive settings presentation."
     },
     "action_popover": {
       "purpose": "Presents a short, anchored set of conversation, session, model, or project actions.",

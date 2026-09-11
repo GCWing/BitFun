@@ -579,7 +579,7 @@ fn permission_project_path(context: &ToolUseContext) -> OpenBitFunResult<String>
 
 const ACCOUNT_PERMISSION_SCOPE: &str = "account";
 const ACCOUNT_PERMISSION_PROJECT_ID: &str = "__openbitfun_account_actions__";
-const ACCOUNT_PERMISSION_PROJECT_PATH: &str = "OpenBitFun account";
+const ACCOUNT_PERMISSION_PROJECT_PATH: &str = "GitHub account";
 
 fn permission_scope(
     context: &ToolUseContext,

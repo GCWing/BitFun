@@ -2060,7 +2060,7 @@ mod tests {
             Ok(vec![AgentSessionSummary {
                 session_id: "session_1".to_string(),
                 session_name: "Main".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 model_id: None,
                 reasoning_preset: None,
                 last_user_dialog_agent_type: None,
@@ -2139,7 +2139,7 @@ mod tests {
             Ok(AgentSessionForkResult {
                 session_id: format!("{}-fork", request.source_session_id),
                 session_name: "Forked session".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
             })
         }
 
@@ -2151,7 +2151,7 @@ mod tests {
             Ok(AgentSessionForkResult {
                 session_id: "session-fork".to_string(),
                 session_name: "Forked session".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
             })
         }
     }
@@ -2237,11 +2237,11 @@ mod tests {
                 session: AgentSessionSummary {
                     session_id: "session_1".to_string(),
                     session_name: "Main".to_string(),
-                    agent_type: "agentic".to_string(),
+                    agent_type: "Standard".to_string(),
                     model_id: Some("provider/model".to_string()),
                     reasoning_preset: Some("high".to_string()),
                     last_user_dialog_agent_type: Some("plan".to_string()),
-                    last_submitted_agent_type: Some("agentic".to_string()),
+                    last_submitted_agent_type: Some("Standard".to_string()),
                     turn_count: 3,
                     created_at_ms: 1000,
                     last_active_at_ms: 2000,
@@ -2298,7 +2298,7 @@ mod tests {
                     AgentSessionLineageEntry {
                         session_id: "root_1".to_string(),
                         session_name: "Root".to_string(),
-                        agent_type: "agentic".to_string(),
+                        agent_type: "Standard".to_string(),
                         created_at_ms: 1,
                         status: AgentSessionLifecycleStatus::Active,
                         active_turn_id: None,
@@ -2729,7 +2729,7 @@ mod tests {
                 "fixed-session-id".to_string(),
                 AgentSessionCreateRequest {
                     session_name: "Fixed session".to_string(),
-                    agent_type: "agentic".to_string(),
+                    agent_type: "Standard".to_string(),
                     agent_route_key: None,
                     workspace_path: Some("/workspace/project".to_string()),
                     project_workspace_path: None,
@@ -2761,7 +2761,7 @@ mod tests {
                 "fixed-session-id".to_string(),
                 AgentSessionCreateRequest {
                     session_name: "Fixed session".to_string(),
-                    agent_type: "agentic".to_string(),
+                    agent_type: "Standard".to_string(),
                     agent_route_key: None,
                     workspace_path: Some("/workspace/project".to_string()),
                     project_workspace_path: None,
@@ -2801,7 +2801,7 @@ mod tests {
                 AgentRunRequest::new(
                     SessionSelector::create(
                         "SDK Session",
-                        "agentic",
+                        "Standard",
                         Some("/workspace/project".to_string()),
                     )
                     .with_metadata(metadata.clone()),
@@ -2815,7 +2815,7 @@ mod tests {
 
         assert_eq!(handle.session_id, "session_1");
         assert_eq!(handle.turn_id, "turn_1");
-        assert_eq!(handle.agent_type.as_deref(), Some("agentic"));
+        assert_eq!(handle.agent_type.as_deref(), Some("Standard"));
         assert!(handle.accepted);
         assert_eq!(ports.created_sessions.lock().unwrap()[0].metadata, metadata);
         assert_eq!(
@@ -3420,11 +3420,11 @@ mod tests {
             session: AgentSessionSummary {
                 session_id: "session_1".to_string(),
                 session_name: "Main".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 model_id: Some("provider/model".to_string()),
                 reasoning_preset: Some("high".to_string()),
                 last_user_dialog_agent_type: Some("plan".to_string()),
-                last_submitted_agent_type: Some("agentic".to_string()),
+                last_submitted_agent_type: Some("Standard".to_string()),
                 turn_count: 3,
                 created_at_ms: 1000,
                 last_active_at_ms: 2000,
@@ -3525,7 +3525,7 @@ mod tests {
                 original_message: None,
                 turn_id: Some("turn_1".to_string()),
                 execution: Default::default(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 workspace_path: Some("/workspace/project".to_string()),
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -3581,7 +3581,7 @@ mod tests {
                 original_message: Some("hello".to_string()),
                 turn_id: Some("turn_1".to_string()),
                 execution: Default::default(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 workspace_path: Some("/workspace/project".to_string()),
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -3701,7 +3701,7 @@ mod tests {
                 original_message: None,
                 turn_id: Some("turn-1".to_string()),
                 execution: Default::default(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 workspace_path: Some("/workspace/project".to_string()),
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -3877,7 +3877,7 @@ mod tests {
         let err = runtime
             .deliver_background_result(AgentBackgroundResultRequest {
                 session_id: "session_1".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 workspace_path: None,
                 remote_connection_id: None,
                 remote_ssh_host: None,
@@ -3929,7 +3929,7 @@ mod tests {
         runtime
             .deliver_background_result(AgentBackgroundResultRequest {
                 session_id: "session_1".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 workspace_path: Some("/workspace/project".to_string()),
                 remote_connection_id: Some("conn-1".to_string()),
                 remote_ssh_host: Some("host-1".to_string()),
@@ -3943,7 +3943,7 @@ mod tests {
         runtime
             .deliver_thread_goal(AgentThreadGoalDeliveryRequest {
                 session_id: "session_1".to_string(),
-                agent_type: "agentic".to_string(),
+                agent_type: "Standard".to_string(),
                 workspace_path: Some("/workspace/project".to_string()),
                 remote_connection_id: Some("conn-1".to_string()),
                 remote_ssh_host: Some("host-1".to_string()),

@@ -2,8 +2,7 @@ import { BaseCommand } from '../../BaseCommand';
 import { CommandResult } from '../../../types/command.types';
 import { ContextType, FileNodeContext, MenuContext, TabContext } from '../../../types/context.types';
 import { i18nService } from '@/infrastructure/i18n';
-import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
-import { isRemoteWorkspace } from '@/shared/types';
+import { canRevealInExplorer } from './RevealInExplorerCommand';
 import { isHtmlFilePath, openHtmlFileInExternalBrowser } from '@/shared/utils/htmlFilePreview';
 
 function getContextFilePath(context: MenuContext): string | undefined {
@@ -31,16 +30,9 @@ export class OpenHtmlInBrowserCommand extends BaseCommand {
   }
 
   canExecute(context: MenuContext): boolean {
-    const currentWorkspace = workspaceManager.getState().currentWorkspace;
-    const remoteWorkspace = isRemoteWorkspace(currentWorkspace);
     const filePath = getContextFilePath(context);
     const htmlFile = Boolean(filePath && isHtmlFilePath(filePath));
-
-    if (remoteWorkspace) {
-      return false;
-    }
-
-    return htmlFile;
+    return htmlFile && canRevealInExplorer(context);
   }
 
   async execute(context: MenuContext): Promise<CommandResult> {
@@ -48,7 +40,7 @@ export class OpenHtmlInBrowserCommand extends BaseCommand {
       const t = i18nService.getT();
       const filePath = getContextFilePath(context);
 
-      if (!filePath || !isHtmlFilePath(filePath)) {
+      if (!filePath || !this.canExecute(context)) {
         return this.failure(t('errors:file.openInBrowserFailed'));
       }
 

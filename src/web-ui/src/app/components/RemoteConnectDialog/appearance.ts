@@ -41,17 +41,11 @@ export const remoteAccountPanelAppearanceDescriptor: AppearanceSurfaceDescriptor
     { id: 'scroll' },
     { id: 'form' },
     { id: 'actions' },
-    { id: 'syncOptions' },
-    { id: 'syncOption' },
-    { id: 'server' },
-    { id: 'syncStatus' },
-    { id: 'progressTrack' },
-    { id: 'progressFill' },
     { id: 'deviceList' },
     { id: 'deviceCard' },
   ],
   facets: [
-    { id: 'view', attribute: 'data-openbitfun-view', values: ['login', 'overwrite', 'devices'] },
+    { id: 'view', attribute: 'data-openbitfun-view', values: ['login', 'devices'] },
   ],
   states: [
     { id: 'offline', selector: { kind: 'self', suffix: '[data-openbitfun-state~="offline"]' } },

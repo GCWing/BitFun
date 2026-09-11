@@ -89,6 +89,56 @@ describe('SessionTreePopover', () => {
     vi.restoreAllMocks();
   });
 
+  it('filters inactive branches, retains ancestors, and restores all agents when disabled', async () => {
+    mocks.sessions.set('child', { ...createSession('child', 'subagent', 'root'), dialogTurns: [] });
+    mocks.sessions.set('grandchild', createSession('grandchild', 'subagent', 'child'));
+    mocks.sessions.set('idle-sibling', { ...createSession('idle-sibling', 'subagent', 'root'), dialogTurns: [] });
+    const render = async (activeOnly: boolean) => {
+      await act(async () => {
+        root.render(<SessionTreePopover sessionId="root" embedded open activeOnly={activeOnly} t={key => key} />);
+      });
+    };
+    const nodeIds = () => Array.from(container.querySelectorAll<HTMLElement>('[role="treeitem"]'))
+      .map(node => node.dataset.sessionId);
+
+    await render(true);
+    expect(nodeIds()).toEqual(['child', 'grandchild']);
+    await render(false);
+    expect(nodeIds()).toEqual(['child', 'grandchild', 'idle-sibling']);
+    await render(true);
+    expect(nodeIds()).toEqual(['child', 'grandchild']);
+  });
+
+  it('shows the active empty state when all agents are inactive', async () => {
+    mocks.sessions.set('child', { ...createSession('child', 'subagent', 'root'), dialogTurns: [] });
+    await act(async () => {
+      root.render(<SessionTreePopover sessionId="root" embedded open activeOnly t={key => key} />);
+    });
+    expect(container.querySelector('[role="treeitem"]')).toBeNull();
+    expect(container.textContent).toContain('flowChatHeader.agentTreeNoActive');
+  });
+
+  it('offers deletion for inactive agents without exposing cancellation or opening the session', async () => {
+    mocks.sessions.set('child', { ...createSession('child', 'subagent', 'root'), dialogTurns: [] });
+    const onDeleteSession = vi.fn().mockResolvedValue(true);
+    const onSelectSession = vi.fn();
+    await act(async () => {
+      root.render(<SessionTreePopover sessionId="root" embedded open onDeleteSession={onDeleteSession} onSelectSession={onSelectSession} t={key => key} />);
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[aria-label="flowChatHeader.agentTreeActions"]')?.click();
+    });
+    const menu = document.querySelector('[data-testid="flowchat-header-session-tree-menu"]');
+    expect(menu?.textContent).toContain('flowChatHeader.agentTreeDelete');
+    expect(menu?.textContent).not.toContain('flowChatHeader.agentTreeCancel');
+    await act(async () => {
+      menu?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.click();
+    });
+    expect(onDeleteSession).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'child' }));
+    expect(onSelectSession).not.toHaveBeenCalled();
+    expect(mocks.getSessionLineage).toHaveBeenCalledTimes(2);
+  });
+
   it('offers non-cascading cancellation for running child sessions', async () => {
     const onCancelSession = vi.fn().mockResolvedValue(true);
     const t = (key: string) => key;
@@ -188,6 +238,8 @@ describe('SessionTreePopover', () => {
     expect(subagentNodes).toHaveLength(3);
     expect(subagentNodes.map(node => node.querySelector('.session-tree-popover__node-title')?.textContent))
       .toEqual(['Parser review', 'Test runner', 'Docs audit']);
+    expect(subagentNodes.map(node => node.querySelector('.session-tree-popover__node-meta')?.textContent))
+      .toEqual(['worker', 'worker', 'worker']);
   });
 
   it('closes a sibling action-menu portal and restores focus with the parent', async () => {
@@ -265,8 +317,7 @@ describe('SessionTreePopover', () => {
     expect(container.querySelector('[data-testid="flowchat-header-session-tree-content"]')).not.toBeNull();
     expect(document.querySelector('.session-tree-popover__panel')).toBeNull();
 
-    const childNode = Array.from(container.querySelectorAll<HTMLElement>('[role="treeitem"]'))
-      .find(node => node.textContent?.includes('Running child'));
+    const childNode = container.querySelector<HTMLElement>('[role="treeitem"][data-session-id="child"]');
     await act(async () => {
       childNode?.querySelector<HTMLButtonElement>('.session-tree-popover__node-main')?.click();
     });

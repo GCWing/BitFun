@@ -265,6 +265,17 @@ impl JsonFileStore {
         .await
     }
 
+    /// Publish binary runtime artifacts with the same strict atomic replacement
+    /// used by text artifacts. Readers must never observe a partial attachment.
+    pub async fn write_bytes_atomic_strict(
+        &self,
+        path: &Path,
+        bytes: Vec<u8>,
+    ) -> Result<(), JsonFileStoreError> {
+        self.write_bytes_atomic_with_policy(path, bytes, AtomicWritePolicy::StrictReplace)
+            .await
+    }
+
     /// Atomically publish a new UTF-8 text file, failing without changing the
     /// target when another process creates it first.
     pub async fn write_text_atomic_create_new(

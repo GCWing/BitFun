@@ -266,6 +266,18 @@
     white-space: nowrap;
   }
 
+  &__inline-item-title {
+    display: inline-flex;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    align-items: center;
+
+    .openbitfun-nav-panel__inline-item-label {
+      flex: 0 1 auto;
+    }
+  }
+
   &__inline-item-btw-badge {
     flex: 0 0 auto;
     display: inline-flex;
@@ -460,7 +472,7 @@
 
   &__inline-item-menu-popover {
     position: fixed;
-    z-index: 10000;
+    z-index: var(--openbitfun-layer-popover);
   }
 
   &__inline-item-edit {
@@ -737,12 +749,10 @@
     padding: 0 6px 0 var(--openbitfun-nav-session-rail);
     border-radius: var(--openbitfun-radius-sm);
     transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
       color 120ms ease;
 
     &:active:not(.is-disabled) {
-      transform: scale(0.99);
       background: var(--openbitfun-color-action-neutral-surface-hover);
     }
 
@@ -756,13 +766,8 @@
   &__inline-item-edit-btn {
     border-radius: var(--openbitfun-radius-sm);
     transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
       color 120ms ease;
-
-    &:active {
-      transform: scale(0.94);
-    }
   }
 
   // Press feedback matches a full-width row, not the 20px icon buttons: the
@@ -770,12 +775,10 @@
   &__inline-toggle {
     border-radius: var(--openbitfun-radius-sm);
     transition:
-      transform 120ms cubic-bezier(0.23, 1, 0.32, 1),
       background 120ms ease,
       color 120ms ease;
 
     &:active:not(:disabled) {
-      transform: scale(0.99);
       background: var(--openbitfun-color-action-neutral-surface-hover);
     }
   }

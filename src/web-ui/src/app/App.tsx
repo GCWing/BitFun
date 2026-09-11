@@ -29,7 +29,7 @@ import {
   retryStartupAfterModuleLoadFailure,
 } from './startup/startupModuleRecovery';
 import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode/ToolbarModeProvider';
-import { RealtimeVoiceCallProvider } from '../flow_chat/components/voice/RealtimeVoiceCallContext';
+import { RealtimeVoiceCallProvider } from '../flow_chat/components/voice/RealtimeVoiceCallProvider';
 import type { AgentCompanionPetCommand } from './services/agentCompanionPetCommands';
 import AskUserAnnouncer from './components/NavPanel/AskUserAnnouncer';
 import { handleBrowserShortcut } from './browserShortcutPolicy';

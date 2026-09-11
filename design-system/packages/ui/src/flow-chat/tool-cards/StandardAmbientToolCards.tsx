@@ -98,7 +98,7 @@ export function RunCodeToolCard({
           action={action}
           content={summary}
           extra={actions ? <ToolCardActions>{actions}</ToolCardActions> : undefined}
-          icon={<ToolCardStatusSlot status={status} toolIcon={<Code2 aria-hidden="true" />} />}
+          icon={<ToolCardStatusSlot size={14} status={status} toolIcon={<Code2 aria-hidden="true" />} />}
         />
       )}
       isExpanded={Boolean(isExpanded && hasDetails)}
@@ -181,7 +181,7 @@ export function WebFetchToolCard({
           action={action}
           content={<OverflowText className={styles.fetchTitle} title={typeof title === "string" ? title : undefined}>{title}</OverflowText>}
           icon={(
-            <ToolCardStatusSlot
+            <ToolCardStatusSlot size={14}
               defaultIcon={status === "completed" || status === "error" ? "tool" : "status"}
               status={status}
               toolIcon={<Globe aria-hidden="true" />}
@@ -260,7 +260,7 @@ export function DefaultToolCard({
           action={displayName}
           content={summary}
           icon={hasVisibleToolCardStatusGlyph(status) || icon
-            ? <ToolCardStatusSlot status={status} toolIcon={icon} />
+            ? <ToolCardStatusSlot size={14} status={status} toolIcon={icon} />
             : undefined}
         />
       )}
@@ -337,7 +337,7 @@ export function ViewImageToolCard({
         header={(
           <AmbientToolCardHeader
             action={statusText}
-            icon={<ToolCardStatusSlot status={status} toolIcon={<ImageIcon aria-hidden="true" />} />}
+            icon={<ToolCardStatusSlot size={14} status={status} toolIcon={<ImageIcon aria-hidden="true" />} />}
           />
         )}
         isExpanded={Boolean(source && isExpanded)}
@@ -461,7 +461,7 @@ export function TodoToolCard({
           action={isExpanded ? undefined : title}
           content={headerSummary}
           icon={(
-            <ToolCardStatusSlot
+            <ToolCardStatusSlot size={14}
               defaultIcon={status === "error" || status === "cancelled" || allCompleted ? "status" : "tool"}
               status={allCompleted ? "completed" : status}
               toolIcon={<ListTodo aria-hidden="true" />}

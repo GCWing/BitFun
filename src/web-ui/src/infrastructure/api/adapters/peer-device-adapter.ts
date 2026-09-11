@@ -1,3 +1,4 @@
+import { translateAgentIdentityCommand, translateAgentIdentityFields, translateAgentIdentityResponse } from '../../../../../shared/agent-harness/wire';
 import { ITransportAdapter, type TransportRequestTiming } from './base';
 import { TauriTransportAdapter } from './tauri-adapter';
 import {
@@ -581,7 +582,7 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
   }
 
   listen<T>(event: string, callback: (data: T) => void): () => void {
-    return this.local.listen<T>(event, callback);
+    return this.local.listen<T>(event, payload => callback(translateAgentIdentityFields(payload, 'canonical')));
   }
 
   async waitForListenerRegistrations?(): Promise<void> {
@@ -819,7 +820,7 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
     const commandJson = JSON.stringify({
       cmd: 'host_invoke',
       command: action,
-      args: params === undefined ? {} : params,
+      args: translateAgentIdentityCommand(action, params ?? {}, 'legacy'),
     });
     const rpcPolicy = isPeerRetryableReadCommand(action)
       ? READ_RPC_POLICY
@@ -853,7 +854,7 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
           );
         }
         this.hooks.onHostInvokeSuccess?.();
-        return envelope.value as T;
+        return translateAgentIdentityResponse(action, envelope.value, params, 'canonical') as T;
       }
       throw new Error(
         `Unexpected peer RPC response for '${action}': ${envelope.resp || 'unknown'}`,

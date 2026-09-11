@@ -1,9 +1,11 @@
+import type { ResourceFileAccess } from '@/infrastructure/api/ResourceFileContext';
 import { mergeAttributes, Node } from '@tiptap/core';
 import { closeHistory } from '@tiptap/pm/history';
 import { getCachedLocalImageDataUrl } from '../utils/loadLocalImages';
 import { isLocalPath, resolveImagePath } from '../utils/rehype-local-images';
 
 type MarkdownImageOptions = {
+  fileAccess?: ResourceFileAccess | null;
   basePath?: string;
   editLabel?: string;
   doneLabel?: string;
@@ -97,7 +99,7 @@ export const MarkdownImage = Node.create<MarkdownImageOptions>({
           image.removeAttribute('data-original-src');
           image.classList.remove('local-image-loading', 'local-image-loaded', 'local-image-error');
           const resolvedSrc = src && isLocalPath(src)
-            ? getCachedLocalImageDataUrl(resolveImagePath(src, this.options.basePath)) ?? src
+            ? getCachedLocalImageDataUrl(resolveImagePath(src, this.options.basePath), this.options.fileAccess) ?? src
             : src;
           image.setAttribute('src', resolvedSrc);
         }

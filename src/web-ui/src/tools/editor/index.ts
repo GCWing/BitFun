@@ -48,7 +48,6 @@ export type {
 } from './services';
 
 export { EditorManager, editorManager } from './services/EditorManager';
-export { editorReadyManager } from './services/EditorReadyManager';
 export { default as MonacoInitManager } from './services/MonacoInitManager';
 
 export {

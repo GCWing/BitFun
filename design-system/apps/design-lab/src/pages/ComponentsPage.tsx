@@ -1,4 +1,5 @@
 import { AppWindow, Heading, Keyboard, List, Rows3, MousePointerClick, PanelTop, ToggleLeft } from "lucide-react";
+import { VoiceCallPreview, VoiceParticlePreview } from "../components/VoiceCallPreview";
 import {
   ActionCard,
   ActionItem,
@@ -168,6 +169,8 @@ const componentIcons = {
 
 function ComponentCardPreview({ component }: { component: ComponentMeta }) {
   const { t } = useI18n();
+  if (component.name === "VoiceCallPanel") return <VoiceCallPreview compact />;
+  if (component.name === "VoiceParticleLogo") return <VoiceParticlePreview />;
   if (component.name === "Combobox") return <Combobox label={t("components.preview.modalProviderName")} defaultValue="openbitfun" options={[{ value: "openbitfun", label: "OpenBitFun" }, { value: "custom", label: t("components.preview.add") }]} />;
   const flowChatPreview = getFlowChatPreviewDefinition(component.name);
 

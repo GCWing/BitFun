@@ -45,67 +45,27 @@ import com.openbitfun.mobile.app.R
 import com.openbitfun.mobile.app.platform.AppLocale
 import com.openbitfun.mobile.app.platform.AppLocaleController
 import com.openbitfun.mobile.app.ui.theme.generated.MobileDesignGeometry
-import com.openbitfun.mobile.core.feature.generalchat.GeneralChatConfigFailure
-import com.openbitfun.mobile.core.feature.generalchat.GeneralChatConfigUi
-import com.openbitfun.mobile.core.feature.generalchat.GeneralChatConnectionTestUi
-import com.openbitfun.mobile.core.feature.generalchat.GeneralChatIntent
-import com.openbitfun.mobile.core.feature.generalchat.GeneralChatModelUi
 
 internal const val GENERAL_SETTINGS_TEST_TAG: String = "general-settings"
 internal const val GENERAL_SETTINGS_PROFILE_TEST_TAG: String = "general-settings-profile"
 internal const val GENERAL_SETTINGS_MODEL_TEST_TAG: String = "general-settings-model"
 internal const val GENERAL_SETTINGS_CLOSE_TEST_TAG: String = "general-settings-close"
 
-/**
- * The app's own settings page, ported from `pages/components/SettingsSheet.ets`.
- *
- * The counterpart of [SettingsScreen]. The source's sidebar gear always opens
- * this root page; remote-control settings is reached by its own remote action.
- * This page is about the phone — who is signed in, which model the app talks to
- * on its own, and what build this is — and mentions no desktop anywhere.
- *
- * Its chrome is deliberately not the remote page's. The source rounds these cards
- * at 8 rather than 24 and left-aligns the title rather than centring it: this page
- * is a list of settings, and that page is a report on one connection.
- *
- * @param accountUsername what the row says underneath "Profile", falling back to
- * whether anyone is signed in at all when the session has no name to give —
- * `this.accountUsername || (this.authenticatedUserId.length > 0 ? … : …)`.
- * @param accountUserId only whether it is blank, which is that fallback's
- * question. The account surface behind the row loads its own store.
- * @param config the general-chat provider, shown as the model row's value and
- * edited in the panel the row opens.
- * @param connectionTest belongs to that panel rather than to this page, and is
- * threaded through because the panel is drawn over this one, as does
- * [onSaveConfig] — whose Boolean is the panel's own "was that accepted".
- */
+/** Phone preferences; model configuration belongs to the controlled host. */
 @Composable
 internal fun GeneralSettingsScreen(
     modifier: Modifier,
     accountUserId: String?,
     accountUsername: String,
-    config: GeneralChatConfigUi,
-    models: List<GeneralChatModelUi>,
-    activeModelId: String,
-    configFailure: GeneralChatConfigFailure?,
-    connectionTest: GeneralChatConnectionTestUi,
-    onChatIntent: (GeneralChatIntent) -> Unit,
-    onSaveConfig: (GeneralChatIntent.SaveConfig) -> Boolean,
     onOpenAccount: () -> Unit,
     onClose: () -> Unit,
 ) {
-    // The provider editor covers this page rather than opening beside it, the way
-    // `if (this.showModelService) { this.ModelServicePanel() }` stacks it over the
-    // settings column. A second bottom sheet on top of this one would be a sheet
-    // over a sheet, which Compose will draw and no phone can make sense of.
-    var showModelService by rememberSaveable { mutableStateOf(false) }
     var showLanguagePicker by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
     val selectedLocale = AppLocaleController.current(LocalConfiguration.current)
 
-    BackHandler(enabled = showLanguagePicker || showModelService) {
+    BackHandler(enabled = showLanguagePicker) {
         showLanguagePicker = false
-        showModelService = false
     }
 
     Box(modifier = modifier.fillMaxSize().testTag(GENERAL_SETTINGS_TEST_TAG)) {
@@ -159,22 +119,7 @@ internal fun GeneralSettingsScreen(
                         },
                         onClick = { showLanguagePicker = true },
                     )
-                    HorizontalDivider(
-                        modifier = Modifier.fillMaxWidth(0.84f).align(Alignment.CenterHorizontally),
-                    )
-                    GeneralSettingsRow(
-                        icon = R.drawable.ic_symbol_square_grid_2x2,
-                        title = stringResource(R.string.model_service_title),
-                        // `modelServiceStatus()`: the model that would answer, which
-                        // is not the local form's model name — with no local model
-                        // configured, an account model is still an answer, and the
-                        // row would otherwise read "not configured" beside a chat
-                        // that works.
-                        value = models.firstOrNull { it.id == activeModelId }?.label
-                            ?: stringResource(R.string.model_service_not_configured),
-                        onClick = { showModelService = true },
-                        modifier = Modifier.testTag(GENERAL_SETTINGS_MODEL_TEST_TAG),
-                    )
+
                 }
             }
 
@@ -235,26 +180,7 @@ internal fun GeneralSettingsScreen(
             )
         }
 
-        if (showModelService) {
-            // Opaque and full-bleed rather than a card floating on the settings
-            // column: it is the only thing to interact with while it is up, and
-            // letting the rows behind it show through would invite a tap that
-            // lands on a page it is covering. Its own header carries the way out,
-            // so this page adds no chrome of its own.
-            ModelServiceScreen(
-                config = config,
-                models = models,
-                activeModelId = activeModelId,
-                failure = configFailure,
-                connectionTest = connectionTest,
-                onIntent = onChatIntent,
-                onSave = onSaveConfig,
-                onClose = { showModelService = false },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background),
-            )
-        }
+
     }
 }
 

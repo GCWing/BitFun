@@ -10,12 +10,11 @@ import {
 } from './skillPromptReference';
 
 describe('skillPromptReference', () => {
-  it('preserves exact nested source identity alongside legacy name tokens', () => {
+  it('continues parsing existing exact nested source references', () => {
     const key = 'project::codex::.system/pdf';
-    const token = createSkillPromptReferenceToken('pdf', key);
+    const token = `[$${key}]`;
     expect(token).toBe('[$project::codex::.system/pdf]');
     expect(parseSkillPromptReferenceToken(token)).toEqual({ skillName: 'pdf', skillKey: key });
-    expect(replaceLeadingSlashCommandWithSkillToken('/pdf read', 'pdf', key)).toBe(`${token} read`);
     expect(getSkillPromptReferenceMatches(`Use [$pdf] and ${token}`)).toHaveLength(2);
   });
 

@@ -59,6 +59,7 @@ import type {
 } from '../types';
 import { GlobalPermissionRulesDialog } from './GlobalPermissionRulesDialog';
 import SessionTitleConfig from './SessionTitleConfig';
+import DefaultHarnessConfig from './DefaultHarnessConfig';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { isRemoteWorkspace } from '@/shared/types/global-state';
 import { WORKSPACE_SEARCH_AVAILABLE } from '@/infrastructure/config/workspaceSearchAvailability';
@@ -1120,6 +1121,8 @@ const RuntimeSettingsPage: React.FC<RuntimeSettingsPageProps> = ({
 
         {page === 'session-workspace' && settings ? (
           <>
+
+        <DefaultHarnessConfig />
 
         {/* Accelerated search is available for local workspaces only. */}
         {WORKSPACE_SEARCH_AVAILABLE && !isRemoteWorkspace(workspace) && (

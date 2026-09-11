@@ -12,8 +12,8 @@ vi.mock('@/flow_chat/store/FlowChatStore', () => ({
       sessions: new Map([['session-1', {
         sessionId: 'session-1',
         sessionKind: 'normal',
-        mode: 'agentic',
-        config: { agentType: 'agentic' },
+        mode: 'Standard',
+        config: { agentType: 'Standard' },
       }]]),
     }),
   },

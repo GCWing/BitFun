@@ -39,19 +39,24 @@ export class AppNavigationPathSpec {
 }
 
 export class AppRouteContract {
+  // Read legacy navigation names without reopening the retired local runtime.
+  static controllerRoute(route: AppRoute): AppRoute {
+    return route === AppRoute.RemoteChat ? AppRoute.RemoteChat : AppRoute.RemoteHome;
+  }
+
   static currentRoute(pathNames: string[]): AppRoute {
     if (pathNames.length === 0) {
-      return AppRoute.ChatHome;
+      return AppRoute.RemoteHome;
     }
-    return pathNames[pathNames.length - 1] as AppRoute;
+    return AppRouteContract.controllerRoute(pathNames[pathNames.length - 1] as AppRoute);
   }
 
   static isGeneralComposerRoute(route: AppRoute): boolean {
-    return route === AppRoute.ChatHome || route === AppRoute.GeneralChat;
+    return false;
   }
 
   static isSessionRoute(route: AppRoute): boolean {
-    return route === AppRoute.GeneralChat || route === AppRoute.RemoteChat;
+    return route === AppRoute.RemoteChat;
   }
 
   /**
@@ -89,6 +94,8 @@ export class AppRouteContract {
   }
 
   static pathSpec(currentRoute: AppRoute, route: AppRoute, sessionId: string = ''): AppNavigationPathSpec | undefined {
+    route = AppRouteContract.controllerRoute(route);
+    currentRoute = AppRouteContract.controllerRoute(currentRoute);
     if (currentRoute === route) {
       return undefined;
     }
@@ -99,11 +106,8 @@ export class AppRouteContract {
     if (isSidebarOpen) {
       return AppNavigationBackAction.CloseSidebar;
     }
-    if (route === AppRoute.GeneralChat || route === AppRoute.RemoteChat) {
+    if (route === AppRoute.RemoteChat) {
       return AppNavigationBackAction.CloseActiveChat;
-    }
-    if (route === AppRoute.RemoteHome) {
-      return AppNavigationBackAction.PopRemoteHome;
     }
     return AppNavigationBackAction.AllowSystem;
   }

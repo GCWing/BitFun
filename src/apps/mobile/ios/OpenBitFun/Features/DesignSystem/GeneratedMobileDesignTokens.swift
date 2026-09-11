@@ -128,6 +128,9 @@ enum MobileDesignGeometry {
     static let composerModelSelectorRowRadius: CGFloat = 9
     static let composerModelSelectorRowGap: CGFloat = 6
     static let sheetTopRadius: CGFloat = 28
+    static let loginSheetMaxWidth: CGFloat = 560
+    static let loginSheetOuterMargin: CGFloat = 8
+    static let loginSheetBodyMinHeight: CGFloat = 142
     static let sheetSideRadius: CGFloat = 28
     static let sheetHorizontalPadding: CGFloat = 20
     static let sheetHeaderHeight: CGFloat = 56

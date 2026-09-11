@@ -2757,7 +2757,7 @@ const ModelSettingsPage: React.FC = () => {
     return (
       <>
         <div className="openbitfun-model-settings__form openbitfun-model-settings__form--modal" data-openbitfun-component="model-settings" data-openbitfun-part="form">
-          <ScrollArea className="openbitfun-model-settings__form-scrollable" data-openbitfun-component="model-settings" data-openbitfun-part="formBody">
+          <div className="openbitfun-model-settings__form-content" data-openbitfun-component="model-settings" data-openbitfun-part="formBody">
             <ConfigPageSection
               title={isProviderScopedEditing ? t('editProviderSubtitle') : t('editSubtitle')}
               className="openbitfun-model-settings__edit-section"
@@ -3233,7 +3233,7 @@ const ModelSettingsPage: React.FC = () => {
               )}
             </ConfigPageSection>
           )}
-          </ScrollArea>
+          </div>
 
         </div>
       </>
@@ -3390,6 +3390,7 @@ const ModelSettingsPage: React.FC = () => {
         onToggle={() => config.id && toggleExpanded(config.id)}
         toggleOnRowClick
         disabled={!config.enabled}
+        detailsDisabled={false}
         data-testid="settings-model-row"
         data-config-id={config.id || ''}
         data-model-id={config.model_name}
@@ -4160,7 +4161,7 @@ const ModelSettingsPage: React.FC = () => {
         ) : renderEditingForm()}
               </DialogBody>
         {!reasoningPanelDraft && (
-          <DialogFooter>
+          <DialogFooter appearance="floating">
             <Button variant="fill" size="sm" onClick={requestCloseEditingModal} disabled={isEditorSaving}>
               {t('actions.cancel')}
             </Button>

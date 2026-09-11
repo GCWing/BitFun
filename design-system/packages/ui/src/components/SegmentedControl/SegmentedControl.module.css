@@ -11,9 +11,9 @@
     align-items: center;
     gap: var(--openbitfun-control-segmented-control-gap);
     padding: var(--openbitfun-control-segmented-control-padding);
-    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    border: 0;
     border-radius: var(--openbitfun-control-segmented-control-radius);
-    background: var(--openbitfun-color-action-neutral-surface);
+    background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 
   .root[data-distribution="fill"] {
@@ -63,6 +63,7 @@
 
   .root[data-size="md"] .segment {
     block-size: var(--openbitfun-control-segmented-control-segment-height-md);
+    padding-inline: var(--openbitfun-control-segmented-control-segment-padding-inline-md);
   }
 
   .root[data-size="md"] .icon {
@@ -108,7 +109,8 @@
     background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 
-  .segment:active:not(:disabled)[aria-checked="false"] {
+  .segment:active:not(:disabled)[aria-checked="false"],
+  .root[data-openbitfun-preview-state="active"] .segment[aria-checked="false"]:not(:disabled) {
     background: var(--openbitfun-color-action-neutral-surface-pressed);
   }
 
@@ -153,7 +155,7 @@
 
   @media (forced-colors: active) {
     .root {
-      border-color: ButtonText;
+      outline: var(--openbitfun-border-width-default) solid ButtonText;
     }
 
     .segment[aria-checked="true"] {

@@ -1,4 +1,4 @@
-import { MiniAppActions, MiniAppBridgeReply, MiniAppBridgeRequest, RemoteMiniAppPayload, RemoteMiniAppClient } from '../../model/RemoteMiniAppModels';
+import { MiniAppActions, MiniAppBridgeReply, MiniAppBridgeRequest, MiniAppHost } from '../../model/MiniAppModels';
 import { MiniAppDocument } from '../../services/MiniAppDocument';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { MiniAppState } from '../state/MiniAppState';
@@ -6,30 +6,28 @@ import { MiniAppState } from '../state/MiniAppState';
 export class MiniAppViewModel {
   readonly state: MiniAppState = new MiniAppState();
   private generation: number = 0;
-  private connection: number = -1;
-  private version: number = 0;
-  private readonly client: RemoteMiniAppClient;
+  private readonly host: MiniAppHost;
   readonly actions: MiniAppActions = {
     open: (): void => { void this.open(); },
     close: (): void => this.close(),
     back: (): void => { void this.open(); },
     refresh: (): void => { void this.open(); },
     select: (id: string): void => { void this.select(id); },
-    request: (raw: string): Promise<string> => this.request(raw)
+    request: (raw: string, revision: number): Promise<string> => this.request(raw, revision)
   };
 
-  constructor(client: RemoteMiniAppClient) { this.client = client; }
+  constructor(host: MiniAppHost) { this.host = host; }
 
   close(): void {
     this.generation += 1;
     this.state.visible = false;
+    this.state.loading = false;
     this.state.document = '';
     this.state.appId = '';
   }
 
   async open(): Promise<void> {
     const generation = ++this.generation;
-    this.connection = this.client.miniAppConnection();
     this.state.visible = true;
     this.state.document = '';
     this.state.appId = '';
@@ -38,8 +36,8 @@ export class MiniAppViewModel {
     this.state.error = '';
     this.state.loading = true;
     try {
-      const value = await this.client.miniApp({ action: 'list' }, this.connection) as RemoteMiniAppPayload;
-      if (generation === this.generation) this.state.apps = value.apps || [];
+      const apps = await this.host.list(RemoteI18n.language());
+      if (generation === this.generation) this.state.apps = apps;
     } catch (error) {
       if (generation === this.generation) this.state.error = String(error);
     } finally {
@@ -48,17 +46,20 @@ export class MiniAppViewModel {
   }
 
   async select(id: string): Promise<void> {
+    const app = this.state.apps.find((entry) => entry.id === id);
+    if (!this.state.visible || !app) return;
     const generation = ++this.generation;
     this.state.loading = true;
+    this.state.document = '';
+    this.state.appId = '';
     this.state.error = '';
     try {
-      const value = await this.client.miniApp({ action: 'open', app_id: id }, this.connection) as RemoteMiniAppPayload;
+      const html = await this.host.document(id);
       if (generation !== this.generation) return;
-      if (!value.html || value.id !== id || value.version === undefined) throw new Error(RemoteI18n.t('miniapp.invalidPage'));
-      this.version = value.version;
+      if (!html) throw new Error(RemoteI18n.t('miniapp.invalidPage'));
       this.state.appId = id;
-      this.state.name = value.name || id;
-      this.state.document = MiniAppDocument.build(value.html, RemoteI18n.language());
+      this.state.name = app.name;
+      this.state.document = MiniAppDocument.build(html, RemoteI18n.language());
       this.state.revision += 1;
     } catch (error) {
       if (generation === this.generation) this.state.error = String(error);
@@ -67,20 +68,19 @@ export class MiniAppViewModel {
     }
   }
 
-  async request(raw: string): Promise<string> {
+  async request(raw: string, revision: number = this.state.revision): Promise<string> {
     const generation = this.generation;
     let id: string = '';
     try {
       const rpc = JSON.parse(raw) as MiniAppBridgeRequest;
       id = rpc.id;
-      if (typeof id !== 'string' || rpc.method !== 'worker.call' || !rpc.params ||
-        typeof rpc.params.method !== 'string' || !this.state.visible || !this.state.appId) {
+      if (revision !== this.state.revision || typeof id !== 'string' || !rpc.params || !this.state.visible || !this.state.appId ||
+        !['storage.get', 'storage.set', 'clipboard.writeText'].includes(rpc.method)) {
         throw new Error(RemoteI18n.t('miniapp.unsupported'));
       }
-      const result = await this.client.miniApp({ action: 'call', app_id: this.state.appId,
-        version: this.version, method: rpc.params.method, params: rpc.params.params }, this.connection);
+      const result = await this.host.call(this.state.appId, rpc.method, rpc.params);
       if (generation !== this.generation) throw new Error(RemoteI18n.t('miniapp.closed'));
-      const reply: MiniAppBridgeReply = { jsonrpc: '2.0', id, result: result === undefined ? null : result };
+      const reply: MiniAppBridgeReply = { jsonrpc: '2.0', id, result };
       return JSON.stringify(reply);
     } catch (error) {
       const reply: MiniAppBridgeReply = { jsonrpc: '2.0', id, error: { message: String(error) } };

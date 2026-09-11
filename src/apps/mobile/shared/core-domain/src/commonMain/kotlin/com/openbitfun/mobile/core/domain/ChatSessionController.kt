@@ -140,11 +140,14 @@ public class ChatSessionController internal constructor(
     private fun applyPollResult(result: PollSessionResult) {
         val hadRunningTurn = hasActiveRunningTurn
         val incomingMessages = result.newMessages
-        val hasAssistantMessage = incomingMessages.any { it.role == "assistant" }
+        val persistedProjection = result.messageSnapshot ?: incomingMessages
+        val hasAssistantMessage = persistedProjection.any { it.role == "assistant" }
+        val historyRewritten = result.hasAuthoritativeMessageCount &&
+            result.totalMessageCount < cursor.knownMessageCount
         if (result.changed) {
             cursor = cursor.copy(
                 pollVersion = result.version,
-                knownMessageCount = if (result.totalMessageCount > 0) {
+                knownMessageCount = if (result.hasAuthoritativeMessageCount) {
                     result.totalMessageCount
                 } else {
                     cursor.knownMessageCount
@@ -173,6 +176,8 @@ public class ChatSessionController internal constructor(
                 activeTurn = activeTurn,
                 modelCatalog = result.modelCatalog,
                 shouldSyncAfterTurnEnded = turnEndedNow || (settling && !runningNow),
+                messageSnapshot = result.messageSnapshot,
+                historyRewritten = historyRewritten,
             ),
         )
     }

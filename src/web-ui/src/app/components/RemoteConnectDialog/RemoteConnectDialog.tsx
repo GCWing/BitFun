@@ -1,11 +1,9 @@
 /**
  * Device & Connections center.
  *
- * The overview keeps account-backed devices and account-free access in one
- * coherent place without presenting their different trust models as peer
- * modes. Detail views retain the complete existing capability set:
- *   - My devices (account, sync, and peer-device control)
- *   - Phone or browser (LAN / ngrok / OpenBitFun Relay / self-hosted)
+ * Every connection uses the signed-in GitHub account. The detail views expose:
+ *   - My devices (account and peer-device control)
+ *   - Phone or browser (official or locally hosted Relay)
  *   - Chat apps (Telegram / Feishu / WeChat)
  * Connections are host-level services and do not require a selected project;
  * remote clients can use the primary assistant workspace.
@@ -32,21 +30,19 @@ import { OverflowText,
 } from '@openbitfun/ui';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Monitor, MonitorSmartphone, Smartphone } from 'lucide-react';
+import { MessageCircle, Monitor, MonitorSmartphone, Smartphone } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
 import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
-import { confirmWarning } from '@/infrastructure/confirm-dialog';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useAccountLoginState } from '@/infrastructure/account/useAccountLoginState';
 import { remoteConnectStatusSource, useRemoteConnectStatus } from '@/infrastructure/remote-connect/remoteConnectStatus';
-import { OFFICIAL_RELAY_URL, relayUrlFromMethod, remoteNetworkMethod, selectRemoteNetworkConnection, type RemoteNetworkMethod } from '@/infrastructure/remote-connect/remoteConnectionState';
+import { isDeviceInvitation, invitationRelayUrl, OFFICIAL_RELAY_URL, selectRemoteNetworkConnection, type RemoteNetworkMethod } from '@/infrastructure/remote-connect/remoteConnectionState';
 import { useNotification } from '@/shared/notification-system';
 import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import { AccountPanel } from './AccountPanel';
 import {
   remoteConnectAPI,
-  remotePairingStateName,
   type ConnectionResult,
   type RemoteConnectStatus,
   type LanNetworkInterface,
@@ -58,8 +54,6 @@ import {
   getRemoteConnectDisclaimerAgreed,
   setRemoteConnectDisclaimerAgreed,
 } from './remoteConnectDisclaimerStorage';
-import { RelayDeployWizard } from '@/features/relay-deploy';
-import type { RelayDeployResult } from '@/features/relay-deploy';
 import {
   stopAfterPendingStart,
   updateIfOperationCurrent,
@@ -97,9 +91,7 @@ function isWeixinRasterQrSrc(raw: string): boolean {
 
 const NETWORK_TABS: { id: NetworkTab; labelKey: string }[] = [
   { id: 'lan', labelKey: 'remoteConnect.methodSameNetwork' },
-  { id: 'ngrok', labelKey: 'remoteConnect.methodNgrok' },
   { id: 'openbitfun_server', labelKey: 'remoteConnect.methodOpenBitFunRelay' },
-  { id: 'custom_server', labelKey: 'remoteConnect.methodSelfHosted' },
 ];
 
 const BOT_TABS: { id: BotTab; label: string }[] = [
@@ -108,7 +100,6 @@ const BOT_TABS: { id: BotTab; label: string }[] = [
   { id: 'weixin', label: '' },
 ];
 
-const NGROK_SETUP_URL = 'https://dashboard.ngrok.com/get-started/setup';
 const FEISHU_SETUP_GUIDE_URLS = {
   'zh-CN': 'https://github.com/GCWing/OpenBitFun/blob/main/docs/remote-connect/feishu-bot-setup.zh-CN.md',
   'en-US': 'https://github.com/GCWing/OpenBitFun/blob/main/docs/remote-connect/feishu-bot-setup.md',
@@ -123,24 +114,7 @@ function pickLocalizedUrl(urls: Partial<Record<LocaleId, string>>, locale: Local
   return urls['en-US'] ?? Object.values(urls)[0] ?? '';
 }
 
-function parseRelayServer(value: string): URL | null {
-  try {
-    const url = new URL(value.trim());
-    if (!['http:', 'https:'].includes(url.protocol)
-      || !url.hostname
-      || url.username
-      || url.password
-      || url.search
-      || url.hash) {
-      return null;
-    }
-    return url;
-  } catch {
-    return null;
-  }
-}
 
-const methodToNetworkTab = remoteNetworkMethod;
 
 const botInfoToBotTab = (info: string | null | undefined): BotTab | null => {
   if (!info) return null;
@@ -192,11 +166,8 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [hasAgreedDisclaimer, setHasAgreedDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
   const [botVerboseMode, setBotVerboseMode] = useState<boolean>(false);
-  const [showRelayDeploy, setShowRelayDeploy] = useState(false);
-  const [accountUsername, setAccountUsername] = useState<string | null>(null);
 
   const [qrCopied, setQrCopied] = useState(false);
-  const [customUrl, setCustomUrl] = useState('');
   const [tgToken, setTgToken] = useState('');
   const [feishuAppId, setFeishuAppId] = useState('');
   const [feishuAppSecret, setFeishuAppSecret] = useState('');
@@ -211,7 +182,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   const [weixinQrPollNonce, setWeixinQrPollNonce] = useState(0);
 
   const formSnapshotRef = useRef({
-    customUrl: '',
     tgToken: '',
     feishuAppId: '',
     feishuAppSecret: '',
@@ -248,9 +218,9 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     operationGenerationRef.current += 1;
     const currentStatus = remoteConnectStatusSource.getSnapshot().status;
     const candidateOwner = pendingOwnerRef.current ?? connectionOwnerRef.current;
-    // Leaving a view cancels only its unfinished invitation. A completed room
-    // or bot connection requires its explicit Disconnect action.
-    const owner = (candidateOwner === 'network' && selectRemoteNetworkConnection(currentStatus).roomConnected)
+    // Closing an invitation preserves an established account route.
+    // Disconnect is an explicit action for both Relay endpoints.
+    const owner = (candidateOwner === 'network' && !pendingStartRef.current && selectRemoteNetworkConnection(currentStatus).connected)
       || (candidateOwner === 'bot' && currentStatus?.bot_connected)
       ? null : candidateOwner;
     const pendingStart = pendingStartRef.current;
@@ -331,25 +301,27 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   const applyStatus = useCallback((nextStatus: RemoteConnectStatus, restoreSelection = false) => {
     const network = selectRemoteNetworkConnection(nextStatus, connectionResultRef.current);
+    // Keep the device invitation visible while the route remains available.
+    const deviceInvitation = isDeviceInvitation(connectionResultRef.current);
 
     // Relay and bot connections can coexist. Restore both selected subtabs
     // before choosing which group to show, otherwise the bot-first open path
     // can leave a connected OpenBitFun Server relay rendering the default LAN UI.
     const hasPendingInvitation = connectionOwnerRef.current === 'network' && connectionResultRef.current !== null;
-    if (network.roomConnected || (restoreSelection && network.accountConnected
-      && (!hasPendingInvitation || network.invitationAccountConnected))) {
+    if (!deviceInvitation && restoreSelection && network.connected
+      && (!hasPendingInvitation || network.invitationConnected)) {
       const connectedTab = network.method;
       if (connectedTab) setNetworkTab(connectedTab);
     }
     const connectedBot = botInfoToBotTab(nextStatus.bot_connected);
     if (connectedBot) setBotTab(connectedBot);
     const owner = connectionOwnerRef.current;
-    if ((owner === 'network' && network.roomConnected) || (owner === 'bot' && connectedBot)) {
+    if (owner === 'bot' && connectedBot) {
       pendingOwnerRef.current = null;
       connectionOwnerRef.current = null;
       setConnectionOwner(null);
       setConnectionResult(null);
-    } else if (owner === 'network' && !nextStatus.active_method && !pendingStartRef.current) {
+    } else if (owner === 'network' && !deviceInvitation && !nextStatus.active_method && !pendingStartRef.current) {
       pendingOwnerRef.current = null;
       connectionOwnerRef.current = null;
       setConnectionOwner(null);
@@ -399,30 +371,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           restoreSelection = false;
           setBotVerboseMode(s.bot_verbose_mode);
 
-          if (!pendingOwnerRef.current && !connectionOwnerRef.current && ['waiting_for_scan', 'verifying', 'handshaking'].includes(
-            remotePairingStateName(s.pairing_state),
-          )) {
-            const tab = methodToNetworkTab(s.active_method);
-            if (!selectRemoteNetworkConnection(s).connected) setActiveView('network');
-            if (tab) setNetworkTab(tab);
-            pendingOwnerRef.current = 'network';
-            connectionOwnerRef.current = 'network';
-            setConnectionOwner('network');
-            // Status cannot recover the original QR payload. Restore an
-            // explicit in-progress surface with a cancel action instead of
-            // silently showing the configuration form or restarting pairing.
-            setConnectionResult({
-              method: s.active_method ?? tab ?? 'relay',
-              qr_data: null,
-              qr_svg: null,
-              qr_url: null,
-              bot_pairing_code: null,
-              bot_link: null,
-              pairing_state: s.pairing_state,
-            });
-            startPolling('relay');
-            return;
-          }
           if (selectRemoteNetworkConnection(s).connected || s.bot_connected) return;
         } catch { /* ignore */ }
         if (attempt < 2) {
@@ -472,7 +420,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       try {
         const formState = await remoteConnectAPI.getFormState();
         if (cancelled) return;
-        setCustomUrl(formState.custom_server_url ?? '');
         setTgToken(formState.telegram_bot_token ?? '');
         setFeishuAppId(formState.feishu_app_id ?? '');
         setFeishuAppSecret(formState.feishu_app_secret ?? '');
@@ -489,27 +436,18 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     };
   }, [isOpen, hasAgreedDisclaimer]);
 
-  // Keep the Self-Hosted server URL in sync with account login state. The
-  // backend already persists the mirrored value; this refreshes the input
-  // while the dialog is open (fill on login, clear on logout).
+  // Refresh connection status when the active identity changes.
   useEffect(() => {
     const unlisten = api.listen<{ logged_in: boolean; relay_url?: string }>(
       'account://login-state',
-      (payload) => {
-        if (payload?.logged_in && payload.relay_url) {
-          setCustomUrl(payload.relay_url);
-        } else if (payload && !payload.logged_in) {
-          setCustomUrl('');
-        }
-        // Account changes rotate an unpaired QR invitation, but an established
-        // room is an independent control channel and stays connected. Refresh
-        // first, then clear only UI state that the backend actually retired.
+      () => {
+        // Invitations belong to the active account route.
         remoteConnectStatusSource.invalidate();
         void remoteConnectStatusSource.refresh().then((nextStatus) => {
           if (!nextStatus) return;
           if (!isOpenRef.current) return;
           applyStatus(nextStatus);
-          if (remotePairingStateName(nextStatus.pairing_state) !== 'connected') {
+          if (!selectRemoteNetworkConnection(nextStatus, connectionResultRef.current).invitationConnected) {
             pendingOwnerRef.current = null;
             connectionOwnerRef.current = null;
             setConnectionOwner(null);
@@ -523,33 +461,13 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     };
   }, [applyStatus]);
 
-  // The account status and pairing status intentionally expose opaque UUIDs
-  // for identity checks. Resolve the persisted, non-secret login hint for the
-  // user-facing connected state instead.
-  useEffect(() => {
-    if (!isOpen || !accountLoggedIn) {
-      setAccountUsername(null);
-      return;
-    }
-    let cancelled = false;
-    void remoteConnectAPI.accountGetCredentialHint().then((hint) => {
-      if (!cancelled) {
-        setAccountUsername(hint?.username.trim() || null);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [accountLoggedIn, isOpen]);
-
   useEffect(() => {
     formSnapshotRef.current = {
-      customUrl,
       tgToken,
       feishuAppId,
       feishuAppSecret,
     };
-  }, [customUrl, tgToken, feishuAppId, feishuAppSecret]);
+  }, [tgToken, feishuAppId, feishuAppSecret]);
 
   const prepareAndStartWeixinBotFromQr = useCallback(async (
     ilinkToken: string,
@@ -558,7 +476,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   ): Promise<ConnectionResult> => {
     const fs = formSnapshotRef.current;
     await remoteConnectAPI.setFormState({
-      custom_server_url: fs.customUrl,
       telegram_bot_token: fs.tgToken,
       feishu_app_id: fs.feishuAppId,
       feishu_app_secret: fs.feishuAppSecret,
@@ -704,6 +621,11 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   // ── Connection handlers ──────────────────────────────────────────
 
   const handleConnect = useCallback(async () => {
+    if (!accountLoggedIn) {
+      setActiveView('account');
+      return;
+    }
+
     if (!hasAgreedDisclaimer) {
       setShowDisclaimer(true);
       return;
@@ -727,27 +649,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     try {
       await cleanupPromiseRef.current.catch(() => undefined);
       if (!isCurrent()) return;
-      if (activeView === 'network' && networkTab === 'custom_server') {
-        const relayUrl = parseRelayServer(customUrl);
-        if (!relayUrl) {
-          setError(t('accountLogin.invalidServer'));
-          return;
-        }
-        const isLoopback = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(relayUrl.hostname);
-        if (relayUrl.protocol === 'http:' && !isLoopback) {
-          const confirmed = await confirmWarning(
-            t('accountLogin.insecureServerTitle'),
-            t('accountLogin.insecureServerConfirm'),
-            {
-              confirmText: t('accountLogin.continueInsecure'),
-              cancelText: t('accountLogin.cancel'),
-            },
-          );
-          if (!confirmed || !isCurrent()) return;
-        }
-      }
       await remoteConnectAPI.setFormState({
-        custom_server_url: customUrl,
         telegram_bot_token: tgToken,
         feishu_app_id: feishuAppId,
         feishu_app_secret: feishuAppSecret,
@@ -758,7 +660,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       if (!isCurrent()) return;
 
       let method: string;
-      let serverUrl: string | undefined;
 
       if (activeView === 'bot') {
         if (botTab === 'telegram') {
@@ -785,11 +686,10 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         if (!isCurrent()) return;
       } else {
         method = networkTab;
-        if (networkTab === 'custom_server') serverUrl = customUrl || undefined;
       }
       const lanIp = networkTab === 'lan' ? (selectedLanIp || undefined) : undefined;
       remoteConnectStatusSource.invalidateReads();
-      const startPromise = remoteConnectAPI.startConnection(method, serverUrl, lanIp);
+      const startPromise = remoteConnectAPI.startConnection(method, lanIp);
       const pendingStart = { owner, generation: operationGeneration, promise: startPromise };
       pendingStartRef.current = pendingStart;
       const result = await startPromise;
@@ -816,7 +716,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         setLoading(false);
       }
     }
-  }, [activeView, networkTab, botTab, customUrl, tgToken, feishuAppId, feishuAppSecret, weixinIlinkToken, weixinBaseUrl, weixinBotAccountId, selectedLanIp, startPolling, t, hasAgreedDisclaimer]);
+  }, [accountLoggedIn, activeView, networkTab, botTab, tgToken, feishuAppId, feishuAppSecret, weixinIlinkToken, weixinBaseUrl, weixinBotAccountId, selectedLanIp, startPolling, hasAgreedDisclaimer]);
 
   const handleStartWeixinQr = useCallback(async () => {
     if (!hasAgreedDisclaimer) {
@@ -909,23 +809,6 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     } catch { /* best effort */ }
   }, [applyStatus, cancelPendingWork]);
 
-  const handleOpenNgrokSetup = useCallback(() => {
-    void systemAPI.openExternal(NGROK_SETUP_URL);
-  }, []);
-
-  /** Self-Hosted tab entry: open the in-app wizard, never an external README. */
-  const handleOpenRelayDeploy = useCallback(() => {
-    setShowRelayDeploy(true);
-  }, []);
-
-  const handleRelayDeployRegistered = useCallback((result: RelayDeployResult) => {
-    setShowRelayDeploy(false);
-    setCustomUrl(result.relayUrl);
-    setNetworkTab('custom_server');
-    setActiveView('network');
-    setError(null);
-  }, []);
-
   const handleOpenFeishuGuide = useCallback(() => {
     void systemAPI.openExternal(pickLocalizedUrl(FEISHU_SETUP_GUIDE_URLS, currentLanguage));
   }, [currentLanguage]);
@@ -962,21 +845,14 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           <ChatAppBrandIcon app={botTab} size={28} />
         </span>
         <h3 className="openbitfun-remote-connect__bot-identity-title">{label}</h3>
-        <p className="openbitfun-remote-connect__bot-identity-description">
-          {botTab === 'weixin'
-            ? t('remoteConnect.botWeixinIntro')
-            : t('remoteConnect.desc_bot')}
-        </p>
+        {botTab === 'weixin' && <p className="openbitfun-remote-connect__bot-identity-description">
+          {t('remoteConnect.botWeixinIntro')}
+        </p>}
       </div>
     );
   };
 
   // ── Sub-tab disabled logic ───────────────────────────────────────
-
-  const isNetworkSubDisabled = (tabId: NetworkTab): boolean => {
-    if (networkConnection.roomConnected && networkConnection.roomMethod && networkConnection.roomMethod !== tabId) return true;
-    return false;
-  };
 
   const isBotSubDisabled = (tabId: BotTab): boolean => {
     if (isBotConnected && connectedBotTab && connectedBotTab !== tabId) return true;
@@ -987,38 +863,13 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   const renderErrorBlock = () => {
     if (!error) return null;
-    const isNgrokErr = error.includes('ngrok is not installed');
     return (
       <div data-openbitfun-component="remote-connect-dialog" data-openbitfun-part="error" className="openbitfun-remote-connect__error-group">
         <p className="openbitfun-remote-connect__error">{error}</p>
-        {isNgrokErr && (
-          <Button variant="outline" size="sm" onClick={handleOpenNgrokSetup}>
-            {t('remoteConnect.openNgrokSetup')}
-          </Button>
-        )}
+
       </div>
     );
   };
-
-  const renderConnectedView = (
-    onDisconnect: () => void,
-    username?: string | null,
-  ) => (
-    <div className="openbitfun-remote-connect__connected" data-openbitfun-component="remote-connect-dialog" data-openbitfun-part="body" data-openbitfun-state="connected">
-      <div className="openbitfun-remote-connect__status" data-openbitfun-component="remote-connect-dialog" data-openbitfun-part="status" data-openbitfun-state="connected">
-        <StatusPill tone="success">{t('remoteConnect.stateConnected')}</StatusPill>
-        {username && (
-          <span className="openbitfun-remote-connect__peer-username">
-            {t('accountLogin.username')}: {username}
-          </span>
-        )}
-      </div>
-      <p className="openbitfun-remote-connect__hint">{t('remoteConnect.connectedHint')}</p>
-      <Button variant="outline" size="sm" onClick={onDisconnect}>
-        {t('remoteConnect.disconnect')}
-      </Button>
-    </div>
-  );
 
   const handleCopyPairingUrl = useCallback(async () => {
     if (!connectionResult?.qr_url) return;
@@ -1043,7 +894,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           qrUrl={connectionResult.qr_url}
           pairingCode={connectionResult.bot_pairing_code}
           owner={connectionOwner === 'bot' ? 'bot' : 'network'}
-          connected={connectionOwner === 'network' && networkConnection.invitationAccountConnected}
+          connected={connectionOwner === 'network' && networkConnection.invitationConnected}
           statusState={statusState}
           copied={qrCopied}
           onCopyUrl={handleCopyPairingUrl}
@@ -1053,8 +904,8 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
             {connectionOwner === 'network' ? t('remoteConnect.cancelInvitation') : t('remoteConnect.cancel')}
           </Button>
         </div>
-        {connectionOwner === 'network' && networkConnection.invitationAccountConnected && (
-          <p className="openbitfun-remote-connect__hint">{t('remoteConnect.accountConnectedHint')}</p>
+        {connectionOwner === 'network' && networkConnection.invitationConnected && (
+          <p className="openbitfun-remote-connect__hint">{t('remoteConnect.connectedHint')}</p>
         )}
       </div>
     );
@@ -1062,148 +913,40 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
 
   // ── Network group content ────────────────────────────────────────
 
-  const NGROK_USAGE_URL = 'https://dashboard.ngrok.com/legacy/usage';
-
   const networkLabel = (tabId: NetworkTab | null): string | null => {
     const tab = NETWORK_TABS.find(item => item.id === tabId);
     return tab ? t(tab.labelKey) : null;
   };
 
   const renderNetworkContent = () => {
-    if (statusState !== 'ready' && !connectionResult) {
-      return <RemotePairingCard owner="network" statusState={statusState} copied={false} onCopyUrl={() => {}} />;
-    }
-    if (networkTab === 'openbitfun_server' || networkTab === 'custom_server') {
-      const invitation = connectionOwner === 'network' ? connectionResult : null;
-      const relayUrl = networkTab === 'openbitfun_server' ? OFFICIAL_RELAY_URL
-        : invitation ? relayUrlFromMethod(invitation.method) ?? customUrl
-          : networkConnection.roomConnected ? relayUrlFromMethod(status?.active_method) ?? customUrl
-            : customUrl;
-      return <RemoteNetworkConnections
-        status={status}
-        method={networkTab}
-        title={networkLabel(networkTab) ?? ''}
-        relayUrl={relayUrl}
-        onRelayUrlChange={setCustomUrl}
-        invitation={invitation}
-        statusState={statusState}
-        loading={loading}
-        pairingUrlCopied={qrCopied}
-        error={renderErrorBlock()}
-        onCopyPairingUrl={handleCopyPairingUrl}
-        onConnect={handleConnect}
-        onCancel={handleCancelConnect}
-        onDisconnect={handleDisconnectRelay}
-        onDeploy={handleOpenRelayDeploy}
-      />;
-    }
-    if (networkConnection.roomConnected && networkConnection.roomMethod === networkTab) {
-      return (
-        <>
-          {networkTab === 'ngrok' && (
-            <p className="openbitfun-remote-connect__ngrok-usage-link">
-              <span
-                className="openbitfun-remote-connect__description-link"
-                role="link"
-                tabIndex={0}
-                onClick={() => systemAPI.openExternal(NGROK_USAGE_URL)}
-                onKeyDown={(e) => { if (e.key === 'Enter') systemAPI.openExternal(NGROK_USAGE_URL); }}
-              >
-                {t('remoteConnect.ngrokUsageLink')}
-              </span>
-            </p>
-          )}
-          {renderConnectedView(
-            handleDisconnectRelay,
-            accountUsername,
-          )}
-        </>
-      );
-    }
-    if (connectionResult && connectionOwner === 'network') {
-      return renderPairingInProgress();
-    }
-    return (
-      <div
-        data-openbitfun-component="remote-connect-dialog"
-        data-openbitfun-part="body"
-        className="openbitfun-remote-connect__body openbitfun-remote-connect__body--network"
-      >
-        <section className="openbitfun-remote-connect__network-card" aria-labelledby="remote-connect-method-title">
-          <div className="openbitfun-remote-connect__network-heading">
-            <Icon name="browser" size="lg" aria-hidden="true" />
-            <h3 id="remote-connect-method-title">{networkLabel(networkTab)}</h3>
-          </div>
-          <div className="openbitfun-remote-connect__network-description">
-            <p className="openbitfun-remote-connect__info-text">
-              {networkTab === 'ngrok' ? (
-                <>
-                  {t('remoteConnect.desc_ngrok_prefix')}
-                  <span
-                    className="openbitfun-remote-connect__description-link"
-                    role="link"
-                    tabIndex={0}
-                    onClick={handleOpenNgrokSetup}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleOpenNgrokSetup(); }}
-                  >
-                    {t('remoteConnect.desc_ngrok_link')}
-                  </span>
-                  {t('remoteConnect.desc_ngrok_suffix')}
-                </>
-              ) : (
-                t(`remoteConnect.desc_${networkTab}`)
-              )}
-            </p>
-          </div>
-          <div className="openbitfun-remote-connect__network-settings">
-            {networkTab === 'lan' && (lanNetworkInfo?.availableIps.length || lanNetworkInfo?.gatewayIp) && (
-              <div className="openbitfun-remote-connect__info-meta-group">
-                {lanNetworkInfo && lanNetworkInfo.availableIps.length > 0 && (
-                  <div className="openbitfun-remote-connect__lan-ip-select">
-                    <span className="openbitfun-remote-connect__info-meta-label">
-                      {t('remoteConnect.currentIp')}
-                    </span>
-                    <Select
-                      className="openbitfun-remote-connect__lan-ip-dropdown"
-                      size="sm"
-                      aria-label={t('remoteConnect.currentIp')}
-                      value={selectedLanIp}
-                      onValueChange={(v) => setSelectedLanIp(String(v))}
-                      options={lanNetworkInfo.availableIps.map(e => ({
-                        label: `${e.ip} — ${e.interface_name}`,
-                        value: e.ip,
-                      }))}
-                    />
-                  </div>
-                )}
-                {(() => {
-                  const selectedIntf = lanNetworkInfo?.availableIps.find(e => e.ip === selectedLanIp);
-                  const gw = selectedIntf?.gateway_ip ?? null;
-                  if (!gw) return null;
-                  return (
-                    <p className="openbitfun-remote-connect__info-meta">
-                      {t('remoteConnect.gatewayIp')}: {gw}
-                    </p>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-          <div className="openbitfun-remote-connect__network-actions">
-            {renderErrorBlock()}
-            <Button
-              variant="primary"
-              size="sm"
-              className="openbitfun-remote-connect__primary-action"
-              loading={loading}
-              onClick={handleConnect}
-            >
-              {loading ? t('remoteConnect.connecting') : t('remoteConnect.showConnectionCode')}
-            </Button>
-          </div>
-        </section>
-      </div>
-    );
+    const invitation = connectionOwner === 'network' ? connectionResult : null;
+    const relayUrl = invitationRelayUrl(invitation)
+      ?? (networkConnection.method === networkTab ? networkConnection.relayUrl : null)
+      ?? (networkTab === 'openbitfun_server' ? OFFICIAL_RELAY_URL : selectedLanIp ? `http://${selectedLanIp}:9700` : '');
+    return <RemoteNetworkConnections
+      status={status}
+      method={networkTab}
+      title={networkLabel(networkTab) ?? ''}
+      relayUrl={relayUrl}
+      settings={networkTab === 'lan' && !invitation && !loading && <Select
+        size="sm"
+        aria-label={t('remoteConnect.currentIp')}
+        value={selectedLanIp}
+        onValueChange={(value) => setSelectedLanIp(String(value))}
+        options={(lanNetworkInfo?.availableIps ?? []).map(entry => ({
+          label: `${entry.ip} — ${entry.interface_name}`, value: entry.ip,
+        }))}
+      />}
+      invitation={invitation}
+      statusState={statusState}
+      loading={loading}
+      pairingUrlCopied={qrCopied}
+      error={renderErrorBlock()}
+      onCopyPairingUrl={handleCopyPairingUrl}
+      onConnect={handleConnect}
+      onCancel={handleCancelConnect}
+      onDisconnect={handleDisconnectRelay}
+    />;
   };
 
   // ── Bot group content ────────────────────────────────────────────
@@ -1500,7 +1243,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   // ── Layout ───────────────────────────────────────────────────────
 
   const isNetworkConnecting = !!connectionResult && connectionOwner === 'network'
-    && !networkConnection.roomConnected && !networkConnection.invitationAccountConnected;
+    && !networkConnection.connected && !networkConnection.invitationConnected;
   const isBotConnecting = !!connectionResult && connectionOwner === 'bot' && !isBotConnected;
   const isCurrentViewPairing = activeView === 'network'
     ? isNetworkConnecting || (loading && pendingOwnerRef.current === 'network')
@@ -1604,7 +1347,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         </div>
       </section>
 
-      <section
+      {accountLoggedIn && <section
         className="openbitfun-remote-connect__overview-section"
         data-openbitfun-component="remote-connect-dialog"
         data-openbitfun-part="overviewSection"
@@ -1645,19 +1388,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           })}
           {renderOverviewAction({
             view: 'bot',
-            icon: (
-              <span className="openbitfun-remote-connect__chat-brand-group">
-                {BOT_TABS.map(tab => (
-                  <span
-                    className="openbitfun-remote-connect__chat-brand-item"
-                    data-connected={isBotConnected && connectedBotTab === tab.id ? 'true' : undefined}
-                    key={tab.id}
-                  >
-                    <ChatAppBrandIcon app={tab.id} size={15} />
-                  </span>
-                ))}
-              </span>
-            ),
+            icon: <MessageCircle size={18} />,
             title: t('remoteConnect.chatAppsTitle'),
             description: t('remoteConnect.chatAppsDescription'),
             statusLabel: statusState === 'unavailable'
@@ -1674,8 +1405,16 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
             state: isBotConnected ? 'connected' : undefined,
           })}
         </div>
-      </section>
+      </section>}
     </ScrollArea>
+  );
+
+  const renderNavigationItem = (view: ActiveView, label: string, icon: React.ReactNode) => (
+    <button type="button" className="openbitfun-remote-connect__navigation-item"
+      aria-current={activeView === view ? 'page' : undefined}
+      onClick={() => handleViewChange(view)}>
+      <span aria-hidden="true">{icon}</span><span>{label}</span>
+    </button>
   );
 
   const renderViewHeader = () => {
@@ -1712,7 +1451,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
           className="openbitfun-remote-connect__view-page-header"
           description={description}
           level={2}
-          size="md"
+          size="sm"
           title={<span id="remote-connect-view-title">{title}</span>}
         />
       </div>
@@ -1741,12 +1480,11 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   );
 
   const networkTabItems: TabGroupItem[] = NETWORK_TABS.map(tab => ({
-    disabled: isNetworkSubDisabled(tab.id) || (isNetworkConnecting && networkTab !== tab.id),
+    disabled: (isNetworkConnecting && networkTab !== tab.id),
     id: `remote-connect-network-tab-${tab.id}`,
     label: renderConnectionTabLabel(
       t(tab.labelKey),
-      (networkConnection.roomConnected && networkConnection.roomMethod === tab.id)
-        || (networkConnection.accountConnected && networkConnection.accountMethod === tab.id),
+      networkConnection.connected && networkConnection.method === tab.id,
     ),
     panelId: 'remote-connect-network-tabpanel',
     value: tab.id,
@@ -1785,6 +1523,12 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     ? handleDialogClose
     : () => setShowDisclaimer(false);
 
+  useEffect(() => {
+    if (!accountLoggedIn && (activeView === 'network' || activeView === 'bot')) {
+      handleViewChange('overview');
+    }
+  }, [accountLoggedIn, activeView, handleViewChange]);
+
   return (
     <>
       <Dialog
@@ -1820,20 +1564,18 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               <h2 id="remote-connect-center-title" className="openbitfun-remote-connect__sidebar-title">
                 {t('remoteConnect.centerTitle')}
               </h2>
-              <span className="openbitfun-remote-connect__title-extra">
-                <Button
-                  className="openbitfun-remote-connect__disclaimer-trigger"
-                  onClick={() => setShowDisclaimer(true)}
-                  size="sm"
-                  variant="outline"
-                >
-                  {t('remoteConnect.disclaimerReview')}
-                </Button>
-              </span>
-              <p className="openbitfun-remote-connect__sidebar-description">
-                {t('remoteConnect.overviewIntro')}
-              </p>
             </div>
+            <nav className="openbitfun-remote-connect__navigation" aria-label={t('remoteConnect.centerTitle')}>
+              {renderNavigationItem('overview', t('remoteConnect.overviewTitle'), <MonitorSmartphone size={18} />)}
+              {renderNavigationItem('account', t('remoteConnect.myDevicesTitle'), <Monitor size={18} />)}
+              {accountLoggedIn && renderNavigationItem('network', t('remoteConnect.mobileBrowserTitle'), <Smartphone size={18} />)}
+              {accountLoggedIn && renderNavigationItem('bot', t('remoteConnect.chatAppsTitle'), <MessageCircle size={18} />)}
+            </nav>
+            <span className="openbitfun-remote-connect__title-extra">
+              <Button className="openbitfun-remote-connect__disclaimer-trigger" onClick={() => setShowDisclaimer(true)} size="xs" variant="text">
+                {t('remoteConnect.disclaimerReview')}
+              </Button>
+            </span>
           </aside>
 
           <main
@@ -1873,6 +1615,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
                     <TabGroup
                       aria-label={t('remoteConnect.chatAppsTitle')}
                       className="openbitfun-remote-connect__tab-group"
+                      size="sm"
                       items={botTabItems}
                       onValueChange={handleBotTabValueChange}
                       value={botTab}
@@ -1949,13 +1692,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
               </DialogBody>
       </Dialog>
 
-      {showRelayDeploy && (
-        <RelayDeployWizard
-          isOpen={showRelayDeploy}
-          onClose={() => setShowRelayDeploy(false)}
-          onRegistered={handleRelayDeployRegistered}
-        />
-      )}
+
     </>
   );
 };

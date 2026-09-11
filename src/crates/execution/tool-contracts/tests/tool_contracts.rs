@@ -869,7 +869,7 @@ fn delegation_restrictions_cover_all_agent_spawn_surfaces() {
 fn tool_context_facts_keep_portable_wire_shape_without_runtime_handles() {
     let facts = ToolContextFacts {
         tool_call_id: Some("call-1".to_string()),
-        agent_type: Some("Agentic".to_string()),
+        agent_type: Some("Standard".to_string()),
         session_id: Some("session-1".to_string()),
         dialog_turn_id: Some("turn-1".to_string()),
         workspace_kind: Some(ToolWorkspaceKind::Remote),
@@ -880,7 +880,7 @@ fn tool_context_facts_keep_portable_wire_shape_without_runtime_handles() {
     let value = serde_json::to_value(&facts).expect("serialize context facts");
 
     assert_eq!(value["toolCallId"], "call-1");
-    assert_eq!(value["agentType"], "Agentic");
+    assert_eq!(value["agentType"], "Standard");
     assert_eq!(value["sessionId"], "session-1");
     assert_eq!(value["dialogTurnId"], "turn-1");
     assert_eq!(value["workspaceKind"], "remote");
@@ -910,7 +910,7 @@ fn portable_tool_context_provider_exposes_facts_only() {
     let provider = FactsOnlyProvider {
         facts: ToolContextFacts {
             tool_call_id: Some("call-2".to_string()),
-            agent_type: Some("Agentic".to_string()),
+            agent_type: Some("Standard".to_string()),
             session_id: Some("session-2".to_string()),
             dialog_turn_id: None,
             workspace_kind: Some(ToolWorkspaceKind::Local),
@@ -2811,7 +2811,7 @@ async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contrac
             "Git".to_string(),
         ],
         &Default::default(),
-        &ManifestTestContext { agent: "agentic" },
+        &ManifestTestContext { agent: "Standard" },
         GET_TOOL_SPEC_TOOL_NAME,
     )
     .await;
@@ -2866,7 +2866,7 @@ async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contrac
         .find(|tool| tool.name == "Read")
         .expect("expanded Read manifest");
     assert_eq!(read.description, "Read description for agentic");
-    assert_eq!(read.parameters["properties"]["agent"]["const"], "agentic");
+    assert_eq!(read.parameters["properties"]["agent"]["const"], "Standard");
 
     assert!(!manifest
         .tool_definitions
@@ -2893,7 +2893,7 @@ async fn contextual_manifest_resolver_accepts_snapshot_provider_boundary() {
             "Git".to_string(),
         ],
         &Default::default(),
-        &ManifestTestContext { agent: "agentic" },
+        &ManifestTestContext { agent: "Standard" },
         GET_TOOL_SPEC_TOOL_NAME,
     )
     .await;
@@ -2948,7 +2948,7 @@ async fn tool_catalog_runtime_facade_owns_manifest_and_readonly_paths() {
                 "Git".to_string(),
             ],
             &Default::default(),
-            &ManifestTestContext { agent: "agentic" },
+            &ManifestTestContext { agent: "Standard" },
         )
         .await;
     assert_eq!(
@@ -2985,7 +2985,7 @@ async fn tool_catalog_runtime_facade_owns_manifest_and_readonly_paths() {
                 "Git".to_string(),
             ],
             &Default::default(),
-            &ManifestTestContext { agent: "agentic" },
+            &ManifestTestContext { agent: "Standard" },
         )
         .await;
     assert_eq!(
@@ -3030,7 +3030,7 @@ async fn get_tool_spec_detail_resolver_preserves_contextual_detail_contract() {
         contextual_manifest_tool("WebFetch", ToolExposure::Deferred, None),
         contextual_manifest_tool(GET_TOOL_SPEC_TOOL_NAME, ToolExposure::Deferred, None),
     ];
-    let context = ManifestTestContext { agent: "agentic" };
+    let context = ManifestTestContext { agent: "Standard" };
 
     let summaries = summarize_get_tool_spec_deferred_tools(&deferred_tools);
     assert_eq!(
@@ -3061,7 +3061,7 @@ async fn get_tool_spec_detail_resolver_preserves_contextual_detail_contract() {
     assert_eq!(detail.description, "WebFetch description for agentic");
     assert_eq!(
         detail.input_schema["properties"]["agent"]["const"],
-        "agentic"
+        "Standard"
     );
     assert_eq!(
         detail.to_value(),
@@ -3072,7 +3072,7 @@ async fn get_tool_spec_detail_resolver_preserves_contextual_detail_contract() {
                 "type": "object",
                 "properties": {
                     "agent": {
-                        "const": "agentic"
+                        "const": "Standard"
                     }
                 }
             },
@@ -3107,7 +3107,7 @@ async fn get_tool_spec_catalog_provider_preserves_runtime_catalog_contract() {
             contextual_manifest_tool("Read", ToolExposure::Direct, None),
         ],
     };
-    let context = ManifestTestContext { agent: "agentic" };
+    let context = ManifestTestContext { agent: "Standard" };
 
     let detail = resolve_get_tool_spec_detail_from_provider(
         &provider,
@@ -3123,7 +3123,7 @@ async fn get_tool_spec_catalog_provider_preserves_runtime_catalog_contract() {
 
 #[tokio::test]
 async fn get_tool_spec_provider_execution_returns_duplicate_result_without_detail_lookup() {
-    let context = ManifestTestContext { agent: "agentic" };
+    let context = ManifestTestContext { agent: "Standard" };
     let input = json!({ "tool_name": "WebFetch" });
 
     let result = resolve_get_tool_spec_execution_result_from_provider(
@@ -3166,7 +3166,7 @@ async fn get_tool_spec_provider_execution_returns_detail_result_from_provider() 
             None,
         )],
     };
-    let context = ManifestTestContext { agent: "agentic" };
+    let context = ManifestTestContext { agent: "Standard" };
     let input = json!({ "tool_name": "WebFetch" });
 
     let result = resolve_get_tool_spec_execution_result_from_provider(
@@ -3192,7 +3192,7 @@ async fn get_tool_spec_provider_execution_returns_detail_result_from_provider() 
     assert_eq!(data["description"], "WebFetch description for agentic");
     assert_eq!(
         data["input_schema"]["properties"]["agent"]["const"],
-        "agentic"
+        "Standard"
     );
     let assistant = result_for_assistant.expect("assistant detail");
     assert!(assistant.contains("<description>\nWebFetch description for agentic"));
@@ -3209,7 +3209,7 @@ async fn get_tool_spec_provider_execution_returns_already_available_result_for_e
             contextual_manifest_tool("Read", ToolExposure::Direct, None),
         ],
     };
-    let context = ManifestTestContext { agent: "agentic" };
+    let context = ManifestTestContext { agent: "Standard" };
     let input = json!({ "tool_name": "Read" });
 
     let result = resolve_get_tool_spec_execution_result_from_provider(
@@ -3251,7 +3251,7 @@ async fn get_tool_spec_runtime_facade_owns_execution_path() {
             None,
         )],
     };
-    let context = ManifestTestContext { agent: "agentic" };
+    let context = ManifestTestContext { agent: "Standard" };
     let input = json!({ "tool_name": "WebFetch" });
     let runtime = GetToolSpecRuntime::<ContextualManifestTool, ManifestTestContext, _>::new(
         &provider,
@@ -3270,7 +3270,7 @@ async fn get_tool_spec_runtime_facade_owns_execution_path() {
     assert_eq!(data["description"], "WebFetch description for agentic");
     assert_eq!(
         data["input_schema"]["properties"]["agent"]["const"],
-        "agentic"
+        "Standard"
     );
 }
 
@@ -3283,7 +3283,7 @@ async fn get_tool_spec_runtime_facade_owns_tool_result_vector_adapter_shape() {
             None,
         )],
     };
-    let context = ManifestTestContext { agent: "agentic" };
+    let context = ManifestTestContext { agent: "Standard" };
     let runtime = GetToolSpecRuntime::<ContextualManifestTool, ManifestTestContext, _>::new(
         &provider,
         GET_TOOL_SPEC_TOOL_NAME,
@@ -3382,7 +3382,7 @@ async fn get_tool_spec_provider_execution_returns_unavailable_result_for_unknown
             None,
         )],
     };
-    let context = ManifestTestContext { agent: "agentic" };
+    let context = ManifestTestContext { agent: "Standard" };
     let input = json!({ "tool_name": "Git" });
 
     let result = resolve_get_tool_spec_execution_result_from_provider(

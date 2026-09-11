@@ -2706,7 +2706,7 @@ mod tests {
         ));
 
         for runtime_agent_key in [
-            "Agentic",
+            "Standard",
             "Plan",
             "external_subagent_runtime:other-provider:agent",
             "external_subagent_runtime:opencode:agent",
@@ -2746,7 +2746,7 @@ mod tests {
             .insert(mux.name.clone(), mux.clone());
         let registered: Arc<dyn Tool> = mux;
 
-        let context = local_tool_context(&workspace, "Agentic");
+        let context = local_tool_context(&workspace, "Standard");
         assert!(Arc::ptr_eq(
             &router
                 .resolve_registered_tool_for_context(registered, &context)
@@ -2782,7 +2782,7 @@ mod tests {
             .expect("router lock")
             .insert(mux.name.clone(), Arc::new(mux));
 
-        let context = local_tool_context(&workspace, "Agentic");
+        let context = local_tool_context(&workspace, "Standard");
         assert!(Arc::ptr_eq(
             &router
                 .resolve_registered_tool_for_context(original, &context)
@@ -2822,7 +2822,7 @@ mod tests {
             router.workspace_routes(&workspace_key).get(&tool_name),
             Some(WorkspaceRoute::Original { conflict: None })
         ));
-        let context = local_tool_context(&workspace, "Agentic");
+        let context = local_tool_context(&workspace, "Standard");
         assert!(Arc::ptr_eq(
             &mux.selected(Some(&context)).expect("native route"),
             &original

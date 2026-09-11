@@ -48,7 +48,7 @@
     "builtin": "Built-in",
     "user": "User",
     "project": "Project",
-    "suite": "Suites"
+    "groups": "Skill Groups"
   },
   "categories": {
     "all": "All installed skills, including built-in, user-level, and project-level.",
@@ -56,7 +56,7 @@
     "user": "OpenBitFun user-level skills installed globally for your account.",
     "project": "OpenBitFun project-level skills for the current workspace.",
     "source": "Skills discovered from {{source}}, including user-level and current-workspace project-level skills.",
-    "suite": "Built-in skill suites grouped by mode, with one-click visibility controls."
+    "groups": "Create and organize reusable groups of skills."
   },
   "section": {
     "user": {
@@ -105,78 +105,66 @@
       "linkLabel": "Link"
     }
   },
-  "suite": {
-    "title": "Skill Suites",
-    "subtitle": "Pick a mode to manage skill visibility. Group actions apply immediately, while individual skill edits can be saved per group.",
-    "modeLabel": "Mode",
-    "refreshTooltip": "Refresh current mode",
-    "refreshAction": "Refresh",
-    "loading": "Loading skill suites...",
-    "empty": "No skills are available.",
-    "groups": {
+  "groups": {
+    "title": "Skill Groups",
+    "subtitle": "Create and organize reusable groups of skills.",
+    "create": "New group",
+    "edit": "Edit group",
+    "copy": "Copy group",
+    "copyName": "{{name}} copy",
+    "copyNameNumbered": "{{name}} {{count}}",
+    "delete": "Delete group",
+    "deleteTitle": "Delete skill group",
+    "deleteMessage": "Delete \"{{name}}\"? Skills and existing agent configurations will be kept.",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "actions": "Actions for {{name}}",
+    "refresh": "Refresh groups and skills",
+    "search": "Search groups or skills…",
+    "searchSkills": "Search skills…",
+    "name": "Group name",
+    "namePlaceholder": "For example: Everyday development",
+    "save": "Save group",
+    "cancel": "Close",
+    "selectedOnly": "Selected only",
+    "memberCount": "{{count}} skills",
+    "unavailableCount": "{{count}} unavailable",
+    "myGroups": "My groups",
+    "builtinGroups": "Built-in groups",
+    "emptyGroup": "No skills added",
+    "unresolvedMembers": "Members are unavailable in the current catalog",
+    "noGroups": "No skill groups yet.",
+    "noMatch": "No matching groups.",
+    "noMatchingSkills": "No matching skills.",
+    "loading": "Loading skill groups…",
+    "catalogUnavailable": "The skill catalog is incomplete or unavailable. Existing member references are kept.",
+    "unavailableMember": "Unavailable in this environment",
+    "unresolvedMember": "Skill details are currently unavailable",
+    "globalDisabled": "Globally disabled",
+    "discardTitle": "Discard group changes?",
+    "discardMessage": "Your unsaved changes to this group will be discarded.",
+    "discard": "Discard changes",
+    "keepEditing": "Keep editing",
+    "errors": {
+      "invalidConfig": "The saved group data could not be read. It has been kept unchanged.",
+      "unsupportedVersion": "These groups use a newer format. Update OpenBitFun to edit them.",
+      "nameRequired": "Enter a group name.",
+      "nameDuplicate": "A group with this name already exists.",
+      "conflict": "This group changed elsewhere. Close the editor and refresh before editing it again.",
+      "notReady": "Wait for groups to load, or refresh and try again.",
+      "loadFailed": "Could not load skill groups. Refresh to retry.",
+      "saveFailed": "Could not save the group. Your changes have been kept; try again."
+    },
+    "builtin": {
       "office": "Office",
-      "computerUse": "Computer Use",
+      "computerUse": "$t(shared:agents.ComputerUse)",
       "meta": "Meta",
       "miniapp": "MiniApp",
       "canvas": "Canvas",
       "debugging": "Debugging",
       "coordination": "Coordination",
       "planning": "Planning",
-      "gstack": "gstack",
-      "other": "Other"
-    },
-    "sections": {
-      "myGroups": "My groups",
-      "builtin": "Built-in groups",
-      "otherSkills": "Other skills"
-    },
-    "manageGroups": "Manage Skill groups",
-    "modes": {
-      "agentic": "agentic",
-      "cowork": "Cowork"
-    },
-    "modeDescriptions": {
-      "agentic": "Coding-first default profile",
-      "cowork": "Office workflow profile",
-      "claw": "Assistant mode"
-    },
-    "modeActions": {
-      "reset": "Reset {{mode}}",
-      "resetShort": "Reset"
-    },
-    "groupActions": {
-      "save": "Save",
-      "enableGroup": "Enable group",
-      "disableGroup": "Disable group"
-    },
-    "resetDialog": {
-      "title": "Reset {{mode}}?",
-      "message": "This will restore the mode's skill visibility to the default state.",
-      "messageWithUnsaved": "This will restore the mode's skill visibility to the default state and discard the current unsaved edits.",
-      "confirm": "Reset",
-      "cancel": "Cancel"
-    },
-    "groupState": {
-      "enabled": "Visible",
-      "disabled": "Hidden",
-      "partial": "Partial"
-    },
-    "skillState": {
-      "enabled": "Enabled for this mode",
-      "disabled": "Disabled for this mode",
-      "pending": "Unsaved",
-      "covered": "Covered · {{source}}",
-      "coveredDetail": "Enabled, but this mode uses the same-name skill from {{source}}.",
-      "globalDisabled": "Globally disabled"
-    },
-    "groupCount": "{{total}} skills",
-    "messages": {
-      "saveSuccess": "Updated {{mode}} suite visibility",
-      "saveFailed": "Failed to update suite: {{error}}",
-      "resetSuccess": "Restored {{mode}} suite defaults",
-      "resetFailed": "Failed to reset suite: {{error}}",
-      "refreshFailed": "Failed to refresh suite: {{error}}",
-      "saveFirst": "Save the current skill edits first."
+      "gstack": "gstack"
     }
   },
   "form": {

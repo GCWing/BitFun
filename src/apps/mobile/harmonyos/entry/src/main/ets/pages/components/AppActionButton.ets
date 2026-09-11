@@ -26,6 +26,7 @@ export struct AppActionButton {
   @Param style: AppActionStyle = AppActionStyle.Secondary;
   @Param actionHeight: number = MobileDesignGeometry.sheetActionHeight;
   @Param isEnabled: boolean = true;
+  @Param elevated: boolean = true;
   @Event onAction: () => void = () => {};
 
   build() {
@@ -39,9 +40,9 @@ export struct AppActionButton {
       .border({ width: this.style === AppActionStyle.Secondary ? 1 : 0, color: LINE })
       .borderRadius(this.actionHeight / 2)
       .shadow({
-        radius: this.hasElevation() ? 14 : 0,
+        radius: this.elevated && this.hasElevation() ? 14 : 0,
         color: this.isFilled() ? SHADOW_SUBTLE : SHADOW_FAINT,
-        offsetY: this.hasElevation() ? 5 : 0
+        offsetY: this.elevated && this.hasElevation() ? 5 : 0
       })
       .opacity(this.isEnabled ? 1 : 0.32)
       .enabled(this.isEnabled)

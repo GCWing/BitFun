@@ -1,77 +1,81 @@
 import { describe, expect, it } from '@ohos/hypium';
 import { MiniAppDocument } from '../main/ets/services/MiniAppDocument';
 import { MiniAppViewModel } from '../main/ets/pages/viewmodel/MiniAppViewModel';
-import { RemoteMiniAppClient, RemoteMiniAppPayload, RemoteMiniAppRequest } from '../main/ets/model/RemoteMiniAppModels';
+import { MiniAppBridgeParams, MiniAppHost, MiniAppSummary } from '../main/ets/model/MiniAppModels';
 
-class FakeMiniAppClient implements RemoteMiniAppClient {
-  generation: number = 1;
-  calls: RemoteMiniAppRequest[] = [];
-  pendingOpen?: (payload: Object) => void;
+class FakeMiniAppHost implements MiniAppHost {
+  calls: string[] = [];
+  pendingOpen?: (html: string) => void;
   holdOpen: boolean = false;
-
-  miniAppConnection(): number { return this.generation; }
-  async miniApp(request: RemoteMiniAppRequest, connection: number): Promise<Object> {
-    if (connection !== this.generation) throw new Error('Target changed');
-    this.calls.push(request);
-    if (request.action === 'list') {
-      const value: RemoteMiniAppPayload = { apps: [{ id: 'game', name: 'Game', description: '' }] };
-      return value;
-    }
-    if (request.action === 'open') {
-      if (this.holdOpen) return new Promise<Object>((resolve) => { this.pendingOpen = resolve; });
-      const value: RemoteMiniAppPayload = { id: 'game', name: 'Game', version: 3, html: '<p>Game</p>' };
-      return value;
-    }
-    return 'saved';
+  stored: Map<string, Object | null> = new Map();
+  async list(_locale: string): Promise<MiniAppSummary[]> {
+    return [{ id: 'game', name: 'Game', description: '' }, { id: 'regex', name: 'Regex', description: '' }];
+  }
+  async document(_id: string): Promise<string> {
+    if (this.holdOpen) return new Promise<string>((resolve) => { this.pendingOpen = resolve; });
+    return '<p>Game</p>';
+  }
+  async call(appId: string, method: string, params: MiniAppBridgeParams): Promise<Object | null> {
+    this.calls.push(appId);
+    const key = `${appId}:${params.key}`;
+    if (method === 'storage.set') this.stored.set(key, params.value || null);
+    return this.stored.get(key) || null;
   }
 }
 
 export default function miniAppUnitTest() {
   describe('MobileMiniApp', () => {
-    it('binds_calls_to_the_open_app_and_refuses_a_replaced_device', 0, async () => {
-      const client = new FakeMiniAppClient();
-      const model = new MiniAppViewModel(client);
+    it('opens_offline_and_binds_storage_to_selected_app_across_reopen', 0, async () => {
+      const host = new FakeMiniAppHost();
+      const model = new MiniAppViewModel(host);
       await model.open();
       await model.select('game');
-      const raw = '{"id":"rpc-1","method":"worker.call","params":{"method":"storage.get","params":{"key":"stats"}},"app_id":"attacker"}';
-      const response = await model.request(raw);
-      expect(response.includes('saved')).assertTrue();
-      expect(client.calls[2].app_id).assertEqual('game');
-      expect(client.calls[2].version).assertEqual(3);
-      client.generation += 1;
-      expect((await model.request(raw)).includes('Target changed')).assertTrue();
-      expect(client.calls.length).assertEqual(3);
+      await model.request('{"id":"save","method":"storage.set","params":{"key":"stats","value":{"wins":3}},"app_id":"attacker"}');
+      expect(host.calls[0]).assertEqual('game');
+      model.close();
+      await model.open();
+      await model.select('regex');
+      expect((await model.request('{"id":"stale","method":"storage.set","params":{"key":"stats","value":3}}', 1)).includes('error')).assertTrue();
+      expect((await model.request('{"id":"get","method":"storage.get","params":{"key":"stats"}}')).includes('"result":null')).assertTrue();
+      await model.open();
+      await model.select('game');
+      expect((await model.request('{"id":"get","method":"storage.get","params":{"key":"stats"}}')).includes('"wins":3')).assertTrue();
     });
 
     it('does_not_resurrect_a_closed_page_after_a_slow_open', 0, async () => {
-      const client = new FakeMiniAppClient();
-      const model = new MiniAppViewModel(client);
+      const host = new FakeMiniAppHost();
+      const model = new MiniAppViewModel(host);
       await model.open();
-      client.holdOpen = true;
+      host.holdOpen = true;
       const loading = model.select('game');
       model.close();
-      const payload: RemoteMiniAppPayload = { id: 'game', version: 3, html: '<p>Late</p>' };
-      client.pendingOpen?.(payload);
+      host.pendingOpen?.('<p>Late</p>');
       await loading;
       expect(model.state.visible).assertFalse();
       expect(model.state.document).assertEqual('');
+      expect(model.state.loading).assertFalse();
     });
 
-    it('rejects_unsupported_bridge_methods_before_transport', 0, async () => {
-      const client = new FakeMiniAppClient();
-      const model = new MiniAppViewModel(client);
+    it('rejects_unknown_apps_closed_pages_and_unsupported_methods', 0, async () => {
+      const host = new FakeMiniAppHost();
+      const model = new MiniAppViewModel(host);
       await model.open();
+      await model.select('attacker');
+      expect(model.state.appId).assertEqual('');
       await model.select('game');
-      const result = await model.request('{"id":"bad","method":"host_invoke"}');
-      expect(result.includes('error')).assertTrue();
-      expect(client.calls.length).assertEqual(2);
+      expect((await model.request('{"id":"bad","method":"host_invoke","params":{}}')).includes('error')).assertTrue();
+      model.close();
+      expect((await model.request('{"id":"bad","method":"storage.get","params":{"key":"stats"}}')).includes('error')).assertTrue();
+      expect(host.calls.length).assertEqual(0);
     });
 
-    it('keeps_app_markup_outside_the_trusted_wrapper_script', 0, () => {
+    it('keeps_app_markup_outside_the_trusted_wrapper_and_disables_network', 0, () => {
       const html = MiniAppDocument.build('</script><script>window.pwned=1</script>', 'en-US');
       expect(html.includes('</script><script>window.pwned')).assertFalse();
       expect(html.includes('sandbox="allow-scripts"')).assertTrue();
       expect(html.includes('allow-same-origin')).assertFalse();
+      expect(html.includes("connect-src 'none'")).assertTrue();
+      expect(html.includes('\\u003c/script>')).assertTrue();
     });
   });
 }

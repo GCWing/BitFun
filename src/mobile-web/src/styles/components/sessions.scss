@@ -128,7 +128,6 @@
   transition: all var(--motion-fast) var(--easing-standard);
 
   &:active {
-    transform: scale(0.96);
     color: var(--openbitfun-color-content-primary);
     background: var(--openbitfun-color-action-neutral-surface-hover);
   }
@@ -212,7 +211,6 @@
   animation: sessionItemIn var(--motion-base) motion.$easing-decelerate both;
 
   &:active {
-    transform: scale(0.985);
     background: var(--openbitfun-color-accent-surface);
   }
 
@@ -729,7 +727,7 @@
   flex-shrink: 0;
 
   &--code,
-  &--agentic {
+  &--Standard {
     background: var(--openbitfun-color-accent-surface);
     color: var(--openbitfun-color-accent-default);
     border-color: var(--openbitfun-color-accent-surface-strong);
@@ -875,7 +873,6 @@
   }
 
   &:active {
-    transform: scale(0.99);
     background: var(--openbitfun-color-surface-subtle);
   }
 

@@ -1,3 +1,4 @@
+import { preferences } from '@kit.ArkData';
 import { common, wantAgent } from '@kit.AbilityKit';
 import { backgroundTaskManager } from '@kit.BackgroundTasksKit';
 import { notificationManager } from '@kit.NotificationKit';
@@ -20,13 +21,25 @@ export class HarmonyTaskCompletionNotificationPort implements TaskCompletionNoti
     this.contextProvider = contextProvider;
   }
 
-  async prepare(): Promise<void> {
+  async offerOnboarding(offer: () => Promise<boolean>): Promise<void> {
     if (this.permissionPrepared) {
       return;
     }
     this.permissionPrepared = true;
     try {
-      if (!notificationManager.isNotificationEnabledSync()) {
+      const store = await preferences.getPreferences(this.contextProvider(), 'notification_onboarding');
+      if (await store.get('completed_v1', false) === true) {
+        return;
+      }
+      if (notificationManager.isNotificationEnabledSync()) {
+        await store.put('completed_v1', true);
+        await store.flush();
+        return;
+      }
+      const enable = await offer();
+      await store.put('completed_v1', true);
+      await store.flush();
+      if (enable) {
         await notificationManager.requestEnableNotification(this.uiAbilityContext());
       }
     } catch (err) {

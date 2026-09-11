@@ -98,10 +98,6 @@ impl Tool for WebSearchTool {
         "Search the web for up-to-date information and sources.".to_string()
     }
 
-    fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Deferred
-    }
-
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

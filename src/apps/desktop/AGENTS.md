@@ -26,14 +26,14 @@ Peer Device Mode ownership and boundaries:
 Frontend regression guards:
 `src/web-ui/src/infrastructure/peer-device/README.md`.
 
-Account login (pending sync choice / finalize) lives in
-`src/api/remote_connect_api.rs` (`PENDING_SYNC_CHOICE`, `account_login`,
-`account_finalize_login`). Do not persist a session before the user chooses
-cloud vs local settings.
+GitHub identity is shared through `account_identity_api.rs`. Relay device
+registration and lifecycle live in `src/api/remote_connect_api.rs`; settings
+remain on their owning device and there is no cloud/local sync choice.
 
-One-click relay deploy: Tauri surface `src/api/relay_deploy_api.rs`, orchestration
-in `openbitfun-services-integrations` `remote_ssh/relay_deploy.rs`. Feature invariants:
-`src/web-ui/src/features/relay-deploy/README.md`.
+The Relay deployment wizard is retired. Preserve the developer scripts under
+`src/apps/relay-server` and their [operator guide](../relay-server/README.md).
+The retained Tauri wrapper and services orchestration are compatibility tools,
+not an entry point to restore in the product UI.
 
 If a change affects behavior shared by multiple runtimes, place stable contracts,
 execution policy, and services in their owning lower-layer crates. Keep only
@@ -99,6 +99,8 @@ cargo check -p openbitfun-desktop && cargo test -p openbitfun-desktop
 
 For skill discovery response compatibility and timeouts, use
 `cargo test -p openbitfun-desktop --lib api::skill_api::tests`.
+For content-search routing and remote fallback protection, use
+`cargo test --locked -p openbitfun-desktop --lib api::search_api::tests`.
 For staged application-update cache and signature behavior, use
 `cargo test -p openbitfun-desktop --lib api::update_api::tests`.
 For peer system-info response compatibility, run

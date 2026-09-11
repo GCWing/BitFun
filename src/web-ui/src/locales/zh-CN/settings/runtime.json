@@ -1,4 +1,18 @@
 {
+  "defaultHarness": {
+    "title": "默认 Agent Harness",
+    "description": "设置普通新会话如何选择 Harness。助理、ACP 与显式指定模式的会话不受影响。",
+    "strategy": "默认方式",
+    "followLast": "跟随上一次选择",
+    "fixed": "固定默认模式",
+    "followLastDescription": "新会话沿用最近一次在 ChatInput 主动选择的 Harness。当前记忆：{{name}}。",
+    "followLastEmptyDescription": "尚未记住 Harness 选择；在 ChatInput 主动选择前，新会话使用 {{name}}。",
+    "fixedDescription": "新会话始终使用指定 Harness；当前会话不会改变。",
+    "fixedMode": "默认 Harness",
+    "fixedModeDescription": "仅用于没有显式指定模式的普通新会话。",
+    "compatibilityMode": "{{id}}（兼容配置）",
+    "loadFailed": "无法读取默认 Harness 设置。为避免覆盖现有配置，此设置已锁定。"
+  },
   "features": {
     "pet": {
       "title": "桌面宠物",

@@ -52,10 +52,6 @@
     &:hover {
       background: var(--openbitfun-color-action-quiet-hover);
     }
-    
-    &:active {
-      transform: scale(0.97);
-    }
   }
 
   &--confirm {
@@ -66,10 +62,6 @@
       background: var(--openbitfun-color-accent-hover);
     }
     
-    &:active:not(:disabled) {
-      transform: scale(0.97);
-    }
-
     &:disabled {
       opacity: 0.5;
       cursor: not-allowed;

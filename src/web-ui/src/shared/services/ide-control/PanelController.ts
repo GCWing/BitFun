@@ -5,6 +5,8 @@
  */
 import { i18nService } from '@/infrastructure/i18n';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
+import { createTab } from '@/shared/utils/tabUtils';
+import { useNavSceneStore } from '@/app/stores/navSceneStore';
 import {
   IdeController,
   IdeControlEvent,
@@ -48,38 +50,13 @@ export class PanelController implements IdeController {
 
    
   async openPanel(config: PanelOpenConfig): Promise<void> {
-    const { panelType, position, config: panelConfig, options } = config;
-
-    
-    const mode = options?.mode || 'agent';
-    const eventName =
-      mode === 'project' ? 'project-create-tab' : mode === 'git' ? 'git-create-tab' : 'agent-create-tab';
-
-    
+    const { panelType, config: panelConfig, options } = config;
+    if (panelType === 'file-viewer' && !panelConfig?.file_path && !panelConfig?.data?.filePath) {
+      useNavSceneStore.getState().openNavScene('file-viewer');
+      return;
+    }
     const tabDetail = this.buildTabDetail(panelType, panelConfig || {}, options);
-
-    
-    if (position === 'right' && options?.expand_panel !== false) {
-      window.dispatchEvent(new CustomEvent('expand-right-panel'));
-      
-      
-      await this.waitForPanelExpansion();
-    }
-
-    
-    window.dispatchEvent(
-      new CustomEvent(eventName, {
-        detail: tabDetail,
-      })
-    );
-
-    
-    if (options?.auto_focus !== false) {
-      
-      setTimeout(() => {
-        this.focusPanel(panelType);
-      }, 100);
-    }
+    createTab({ ...tabDetail, mode: options?.mode || 'agent' });
   }
 
    
@@ -229,12 +206,7 @@ export class PanelController implements IdeController {
   }
 
    
-  private async waitForPanelExpansion(): Promise<void> {
-    return new Promise((resolve) => {
-      
-      setTimeout(resolve, 300);
-    });
-  }
+
 
    
   private sendExecutionResult(requestId: string, success: boolean, message: string): void {

@@ -79,7 +79,8 @@
       "unsaved": "实时语音配置有尚未保存的修改。"
     },
     "call": {
-      "title": "OpenBitFun 实时通话",
+      "title": "实时通话",
+      "close": "关闭通话窗口",
       "button": "开始实时语音通话",
       "launcherCompactLabel": "Hi",
       "launcherLabel": "Hello",

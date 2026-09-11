@@ -24,7 +24,7 @@ import AssistantAvatarPicker from './AssistantAvatarPicker';
 import AssistantQuickInput from './AssistantQuickInput';
 import { useNurseryStore } from '../nurseryStore';
 import './NurseryView.scss';
-import { OverflowText, Icon, IconButton, Input, ScrollArea, Textarea, Tooltip } from '@openbitfun/ui';
+import { ActionCard, OverflowText, Icon, IconButton, Input, PageHeader, ScrollArea, Spinner, Textarea, Tooltip } from '@openbitfun/ui';
 
 const log = createLogger('AssistantConfigPage');
 
@@ -331,27 +331,32 @@ const AssistantConfigPage: React.FC = () => {
         {/* Persona docs */}
         <div className="acp-section acp-section--nested">
           <div className="acp-section__head">
-            <span className="acp-section__title">{t('nursery.assistant.personaDocsTitle')}</span>
+            <PageHeader size="sm" level={3} title={t('nursery.assistant.personaDocsTitle')} />
           </div>
           <div className="acp-persona-doc-list" data-openbitfun-component="assistant-config-page" data-openbitfun-part="personaList">
             {PERSONA_DOC_FILES.map((fileName) => {
               const selected = personaDoc?.fileName === fileName && rightView === 'personaDoc';
               const labelKey = fileName.replace(/\.md$/i, '') as 'SOUL' | 'USER' | 'IDENTITY';
               return (
-                <button data-overflow-trigger
+                <div
                   key={fileName}
-                  type="button"
-                  className={`acp-persona-doc-row${selected ? ' acp-persona-doc-row--selected' : ''}`}
+                  className="acp-persona-doc-row"
                   data-openbitfun-component="assistant-config-page"
                   data-openbitfun-part="persona"
                   data-openbitfun-state={selected ? 'selected' : undefined}
-                  aria-pressed={selected}
-                  onClick={() => openPersonaDoc(fileName)}
                 >
-                  <span className="acp-persona-doc-row__icon"><FileText size={12} /></span>
-                  <OverflowText className="acp-persona-doc-row__label">{t(`nursery.assistant.personaDocs.${labelKey}`)}</OverflowText>
-                  <span className="acp-persona-doc-row__file">{fileName}</span>
-                </button>
+                  <ActionCard
+                    className="acp-persona-doc-row__control"
+                    size="sm"
+                    selected={selected}
+                    aria-pressed={selected}
+                    leading={<Icon glyph={FileText} size="sm" />}
+                    description={fileName}
+                    onClick={() => openPersonaDoc(fileName)}
+                  >
+                    {t(`nursery.assistant.personaDocs.${labelKey}`)}
+                  </ActionCard>
+                </div>
               );
             })}
           </div>
@@ -368,7 +373,7 @@ const AssistantConfigPage: React.FC = () => {
               <Suspense
                 fallback={(
                   <div className="acp-loading" data-openbitfun-component="assistant-config-page" data-openbitfun-part="loading">
-                    <Icon name="refresh" size="sm" className="nursery-spinning" />
+                    <Spinner size="sm" />
                   </div>
                 )}
               >
@@ -402,33 +407,29 @@ const AssistantConfigPage: React.FC = () => {
         <div className="acp-right-shell acp-right-shell--editor">
           <div className="acp-persona-editor" data-openbitfun-component="assistant-config-page" data-openbitfun-part="editor">
             <div className="acp-persona-editor__head" data-openbitfun-component="assistant-config-page" data-openbitfun-part="editorHeader">
-              <Tooltip content={t('nursery.template.closeDetail')}>
-                <IconButton
-                  type="button"
-                  size="sm"
-                  className="acp-persona-editor__back"
-                  onClick={closePersonaDoc}
-                  aria-label={t('nursery.template.closeDetail')}
-                  icon={<Icon name="arrow-left" size="xs" />}
-                />
-              </Tooltip>
-              <OverflowText className="acp-persona-editor__title">{t(`nursery.assistant.personaDocs.${docLabelKey}`)}</OverflowText>
-              <Tooltip content={t('nursery.template.closeDetail')}>
-                <IconButton
-                  type="button"
-                  size="sm"
-                  tone="danger"
-                  className="acp-persona-editor__close"
-                  onClick={closePersonaDoc}
-                  aria-label={t('nursery.template.closeDetail')}
-                  icon={<Icon name="xmark" size="xs" />}
-                />
-              </Tooltip>
+              <PageHeader
+                className="acp-persona-editor__heading"
+                size="sm"
+                level={3}
+                title={t(`nursery.assistant.personaDocs.${docLabelKey}`)}
+                description={fileName}
+                leading={(
+                  <Tooltip content={t('nursery.template.closeDetail')}>
+                    <IconButton
+                      type="button"
+                      size="sm"
+                      onClick={closePersonaDoc}
+                      aria-label={t('nursery.template.closeDetail')}
+                      icon={<Icon name="arrow-left" size="sm" />}
+                    />
+                  </Tooltip>
+                )}
+              />
             </div>
             <div className="acp-persona-editor__body" data-openbitfun-component="assistant-config-page" data-openbitfun-part="editorBody">
               {error && <p className="acp-persona-editor__error" data-openbitfun-component="assistant-config-page" data-openbitfun-part="error">{t('nursery.assistant.personaDocLoadFailed')}: {error}</p>}
               {loading ? (
-                <div className="acp-loading" data-openbitfun-component="assistant-config-page" data-openbitfun-part="loading"><Icon name="refresh" size="sm" className="nursery-spinning" /></div>
+                <div className="acp-loading" data-openbitfun-component="assistant-config-page" data-openbitfun-part="loading"><Spinner size="sm" /></div>
               ) : usesHybridEditor ? (
                 <div className="acp-persona-editor__hybrid">
                   <section className="acp-persona-editor__frontmatter" data-openbitfun-component="assistant-config-page" data-openbitfun-part="frontmatter">
@@ -489,21 +490,26 @@ const AssistantConfigPage: React.FC = () => {
       data-openbitfun-component="assistant-config-page"
       data-openbitfun-part="root"
     >
-      {/* Top bar — back only */}
-      <div className="nursery-page__bar acp-page__bar" data-openbitfun-component="assistant-config-page" data-openbitfun-part="toolbar">
-        <Tooltip content={t('nursery.backToGallery')}>
-          <IconButton
-            type="button"
-            size="sm"
-            className="nursery-page__back"
-            data-openbitfun-component="assistant-config-page"
-            data-openbitfun-part="back"
-            onClick={openGallery}
-            aria-label={t('nursery.backToGallery')}
-            icon={<Icon name="arrow-left" size="xs" />}
-          />
-        </Tooltip>
-      </div>
+      <header className="nursery-page__header" data-openbitfun-component="assistant-config-page" data-openbitfun-part="toolbar">
+        <PageHeader
+          className="nursery-page__heading"
+          level={2}
+          title={t('nursery.card.configure')}
+          leading={(
+            <Tooltip content={t('nursery.backToGallery')}>
+              <IconButton
+                type="button"
+                size="sm"
+                data-openbitfun-component="assistant-config-page"
+                data-openbitfun-part="back"
+                onClick={openGallery}
+                aria-label={t('nursery.backToGallery')}
+                icon={<Icon name="arrow-left" size="sm" />}
+              />
+            </Tooltip>
+          )}
+        />
+      </header>
 
       {/* Two-column layout */}
       <div className="acp-layout" data-openbitfun-component="assistant-config-page" data-openbitfun-part="layout">
@@ -530,18 +536,18 @@ const AssistantConfigPage: React.FC = () => {
                   onBlur={commitEdit}
                   onKeyDown={onEditKey}
                   className="acp-left-header__name-input"
+                  aria-label={t('hero.editNameTitle')}
                 />
               ) : (
-                <span
+                <button
+                  type="button"
+                  data-overflow-trigger
                   className="acp-left-header__name"
-                  role="button"
-                  tabIndex={0}
                   onClick={() => startEdit('name')}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit('name'); } }}
                   title={t('hero.editNameTitle')}
                 >
-                  {identityName}
-                </span>
+                  <OverflowText>{identityName}</OverflowText>
+                </button>
               )}
               <div className="acp-left-header__meta">
                 {editingField === 'creature' ? (
@@ -552,18 +558,18 @@ const AssistantConfigPage: React.FC = () => {
                     onBlur={commitEdit}
                     onKeyDown={onEditKey}
                     className="acp-left-header__meta-input"
+                    aria-label={t('identity.creaturePlaceholderShort')}
                     size="sm"
                   />
                 ) : (
-                  <span
+                  <button
+                    type="button"
+                    data-overflow-trigger
                     className={`acp-left-header__meta-tag${!displayIdentity.creature ? ' is-empty' : ''}`}
-                    role="button"
-                    tabIndex={0}
                     onClick={() => startEdit('creature')}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit('creature'); } }}
                   >
-                    {displayIdentity.creature || t('identity.creaturePlaceholderShort')}
-                  </span>
+                    <OverflowText>{displayIdentity.creature || t('identity.creaturePlaceholderShort')}</OverflowText>
+                  </button>
                 )}
                 {(displayIdentity.creature || displayIdentity.vibe) && (
                   <span className="acp-left-header__meta-dot" aria-hidden>·</span>
@@ -576,18 +582,18 @@ const AssistantConfigPage: React.FC = () => {
                     onBlur={commitEdit}
                     onKeyDown={onEditKey}
                     className="acp-left-header__meta-input"
+                    aria-label={t('identity.vibePlaceholderShort')}
                     size="sm"
                   />
                 ) : (
-                  <span
+                  <button
+                    type="button"
+                    data-overflow-trigger
                     className={`acp-left-header__meta-tag${!displayIdentity.vibe ? ' is-empty' : ''}`}
-                    role="button"
-                    tabIndex={0}
                     onClick={() => startEdit('vibe')}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startEdit('vibe'); } }}
                   >
-                    {displayIdentity.vibe || t('identity.vibePlaceholderShort')}
-                  </span>
+                    <OverflowText>{displayIdentity.vibe || t('identity.vibePlaceholderShort')}</OverflowText>
+                  </button>
                 )}
               </div>
             </div>
@@ -599,7 +605,7 @@ const AssistantConfigPage: React.FC = () => {
             assistantName={identityName}
           />
           <ScrollArea className="acp-sessions-area" data-openbitfun-component="assistant-config-page" data-openbitfun-part="sessions">
-            <h2 className="acp-sessions-area__title">{t('nursery.assistant.sessionsSectionTitle')}</h2>
+            <PageHeader className="acp-sessions-area__title" size="sm" level={3} title={t('nursery.assistant.sessionsSectionTitle')} />
             <SessionsSection
               workspaceId={workspace?.id}
               workspacePath={workspacePath}

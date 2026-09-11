@@ -234,7 +234,7 @@ mod tests {
     #[tokio::test]
     async fn execution_rejects_non_creative_agents_even_if_called_directly() {
         let error = FrontendWorkbenchTool::new()
-            .call_impl(&json!({"action": "status"}), &context("agentic"))
+            .call_impl(&json!({"action": "status"}), &context("Standard"))
             .await
             .expect_err("non-Creative call must fail");
         assert!(error.to_string().contains("Creative mode"));

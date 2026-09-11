@@ -3,8 +3,9 @@
 //! Tauri command and the PublishMiniApp agent tool so the two paths cannot
 //! drift.
 
-use super::client::{MarketClient, MarketClientError};
+use super::client::MarketClient;
 use super::package::build_market_package;
+use crate::account_identity::MarketClientError;
 use openbitfun_product_domains::miniapp::market::{
     MarketSubmission, MarketSubmissionDraftRequest, MarketSubmissionStatus, MARKET_CATEGORIES,
     MARKET_MAX_SCREENSHOTS, MARKET_MAX_SCREENSHOT_BYTES,

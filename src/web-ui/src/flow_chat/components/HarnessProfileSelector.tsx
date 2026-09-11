@@ -1,7 +1,9 @@
+import { HARNESS_IDS, canonicalAgentId, type HarnessId } from '@/shared/agents/identity';
+import { HARNESS_PRESENTATION } from '@/shared/agents/harnessPresentation';
 import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { OverflowText, Icon, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip, type IconName } from '@openbitfun/ui';
+import { OverflowText, Icon, Menu, MenuItem, MenuSection, MenuSeparator, Tooltip } from '@openbitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
 import { notificationService } from '@/shared/notification-system';
@@ -10,13 +12,9 @@ import { useSideAnchoredPopoverPosition } from '@/shared/utils/useSideAnchoredPo
 import './HarnessProfileSelector.scss';
 
 export type HarnessProfileId = KnownHarnessProfileId | (string & {});
-export type KnownHarnessProfileId =
-  | 'minimal'
-  | 'balanced'
-  | 'ultimate'
-  | 'creative'
-  | 'other';
-export type SelectableHarnessProfileId = 'minimal' | 'balanced' | 'ultimate' | 'creative';
+/** Includes the existing Agent submenu, which is navigation rather than an identity. */
+export type KnownHarnessProfileId = HarnessId | 'other';
+export type SelectableHarnessProfileId = HarnessId;
 
 export interface HarnessAgentOption {
   id: string;
@@ -57,40 +55,21 @@ interface HarnessProfileSelectorProps {
   onSelectionComplete?: () => void;
 }
 
-const PROFILE_IDS: KnownHarnessProfileId[] = [
-  'minimal',
-  'balanced',
-  'ultimate',
-  'creative',
-  'other',
-];
-type DensityHarnessProfileId = 'minimal' | 'balanced' | 'ultimate';
-
-const PROFILE_GEARS: Record<DensityHarnessProfileId, 1 | 2 | 3> = {
-  minimal: 1,
-  balanced: 2,
-  ultimate: 3,
-};
-
-const PROFILE_ICONS: Record<SelectableHarnessProfileId, IconName> = {
-  minimal: 'minimal',
-  balanced: 'standard',
-  ultimate: 'ultimate',
-  creative: 'creative',
-};
+const PROFILE_IDS: KnownHarnessProfileId[] = [...HARNESS_IDS, 'other'];
+type DensityHarnessProfileId = 'Minimal' | 'Standard' | 'Ultimate';
 
 function isDensityProfile(profile: KnownHarnessProfileId): profile is DensityHarnessProfileId {
-  return profile === 'minimal' || profile === 'balanced' || profile === 'ultimate';
+  return profile === 'Minimal' || profile === 'Standard' || profile === 'Ultimate';
 }
 
 function isSelectableProfile(
   profile: KnownHarnessProfileId,
 ): profile is SelectableHarnessProfileId {
-  return isDensityProfile(profile) || profile === 'creative';
+  return isDensityProfile(profile) || profile === 'Creative';
 }
 
 function sameAgent(left: string | null | undefined, right: string | null | undefined): boolean {
-  return left?.trim().toLowerCase() === right?.trim().toLowerCase();
+  return canonicalAgentId(left?.trim() ?? '').toLowerCase() === canonicalAgentId(right?.trim() ?? '').toLowerCase();
 }
 
 /** Menu rows and the compact add-menu trigger share one mode mark. */
@@ -105,7 +84,7 @@ function HarnessProfileMark({
     <span
       className="openbitfun-harness-selector__density-mark"
       data-harness-profile={profile}
-      data-harness-density={densityProfile ? PROFILE_GEARS[densityProfile] : 0}
+      data-harness-density={densityProfile ? HARNESS_PRESENTATION[densityProfile].gear : 0}
       aria-hidden
     >
       {profile === 'other' ? (
@@ -116,7 +95,7 @@ function HarnessProfileMark({
         />
       ) : (
         <Icon
-          name={PROFILE_ICONS[profile]}
+          name={HARNESS_PRESENTATION[profile].icon}
           className="openbitfun-harness-selector__density-frame"
           size="md"
         />

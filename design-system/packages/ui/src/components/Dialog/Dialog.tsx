@@ -5,7 +5,9 @@ import {
   isValidElement,
   useCallback,
   useContext,
+  useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   type HTMLAttributes,
@@ -64,6 +66,8 @@ interface OverlaySurfaceProps
   initialFocusRef?: RefObject<HTMLElement | null>;
   kind: "dialog" | "sheet";
   onOpenChange: (open: false, reason: DialogCloseReason) => void;
+  /** Called after the closed surface has finished exiting and unmounted. */
+  onExitComplete?: () => void;
   open: boolean;
   placement?: SheetPlacement;
   preventScroll?: boolean;
@@ -84,6 +88,7 @@ const OverlaySurface = forwardRef<HTMLDivElement, OverlaySurfaceProps>(function 
   initialFocusRef,
   kind,
   onOpenChange,
+  onExitComplete,
   open,
   placement,
   preventScroll = true,
@@ -99,9 +104,23 @@ const OverlaySurface = forwardRef<HTMLDivElement, OverlaySurfaceProps>(function 
   const surfaceRef = useRef<HTMLDivElement | null>(null);
   const titleId = `openbitfun-dialog-title-${useId()}`;
   const descriptionId = `openbitfun-dialog-description-${useId()}`;
-  const hasTitle = containsType(children, DialogTitle);
-  const hasDescription = containsType(children, DialogDescription);
   const { present, state } = usePresence(open, EXIT_DURATION_MS);
+  const lastOpenChildren = useRef<ReactNode>(null);
+  const wasPresent = useRef(present);
+  // Owners often clear selection or form state in the same update as closing.
+  // Keep the last committed content until the exit finishes to preserve geometry.
+  useLayoutEffect(() => {
+    if (open) lastOpenChildren.current = children;
+    else if (!present) lastOpenChildren.current = null;
+  }, [children, open, present]);
+  useEffect(() => {
+    const completed = wasPresent.current && !present && !open;
+    wasPresent.current = present;
+    if (completed) onExitComplete?.();
+  }, [onExitComplete, open, present]);
+  const renderedChildren = open ? children : lastOpenChildren.current;
+  const hasTitle = containsType(renderedChildren, DialogTitle);
+  const hasDescription = containsType(renderedChildren, DialogDescription);
 
   const close = useCallback((reason: DialogCloseReason) => {
     if (open) onOpenChange(false, reason);
@@ -152,6 +171,7 @@ const OverlaySurface = forwardRef<HTMLDivElement, OverlaySurfaceProps>(function 
         <DialogContext.Provider value={context}>
           <div
             {...surfaceProps}
+            {...(!open ? { inert: "" } : {})}
             aria-describedby={ariaDescribedBy ?? (hasDescription ? descriptionId : undefined)}
             aria-hidden={exiting || undefined}
             aria-label={ariaLabel}
@@ -167,7 +187,7 @@ const OverlaySurface = forwardRef<HTMLDivElement, OverlaySurfaceProps>(function 
             role={role}
             tabIndex={-1}
           >
-            {children}
+            {renderedChildren}
           </div>
         </DialogContext.Provider>
       </div>
@@ -209,9 +229,13 @@ export const Sheet = forwardRef<HTMLDivElement, SheetProps>(function Sheet({
   );
 });
 
-export const DialogHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  function DialogHeader({ className, ...props }, ref) {
-    return <header {...props} className={classNames(styles.header, className)} data-openbitfun-part="header" ref={ref} />;
+export interface DialogHeaderProps extends HTMLAttributes<HTMLDivElement> {
+  separator?: boolean;
+}
+
+export const DialogHeader = forwardRef<HTMLDivElement, DialogHeaderProps>(
+  function DialogHeader({ className, separator = false, ...props }, ref) {
+    return <header {...props} className={classNames(styles.header, className)} data-openbitfun-part="header" data-separator={separator} ref={ref} />;
   },
 );
 
@@ -291,15 +315,17 @@ export const DialogBody = forwardRef<HTMLDivElement, DialogBodyProps>(
 
 export interface DialogFooterProps extends HTMLAttributes<HTMLElement> {
   appearance?: DialogFooterAppearance;
+  separator?: boolean;
 }
 
 export const DialogFooter = forwardRef<HTMLElement, DialogFooterProps>(
-  function DialogFooter({ appearance = "attached", className, ...props }, ref) {
+  function DialogFooter({ appearance = "attached", className, separator = false, ...props }, ref) {
     return (
       <footer
         {...props}
         className={classNames(styles.footer, className)}
         data-appearance={appearance}
+        data-separator={separator}
         data-openbitfun-part="footer"
         ref={ref}
       />
