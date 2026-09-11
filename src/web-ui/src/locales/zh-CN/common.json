@@ -1517,10 +1517,16 @@
   "welcomeScene": {
     "space": {
       "separator": "，",
-      "work": "干点活儿",
-      "play": "玩点花样",
       "your": "随你发挥",
       "suffix": "。"
+    },
+    "phrases": {
+      "impossible": "创造不可能。",
+      "dreams": "让梦想开出花。",
+      "think": "试试新想法。",
+      "ideas": "灵感来敲门。",
+      "create": "把如果变成真。",
+      "explore": "折腾点新鲜的。"
     },
     "tabLabel": "欢迎使用",
     "welcomeBack": "欢迎回到",

@@ -11,13 +11,22 @@
     min-block-size: 0;
     overflow: hidden;
     border-radius: calc(var(--openbitfun-space-8) + var(--openbitfun-space-1));
-    background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 80%, transparent);
+    background: var(--openbitfun-color-content-on-light);
     color: var(--openbitfun-color-content-on-dark);
     font-family: var(--openbitfun-type-body-lg-font-family);
     font-size: var(--openbitfun-type-body-lg-font-size);
     font-weight: var(--openbitfun-type-body-lg-font-weight);
     line-height: var(--openbitfun-type-body-lg-line-height);
     letter-spacing: var(--openbitfun-type-body-lg-letter-spacing);
+  }
+
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .root {
+      /* Figma live-call surface: 80% dark fill over a 10px backdrop blur. */
+      background: color-mix(in srgb, var(--openbitfun-color-content-on-light) 80%, transparent);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+    }
   }
 
   .header {
@@ -142,11 +151,20 @@
   }
 
   @media (prefers-reduced-transparency: reduce) {
-    .root { background: var(--openbitfun-color-content-on-light); }
+    .root {
+      background: var(--openbitfun-color-content-on-light);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
   }
 
   @media (forced-colors: active) {
-    .root { background: Canvas; color: CanvasText; }
+    .root {
+      background: Canvas;
+      color: CanvasText;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
     .user { border: 1px solid CanvasText; }
     .root :is(.control, .back, .close) { border: 1px solid ButtonText; color: ButtonText; opacity: 1; }
   }

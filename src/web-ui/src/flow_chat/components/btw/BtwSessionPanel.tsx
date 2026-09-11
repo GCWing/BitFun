@@ -70,6 +70,7 @@ import {
 import { FlowChatManager } from '../../services/FlowChatManager';
 import { useSessionCompletionReceipt } from '../../hooks/useSessionCompletionReceipt';
 import { isImeOwnedKeyboardEvent } from '@/shared/utils/ime';
+import { bindBtwTailFollow } from './btwTailFollow';
 
 function findReviewChildByRequestId(
   parentSessionId: string | null | undefined,
@@ -290,35 +291,15 @@ const BtwSessionPanelContent: React.FC<BtwSessionPanelProps & { viewState: BtwPa
     if (!container) return;
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
     setShowScrollToBottom(distanceFromBottom > 120);
-    if (distanceFromBottom < 80 && !viewState.restoring) {
-      shouldAutoScrollRef.current = true;
-    }
-    viewState.followTail = shouldAutoScrollRef.current;
-  }, [viewState]);
+  }, []);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
-    const handleWheel = (e: WheelEvent) => {
-      if (e.deltaY < 0) {
-        shouldAutoScrollRef.current = false;
-        viewState.followTail = false;
-      } else if (e.deltaY > 0) {
-        const { scrollTop, scrollHeight, clientHeight } = container;
-        const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-        if (distanceFromBottom < 100) {
-          shouldAutoScrollRef.current = true;
-        }
-      }
-    };
-
-    container.addEventListener('wheel', handleWheel, { passive: true });
-    container.addEventListener('scroll', updateScrollAffordance, { passive: true });
-    updateScrollAffordance();
-    return () => {
-      container.removeEventListener('wheel', handleWheel);
-      container.removeEventListener('scroll', updateScrollAffordance);
-    };
+    return bindBtwTailFollow(container, (following) => {
+      shouldAutoScrollRef.current = following;
+      viewState.followTail = following;
+    }, updateScrollAffordance);
   }, [updateScrollAffordance, viewState]);
 
   useEffect(() => {
@@ -386,6 +367,7 @@ const BtwSessionPanelContent: React.FC<BtwSessionPanelProps & { viewState: BtwPa
     onTabOpen: handleTabOpen,
     sessionId: childSessionId,
     activeSessionOverride: childSession ?? null,
+    allowUserMessageRollback: false,
     allowUserMessageEdit: false,
     allowTranscriptExport: viewKind !== 'review-check',
     onExploreGroupToggle,

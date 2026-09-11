@@ -8,6 +8,9 @@
     --_icon-button-size: var(--openbitfun-control-height-sm);
 
     position: relative;
+    /* Match Button: the pseudo-element owns hover feedback, not the native control. */
+    -webkit-appearance: none;
+    appearance: none;
     box-sizing: border-box;
     display: inline-flex;
     flex: 0 0 auto;
@@ -175,6 +178,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .button,
+    .button::before,
     .progress {
       transition: none;
     }

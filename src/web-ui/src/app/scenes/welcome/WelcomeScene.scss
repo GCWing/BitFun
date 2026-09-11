@@ -1,5 +1,5 @@
 /**
- * The welcome fades between three phrases, then rests on the final invitation.
+ * The welcome types and erases localized phrases in a fixed-width slot.
  */
 .welcome-scene {
   position: relative;
@@ -78,33 +78,32 @@
     letter-spacing: var(--openbitfun-type-display-sm-letter-spacing);
   }
 
-  &__word-slot {
+  &__phrase-slot {
     display: grid;
     flex: 0 0 auto;
-    text-align: end;
+    text-align: start;
   }
 
-  &__word {
+  &__phrase-sizer,
+  &__typed-phrase {
     grid-area: 1 / 1;
-    white-space: nowrap;
-    visibility: hidden;
-    opacity: 0;
-    transition:
-      opacity var(--openbitfun-motion-duration-slow) var(--openbitfun-motion-easing-smooth),
-      visibility 0s var(--openbitfun-motion-duration-slow);
-
-    &[data-active='true'] {
-      visibility: inherit;
-      opacity: 1;
-      // Briefly overlap the fades without leaving two legible phrases stacked.
-      transition-delay:
-        calc(var(--openbitfun-motion-duration-slow) - var(--openbitfun-motion-duration-instant)),
-        0s;
-    }
+    white-space: pre;
   }
 
-  &__suffix {
-    white-space: pre;
+  &__phrase-sizer {
+    visibility: hidden;
+    // Include the cursor's width and gap in the reserved space.
+    padding-inline-end: 0.14em;
+  }
+
+  &__cursor {
+    display: inline-block;
+    width: 0.06em;
+    height: 0.85em;
+    margin-inline-start: 0.08em;
+    vertical-align: -0.06em;
+    background: currentColor;
+    animation: welcome-cursor-blink 1s steps(1, end) infinite;
   }
 }
 
@@ -116,6 +115,11 @@
   to {
     opacity: 1;
   }
+}
+
+@keyframes welcome-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 @container (max-width: 560px) {
@@ -154,8 +158,9 @@
   .welcome-scene {
     animation: none;
 
-    &__word {
-      transition: none;
+    &__cursor {
+      animation: none;
+      visibility: hidden;
     }
   }
 }

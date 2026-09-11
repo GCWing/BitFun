@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Button, Icon, OverflowText } from '@openbitfun/ui';
+import { Button, Icon, IconButton, OverflowText } from '@openbitfun/ui';
 import type { AnnouncementCard } from '../types';
 import { useAnnouncementStore } from '../store/announcementStore';
 import { useAnnouncementI18n } from '../hooks/useAnnouncementI18n';
@@ -69,32 +69,34 @@ const AnnouncementToastItem: React.FC<Props> = ({ card }) => {
       aria-hidden={exiting}
       {...(exiting ? { inert: '' } : {})}
     >
-      {/* Row 1: title + close (with optional countdown ring) */}
+      {/* Row 1: title + close with optional countdown ring */}
       <div className="announcement-toast__header">
         <OverflowText as="div" lines={2} className="announcement-toast__title">{resolve(toast.title)}</OverflowText>
         {toast.dismissible && (
           <div className="announcement-toast__close-wrap">
-            {autoDismissMs && (
+            {autoDismissMs != null && autoDismissMs > 0 && (
               <svg
                 className="announcement-toast__ring"
                 viewBox="0 0 28 28"
-                aria-hidden
+                aria-hidden="true"
+                focusable="false"
               >
-                <circle cx="14" cy="14" r="11.5"
+                <circle cx="14" cy="14" r="13.25"
                   className="announcement-toast__ring-track" />
-                <circle cx="14" cy="14" r="11.5"
+                <circle cx="14" cy="14" r="13.25" pathLength="100"
                   className="announcement-toast__ring-fill"
                   style={{ animationDuration: `${autoDismissMs}ms` }} />
               </svg>
             )}
-            <button
-              type="button"
+            <IconButton
               className="announcement-toast__close"
+              shape="circle"
+              size="xs"
+              variant="quiet"
+              icon={<Icon name="xmark" />}
               onClick={handleDismiss}
               aria-label={t('announcements.common.close')}
-            >
-              <Icon name="xmark" size="lg" />
-            </button>
+            />
           </div>
         )}
       </div>

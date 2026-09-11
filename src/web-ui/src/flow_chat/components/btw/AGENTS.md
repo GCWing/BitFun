@@ -18,7 +18,7 @@ UI state on each tab switch. Closing a tab releases its wrapper and view state.
 For transcript windowing, scrolling, or review integration changes, run:
 
 ```bash
-pnpm --dir src/web-ui run test:run src/flow_chat/components/btw/useBtwSessionState.test.tsx src/flow_chat/components/btw/useBtwPanelViewport.test.tsx src/flow_chat/components/btw/BtwVirtualSessionList.test.tsx src/flow_chat/components/btw/BtwSessionPanel.review-action.test.tsx src/flow_chat/components/btw/BtwSessionPanelLayout.test.ts
+pnpm --dir src/web-ui run test:run src/flow_chat/components/btw/btwTailFollow.test.ts src/flow_chat/components/btw/useBtwSessionState.test.tsx src/flow_chat/components/btw/useBtwPanelViewport.test.tsx src/flow_chat/components/btw/BtwVirtualSessionList.test.tsx src/flow_chat/components/btw/BtwSessionPanel.review-action.test.tsx src/flow_chat/components/btw/BtwSessionPanelLayout.test.ts
 ```
 
 Native WebView2 checks remain manual: long subagent transcripts, streaming tail

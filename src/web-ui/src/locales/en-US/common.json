@@ -1517,10 +1517,16 @@
   "welcomeScene": {
     "space": {
       "separator": ", ",
-      "work": "Work",
-      "play": "Play",
       "your": "Your",
       "suffix": " space."
+    },
+    "phrases": {
+      "impossible": "Create the impossible.",
+      "dreams": "Let dreams bloom.",
+      "think": "Try an idea.",
+      "ideas": "Hello, ideas.",
+      "create": "Make it real.",
+      "explore": "Try a twist."
     },
     "tabLabel": "Welcome",
     "welcomeBack": "Welcome back to",

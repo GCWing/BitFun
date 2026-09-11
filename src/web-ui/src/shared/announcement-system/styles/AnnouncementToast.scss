@@ -122,9 +122,12 @@ $toast-width: 320px;
     overflow: hidden;
   }
 
-  // ── Close button + countdown ring ────────────────────────────────────────
+  // The transparent close control and countdown share one circular footprint.
   &__close-wrap {
     position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
     width: 28px;
     height: 28px;
@@ -133,63 +136,38 @@ $toast-width: 320px;
 
   &__ring {
     position: absolute;
+    z-index: 1;
     inset: 0;
     width: 100%;
     height: 100%;
-    // Start arc from 12 o'clock
     transform: rotate(-90deg);
     pointer-events: none;
   }
 
-  // Circumference = 2π × 11.5 ≈ 72.26
-  $ring-circumference: 72.26px;
+  &__ring-track,
+  &__ring-fill {
+    fill: none;
+    stroke-width: 1.5;
+  }
 
   &__ring-track {
-    fill: none;
     stroke: var(--openbitfun-color-border-default);
-    stroke-width: 1.5;
   }
 
   &__ring-fill {
-    fill: none;
     stroke: var(--openbitfun-color-accent-default);
-    stroke-width: 1.5;
     stroke-linecap: round;
-    stroke-dasharray: $ring-circumference;
+    stroke-dasharray: 100;
     stroke-dashoffset: 0;
     animation: openbitfun-announcement-ring-countdown linear both;
-    // Smooth opacity fade at the very end
-    transition: opacity 0.3s ease;
   }
 
+  // Match the ring's hit area while retaining the shared small close glyph.
   &__close {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    border-radius: 50%;
+    inline-size: 100%;
+    block-size: 100%;
+    flex-shrink: 0;
     color: var(--openbitfun-color-content-muted);
-    cursor: pointer;
-    transition:
-      background-color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard),
-      color var(--openbitfun-motion-duration-base) var(--openbitfun-motion-easing-standard);
-
-    svg {
-      width: 13px;
-      height: 13px;
-    }
-
-    @media (hover: hover) and (pointer: fine) {
-      &:hover {
-        background: var(--openbitfun-color-surface-panel);
-        color: var(--openbitfun-color-content-primary);
-      }
-    }
   }
 
   // ── Description ──────────────────────────────────────────────────────────
@@ -221,11 +199,11 @@ $toast-width: 320px;
 @keyframes openbitfun-announcement-toast-in {
   from {
     opacity: 0;
-    transform: translateX(-12px) scale(0.985);
+    transform: translateX(-12px);
   }
   to {
     opacity: 1;
-    transform: translateX(0) scale(1);
+    transform: translateX(0);
   }
 }
 
@@ -242,7 +220,7 @@ $toast-width: 320px;
 
 @keyframes openbitfun-announcement-ring-countdown {
   from { stroke-dashoffset: 0; }
-  to   { stroke-dashoffset: 72.26px; }
+  to { stroke-dashoffset: 100; }
 }
 
 @media (prefers-reduced-motion: reduce) {
