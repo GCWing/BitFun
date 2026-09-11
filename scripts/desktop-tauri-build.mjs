@@ -13,6 +13,7 @@ import {
   statSync,
   writeFileSync,
 } from 'fs';
+import { buildLoopx } from './build-loopx.mjs';
 import { ensureFlashgrepBinary } from './prepare-flashgrep-resource.mjs';
 import { extractProductConfigArg } from './product-customization/cli.mjs';
 import { productBuildEnvironment } from './product-customization/projections.mjs';
@@ -53,6 +54,7 @@ async function main() {
     desktopDir,
   );
   process.env.FLASHGREP_DAEMON_BIN = flashgrepBinary;
+  const loopxResourceDir = await prepareBundledLoopx(forward, desktopDir);
   // Tauri CLI reads CI and rejects numeric "1" (common in CI providers).
   process.env.CI = 'true';
   if (process.platform === 'darwin' && requestsDmgBundle(forward)) {
@@ -64,6 +66,7 @@ async function main() {
   const tauriConfig = prepareTauriConfig(join(desktopDir, 'tauri.conf.json'), {
     desktopDir,
     flashgrepBinary,
+    loopxResourceDir,
     resolution,
     releaseChannel,
   });
@@ -291,7 +294,7 @@ export function prepareMacOSFlashgrepForSigning(
 
 export function prepareTauriConfig(
   baseConfigPath,
-  { desktopDir, flashgrepBinary, resolution, releaseChannel }
+  { desktopDir, flashgrepBinary, loopxResourceDir, resolution, releaseChannel }
 ) {
   const config = JSON.parse(readFileSync(baseConfigPath, 'utf8'));
   if (resolution) {
@@ -303,6 +306,7 @@ export function prepareTauriConfig(
     config.identifier = resolution.assembly.bundleId;
   }
   injectTargetFlashgrepResource(config, desktopDir, flashgrepBinary);
+  injectLoopxResource(config, loopxResourceDir);
   // The DeepSeek bridge is not a compile-time resource: cargo check and
   // desktop:dev must not require packages/dsh-acp/dist-profile. Official
   // packaging injects it here; frontend:build-all (beforeBuildCommand)
@@ -404,6 +408,38 @@ function injectTargetFlashgrepResource(config, desktopDir, flashgrepBinary) {
     ...(config.bundle || {}),
     resources,
   };
+}
+
+// The compiled loopx CLI sidecar is staged under resources/loopx/ and injected
+// only when a real bundle is requested. tauri-build validates every resource
+// path at cargo-build time, so a missing directory must never appear in the
+// generated config. Desktop dev keeps the same layout via ensureLoopxSidecar
+// in scripts/dev.cjs; when the sidecar is absent the runtime degrades to the
+// fixed system `loopx` command (ExactPinned) instead of vendor/pip.
+function injectLoopxResource(config, loopxResourceDir) {
+  const resources = { ...(config.bundle?.resources || {}) };
+  delete resources['resources/loopx/'];
+  if (loopxResourceDir) {
+    resources['resources/loopx/'] = 'resources/loopx/';
+  }
+  config.bundle = {
+    ...(config.bundle || {}),
+    resources,
+  };
+}
+
+async function prepareBundledLoopx(forwardArgs, desktopDir) {
+  if (forwardArgs.includes('--no-bundle')) {
+    return null;
+  }
+  console.log('[tauri-build] Building the bundled loopx CLI sidecar (scripts/build-loopx.mjs)');
+  await buildLoopx();
+  const loopxDir = join(desktopDir, 'resources', 'loopx');
+  const bin = join(loopxDir, process.platform === 'win32' ? 'loopx.exe' : 'loopx');
+  if (!existsSync(bin)) {
+    throw new Error(`bundled loopx CLI missing after build at ${bin}`);
+  }
+  return loopxDir;
 }
 
 function bundledFlashgrepResources(primaryBinary) {
