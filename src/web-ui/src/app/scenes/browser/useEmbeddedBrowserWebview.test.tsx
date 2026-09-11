@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useEmbeddedBrowserWebview } from './useEmbeddedBrowserWebview';
 
 const mocks = vi.hoisted(() => ({
-  invoke: vi.fn(async (..._args: unknown[]) => {}),
+  invoke: vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => {}),
   view: { label: 'test-browser', show: vi.fn(async () => {}), hide: vi.fn(async () => {}),
     close: vi.fn(async () => {}), setFocus: vi.fn(async () => {}) },
 }));
@@ -144,4 +144,46 @@ it('does not invoke native APIs in the web surface', async () => {
   expect(mocks.invoke).not.toHaveBeenCalled();
   expect(mocks.view.show).not.toHaveBeenCalled();
   expect(mocks.view.hide).not.toHaveBeenCalled();
+});
+
+it('aligns native and preview edges at fractional DPI and applies a one-physical-pixel move', async () => {
+  vi.stubGlobal('devicePixelRatio', 1.5);
+  viewportBounds = new DOMRect(912.333374, 128.333343, 747, 938.333374);
+  await render();
+  const creation = mocks.invoke.mock.calls.find(call => call[0] === 'browser_webview_create')!;
+  const { request } = creation[1] as { request: { x: number; y: number; width: number; height: number } };
+  expect(request.x * 1.5).toBeCloseTo(1369);
+  expect(request.y * 1.5).toBeCloseTo(193);
+  expect((request.x + request.width) * 1.5).toBeCloseTo(2489);
+  expect((request.y + request.height) * 1.5).toBeCloseTo(1600);
+  expect(viewportBounds.left + browser.previewBounds!.left).toBeCloseTo(request.x);
+  expect(viewportBounds.top + browser.previewBounds!.top).toBeCloseTo(request.y);
+  expect(browser.previewBounds!.width).toBe(request.width);
+  expect(browser.previewBounds!.height).toBe(request.height);
+
+  mocks.invoke.mockClear();
+  await mutate(() => {
+    viewportBounds = new DOMRect(viewportBounds.left, viewportBounds.top + 2 / 3, viewportBounds.width, viewportBounds.height);
+    window.dispatchEvent(new Event('resize'));
+  });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 180)); });
+  const update = mocks.invoke.mock.calls.find(call => call[0] === 'browser_webview_set_bounds')!;
+  expect(update).toBeDefined();
+  const updated = (update[1] as { request: { y: number } }).request;
+  expect(updated.y * 1.5).toBeCloseTo(194);
+  expect(viewportBounds.top + browser.previewBounds!.top).toBeCloseTo(updated.y);
+});
+
+it('keeps the decoded preview beneath a popup without waiting for the next capture', async () => {
+  vi.stubGlobal('Image', class { src = ''; decode = async () => {}; });
+  mocks.invoke.mockImplementation(async command => command === 'browser_webview_capture_preview'
+    ? { status: 'ready', dataUrl: 'data:image/jpeg;base64,preview' } : undefined);
+  await render();
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+  expect(browser.previewUrl).toBe('data:image/jpeg;base64,preview');
+  await mutate(() => document.body.append(overlay()));
+  expect(mocks.view.hide).toHaveBeenCalledOnce();
+  expect(browser.previewUrl).toBe('data:image/jpeg;base64,preview');
+  await act(async () => browser.loadUrl('https://example.com/new-page'));
+  expect(browser.previewUrl).toBeNull();
 });

@@ -178,6 +178,7 @@ import { canvasEditorGroupAppearanceDescriptor } from '@/app/components/panels/c
 import { canvasThumbnailAppearanceDescriptor } from '@/app/components/panels/content-canvas/mission-control/ThumbnailCard.appearance';
 import { canvasTabOverflowAppearanceDescriptor } from '@/app/components/panels/content-canvas/tab-bar/TabOverflowMenu.appearance';
 import { browserPanelAppearanceDescriptor } from '@/app/scenes/browser/BrowserPanel.appearance';
+import { browserPreviewAppearanceDescriptor } from '@/app/scenes/browser/BrowserPreview.appearance';
 import { nurseryGalleryAppearanceDescriptor } from '@/app/scenes/profile/views/NurseryGallery.appearance';
 import { gitGraphViewAppearanceDescriptor } from '@/app/scenes/git/views/GraphView.appearance';
 import { navBarAppearanceDescriptor } from '@/app/components/NavBar/NavBar.appearance';
@@ -430,6 +431,7 @@ export function createDefaultAppearanceRegistry(): AppearanceRegistry {
     .registerComponent(canvasThumbnailAppearanceDescriptor)
     .registerComponent(canvasTabOverflowAppearanceDescriptor)
     .registerComponent(browserPanelAppearanceDescriptor)
+    .registerComponent(browserPreviewAppearanceDescriptor)
     .registerComponent(nurseryGalleryAppearanceDescriptor)
     .registerComponent(deepReviewConsentDialogAppearanceDescriptor)
     .registerComponent(flowToolCardAppearanceDescriptor)

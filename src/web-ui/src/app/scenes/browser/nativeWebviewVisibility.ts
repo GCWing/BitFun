@@ -37,7 +37,10 @@ interface NativeView {
 }
 
 /** Serialize native calls and re-read current state after every async boundary. */
-export function createNativeWebviewVisibility(shouldShow: (view: NativeView) => boolean) {
+export function createNativeWebviewVisibility(
+  shouldShow: (view: NativeView) => boolean,
+  onVisibilityChanged?: (view: NativeView, visible: boolean) => void,
+) {
   const pending = new WeakMap<NativeView, Promise<void>>();
   const applied = new WeakMap<NativeView, boolean>();
   return async (view: NativeView, focus = false): Promise<void> => {
@@ -45,8 +48,13 @@ export function createNativeWebviewVisibility(shouldShow: (view: NativeView) => 
       const reconcile = async () => {
         let desired = shouldShow(view);
         while (applied.get(view) !== desired) {
-          if (desired) await view.show();
-          else await view.hide();
+          if (desired) {
+            await view.show();
+            onVisibilityChanged?.(view, true);
+          } else {
+            onVisibilityChanged?.(view, false);
+            await view.hide();
+          }
           applied.set(view, desired);
           desired = shouldShow(view);
         }

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import { useEmbeddedBrowserWebview } from './useEmbeddedBrowserWebview';
+import { BrowserPreview } from './BrowserPreview';
 import './BrowserScene.scss';
 
 const log = createLogger('BrowserScene');
@@ -103,10 +104,13 @@ const BrowserScene: React.FC = () => {
             className="browser-scene__webview-host"
             data-webview-label={browser.webviewLabel}
           >
-            <div className="browser-scene__webview-placeholder">
-              <Icon name="browser" size="lg" />
-              <OverflowText data-testid="browser-current-url">{browser.currentUrl}</OverflowText>
-            </div>
+            {!browser.previewUrl && (
+              <div className="browser-scene__webview-placeholder">
+                <Icon name="browser" size="lg" />
+                <OverflowText data-testid="browser-current-url">{browser.currentUrl}</OverflowText>
+              </div>
+            )}
+            <BrowserPreview src={browser.previewUrl} bounds={browser.previewBounds} />
           </div>
         )}
       </div>

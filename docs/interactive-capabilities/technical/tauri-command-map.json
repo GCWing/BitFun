@@ -2,10 +2,10 @@
   "schemaVersion": 2,
   "generatedFrom": "src/shared/interactive-capabilities/catalog.json",
   "catalogDigest": "896281a3cd5cac2b50ec607988e04624224444911ddb2d58ba59a5d7d06493c5",
-  "commandCount": 643,
+  "commandCount": 644,
   "coverage": {
-    "commandCount": 643,
-    "documentedCommandCount": 607,
+    "commandCount": 644,
+    "documentedCommandCount": 608,
     "implementationCommandCount": 36,
     "implementationDigest": "c9bbc0f2ca3695d8c18cff285386edeba7bcf3b11120adb57509a80b09ee3297"
   },
@@ -710,6 +710,22 @@
       "rustPath": "api::browser_api::browser_get_url",
       "sourceFile": "src/apps/desktop/src/api/browser_api.rs",
       "signature": "fn browser_get_url( app: tauri::AppHandle, request: WebviewLabelRequest, ) -> Result<String, String>",
+      "remoteWorkspacePolicy": "LocalOnly"
+    },
+    {
+      "id": "browser_webview_capture_preview",
+      "moduleId": "browser",
+      "capabilityId": "feature.browser",
+      "capabilityIds": [
+        "feature.browser"
+      ],
+      "documentedItemIds": [
+        "feature.browser:embedded-webview"
+      ],
+      "visibility": "documented",
+      "rustPath": "api::browser_api::browser_webview_capture_preview",
+      "sourceFile": "src/apps/desktop/src/api/browser_api.rs",
+      "signature": "fn browser_webview_capture_preview( app: tauri::AppHandle, request: WebviewLabelRequest, ) -> Result<WebviewPreviewResponse, String>",
       "remoteWorkspacePolicy": "LocalOnly"
     },
     {

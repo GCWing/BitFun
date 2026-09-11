@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BLANK_TARGET_INTERCEPT_SCRIPT } from './browserInspectorScript';
 import { STREAM_RENDER_OPTIMIZATION_SCRIPT } from './browserStreamPerformanceScript';
 import { validateUrl } from './browserUrlCheck';
+import { BrowserPreviewCache, prepareBrowserPreview, type BrowserPreviewResponse } from './browserPreviewCache';
+import { alignBrowserViewport, type BrowserViewportBounds } from './browserViewportGeometry';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { createNativeWebviewVisibility, hasNativeWebviewOccluder, NATIVE_WEBVIEW_OCCLUSION_SELECTOR } from './nativeWebviewVisibility';
 export { NATIVE_WEBVIEW_OCCLUSION_SELECTOR, rectanglesIntersect } from './nativeWebviewVisibility';
 
 const WEBVIEW_RESIZE_DEBOUNCE_MS = 160;
-const WEBVIEW_BOUNDS_EPSILON = 1;
 const WEBVIEW_BOUNDS_WAIT_TIMEOUT_MS = 2000;
 const BROWSER_WEBVIEW_PAGE_LOAD_EVENT = 'browser-webview-page-load';
 const WEBVIEW_CREATE_RETRY_DELAYS_MS = [0, 250, 750];
@@ -180,6 +181,15 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
   activeRef.current = isVisible;
   const mountedRef = useRef(true);
   const toolbarSuspendedRef = useRef(false);
+  const nativeVisibleRef = useRef(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewBounds, setPreviewBounds] = useState<BrowserViewportBounds | null>(null);
+  const preview = useMemo(() => new BrowserPreviewCache({
+    capture: label => api.invoke<BrowserPreviewResponse>('browser_webview_capture_preview', { request: { label } }),
+    prepare: prepareBrowserPreview,
+    onFrame: setPreviewUrl,
+    onError: previewError => log.warn('Browser preview unavailable; using the default placeholder', previewError),
+  }), [log]);
   const visibility = useMemo(() => createNativeWebviewVisibility(target => {
     const viewport = viewportRef.current;
     if (!mountedRef.current || !activeRef.current || toolbarSuspendedRef.current
@@ -197,7 +207,11 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
     // rectangle after the DOM container has moved.
     return !!bounds && !hasNativeWebviewOccluder(viewport, bounds)
       && (!nativeBounds || !hasNativeWebviewOccluder(viewport, nativeBounds));
-  }), []);
+  }, (target, visible) => {
+    if (target !== webviewRef.current) return;
+    nativeVisibleRef.current = visible;
+    preview.setVisible(visible && document.visibilityState !== 'hidden');
+  }), [preview]);
 
   const syncVisibility = useCallback(async (focus = false) => {
     const target = webviewRef.current;
@@ -216,12 +230,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
     const rect = viewportRef.current.getBoundingClientRect();
     if (rect.width <= 1 || rect.height <= 1) return null;
 
-    return {
-      left: Math.round(rect.left),
-      top: Math.round(rect.top),
-      width: Math.round(rect.width),
-      height: Math.round(rect.height),
-    };
+    return alignBrowserViewport(rect, window.devicePixelRatio);
   }, []);
 
   const waitForViewportBounds = useCallback(async (): Promise<WebviewBounds> => {
@@ -250,17 +259,30 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
     const previous = lastBoundsRef.current;
     const boundsChanged =
       !previous ||
-      Math.abs(previous.left - nextBounds.left) > WEBVIEW_BOUNDS_EPSILON ||
-      Math.abs(previous.top - nextBounds.top) > WEBVIEW_BOUNDS_EPSILON ||
-      Math.abs(previous.width - nextBounds.width) > WEBVIEW_BOUNDS_EPSILON ||
-      Math.abs(previous.height - nextBounds.height) > WEBVIEW_BOUNDS_EPSILON;
+      previous.left !== nextBounds.left || previous.top !== nextBounds.top ||
+      previous.width !== nextBounds.width || previous.height !== nextBounds.height;
 
     if (boundsChanged) {
+      if (!previous || previous.width !== nextBounds.width || previous.height !== nextBounds.height) {
+        preview.invalidate();
+      }
       await setWebviewBounds(target.label, nextBounds);
       lastBoundsRef.current = nextBounds;
+      if (!previous || previous.width !== nextBounds.width || previous.height !== nextBounds.height) {
+        preview.invalidate();
+      }
     }
+    // The image is positioned relative to the host, but uses the applied native
+    // rectangle rather than stretching to the host's fractional CSS dimensions.
+    const viewport = viewportRef.current;
+    const applied = lastBoundsRef.current;
+    if (!mountedRef.current || target !== webviewRef.current || !viewport || !applied) return;
+    const rect = viewport.getBoundingClientRect();
+    const relative = { left: applied.left - rect.left, top: applied.top - rect.top, width: applied.width, height: applied.height };
+    setPreviewBounds(current => current && current.left === relative.left && current.top === relative.top
+      && current.width === relative.width && current.height === relative.height ? current : relative);
     await visibility(target);
-  }, [isTauri, readViewportBounds, visibility]);
+  }, [isTauri, preview, readViewportBounds, visibility]);
 
   const closeWebview = useCallback(async (handle?: BrowserWebviewHandle | null) => {
     const target = handle ?? webviewRef.current;
@@ -275,6 +297,9 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
       }
     } finally {
       if (!handle || target === webviewRef.current) {
+        nativeVisibleRef.current = false;
+        preview.setVisible(false);
+        preview.setTarget('');
         webviewRef.current = null;
         webviewLabelRef.current = '';
         setWebviewLabel('');
@@ -283,7 +308,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
         pageLoadUnlistenRef.current = null;
       }
     }
-  }, [log]);
+  }, [log, preview]);
 
   const startPageLoadListener = useCallback(async (label: string) => {
     pageLoadUnlistenRef.current?.();
@@ -294,6 +319,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
       BROWSER_WEBVIEW_PAGE_LOAD_EVENT,
       ({ payload }) => {
         if (!payload || payload.label !== label) return;
+        preview.invalidate();
         if (payload.event === 'started') {
           setIsLoading(true);
         } else {
@@ -308,7 +334,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
         }
       },
     );
-  }, []);
+  }, [preview]);
 
   const createWebview = useCallback(async (url: string) => {
     const previous = webviewRef.current;
@@ -334,6 +360,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
           throw new Error('Browser surface disposed during webview creation');
         }
         webviewRef.current = handle;
+        preview.setTarget(label);
         lastBoundsRef.current = initialBounds;
         await injectBrowserPageScripts(label);
         await startPageLoadListener(label);
@@ -354,7 +381,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
     }
 
     throw lastError;
-  }, [closeWebview, labelPrefix, log, openRequestId, startPageLoadListener, waitForViewportBounds]);
+  }, [closeWebview, labelPrefix, log, openRequestId, preview, startPageLoadListener, waitForViewportBounds]);
 
   const navigateExistingWebview = useCallback(async (url: string): Promise<boolean> => {
     const label = webviewLabelRef.current;
@@ -381,6 +408,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
 
   const loadUrl = useCallback(async (rawUrl: string) => {
     const nextUrl = normalizeUrl(rawUrl, defaultUrl);
+    preview.invalidate();
     setInputValue(nextUrl);
     setCurrentUrl(nextUrl);
     currentUrlRef.current = nextUrl;
@@ -415,7 +443,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
     } finally {
       setIsLoading(false);
     }
-  }, [createWebview, defaultUrl, isTauri, log, navigateExistingWebview, openRequestId, syncWebviewBounds, visibility]);
+  }, [createWebview, defaultUrl, isTauri, log, navigateExistingWebview, openRequestId, preview, syncWebviewBounds, visibility]);
 
   const queueSync = useCallback(() => {
     if (resizeTimerRef.current !== null) window.clearTimeout(resizeTimerRef.current);
@@ -472,8 +500,13 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
 
   useEffect(() => {
     mountedRef.current = true;
+    preview.resume();
+    const handleDocumentVisibility = () => preview.setVisible(nativeVisibleRef.current && document.visibilityState !== 'hidden');
+    document.addEventListener('visibilitychange', handleDocumentVisibility);
     return () => {
       mountedRef.current = false;
+      preview.dispose();
+      document.removeEventListener('visibilitychange', handleDocumentVisibility);
       pageLoadUnlistenRef.current?.();
       pageLoadUnlistenRef.current = null;
       if (resizeTimerRef.current !== null) {
@@ -486,7 +519,7 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
         void visibility(handle).catch(() => {}).then(() => closeWebview(handle));
       }
     };
-  }, [closeWebview, visibility]);
+  }, [closeWebview, preview, visibility]);
 
   useEffect(() => {
     if (!isTauri) return;
@@ -586,6 +619,8 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
     isLoading,
     isTauri,
     loadUrl,
+    previewUrl,
+    previewBounds,
     reload,
     setInputValue,
     viewportRef,
@@ -603,6 +638,8 @@ export function useEmbeddedBrowserWebview(options: UseEmbeddedBrowserWebviewOpti
     isLoading,
     isTauri,
     loadUrl,
+    previewUrl,
+    previewBounds,
     reload,
     viewportRef,
     webviewLabel,

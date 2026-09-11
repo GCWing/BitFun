@@ -15,6 +15,7 @@ import { useContextStore } from '@/shared/context-system';
 import type { WebElementContext } from '@/shared/types/context';
 import { createInspectorScript, CANCEL_INSPECTOR_SCRIPT } from './browserInspectorScript';
 import { useEmbeddedBrowserWebview } from './useEmbeddedBrowserWebview';
+import { BrowserPreview } from './BrowserPreview';
 import './BrowserPanel.scss';
 
 const log = createLogger('BrowserPanel');
@@ -237,10 +238,13 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl, openR
             className="browser-panel__webview-host"
             data-webview-label={webviewLabel}
           >
-            <div data-openbitfun-component="browser-panel" data-openbitfun-part="placeholder" className="browser-panel__webview-placeholder">
-              <Icon name="browser" size="lg" />
-              <OverflowText data-testid="browser-current-url">{currentUrl}</OverflowText>
-            </div>
+            {!browser.previewUrl && (
+              <div data-openbitfun-component="browser-panel" data-openbitfun-part="placeholder" className="browser-panel__webview-placeholder">
+                <Icon name="browser" size="lg" />
+                <OverflowText data-testid="browser-current-url">{currentUrl}</OverflowText>
+              </div>
+            )}
+            <BrowserPreview src={browser.previewUrl} bounds={browser.previewBounds} />
           </div>
         )}
       </div>

@@ -4,7 +4,7 @@
 //! adapter so stream-specific initialization can run before page scripts.
 
 use openbitfun_core::agentic::tools::browser_control::BuiltInBrowserTarget;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use tauri::Manager;
@@ -384,6 +384,64 @@ pub struct WebviewLabelRequest {
     pub label: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum WebviewPreviewResponse {
+    Ready {
+        #[serde(rename = "dataUrl")]
+        data_url: String,
+    },
+    Unsupported {
+        reason: String,
+    },
+}
+
+// Preview frames are ephemeral UI assets, never files or full-page captures.
+fn encode_browser_preview(png_base64: &str) -> Result<String, String> {
+    use base64::Engine as _;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(png_base64)
+        .map_err(|e| format!("decode browser preview failed: {e}"))?;
+    let image = image::load_from_memory_with_format(&bytes, image::ImageFormat::Png)
+        .map_err(|e| format!("decode browser preview PNG failed: {e}"))?;
+    let image = if image.width() > 1600 || image.height() > 1600 {
+        image.thumbnail(1600, 1600)
+    } else {
+        image
+    };
+    let mut jpeg = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 80)
+        .encode_image(&image.to_rgb8())
+        .map_err(|e| format!("encode browser preview JPEG failed: {e}"))?;
+    Ok(format!(
+        "data:image/jpeg;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(jpeg)
+    ))
+}
+
+/// Capture only the controller's embedded page for DOM occlusion placeholders.
+#[tauri::command]
+pub async fn browser_webview_capture_preview(
+    app: tauri::AppHandle,
+    request: WebviewLabelRequest,
+) -> Result<WebviewPreviewResponse, String> {
+    validate_browser_label(&request.label)?;
+    let webview = find_browser_webview(&app, &request.label)?;
+    let png = match openbitfun_webdriver::platform::take_screenshot(webview, 1000).await {
+        Ok(png) => png,
+        Err(error) if error.error == "unsupported operation" => {
+            return Ok(WebviewPreviewResponse::Unsupported {
+                reason: error.message,
+            });
+        }
+        Err(error) => return Err(error.message),
+    };
+    let data_url = tokio::task::spawn_blocking(move || encode_browser_preview(&png))
+        .await
+        .map_err(|e| format!("browser preview encoding task failed: {e}"))??;
+    Ok(WebviewPreviewResponse::Ready { data_url })
+}
+
 #[tauri::command]
 pub async fn browser_webview_reload(
     app: tauri::AppHandle,
@@ -436,6 +494,23 @@ pub async fn browser_get_url(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preview_is_a_bounded_jpeg_and_rejects_invalid_data() {
+        use base64::Engine as _;
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(2000, 1000)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let encoded = base64::engine::general_purpose::STANDARD.encode(png.into_inner());
+        let preview = encode_browser_preview(&encoded).unwrap();
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(preview.strip_prefix("data:image/jpeg;base64,").unwrap())
+            .unwrap();
+        let image = image::load_from_memory(&bytes).unwrap();
+        assert_eq!((image.width(), image.height()), (1600, 800));
+        assert!(encode_browser_preview("invalid").is_err());
+    }
 
     #[test]
     fn open_request_correlation_requires_the_exact_active_target() {
