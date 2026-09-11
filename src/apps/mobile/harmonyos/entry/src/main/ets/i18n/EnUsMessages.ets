@@ -1,4 +1,10 @@
 export const EN_US_MESSAGES: [string, string][] = [
+  ['home.welcomeTitle', 'Pick up wherever you are'],
+  ['home.welcomeDetail', 'Connect your computer to follow your tasks and continue the conversation.'],
+  ['home.connectComputer', 'Connect computer'],
+  ['home.connecting', 'Connecting…'],
+  ['home.exploreMiniApps', 'Explore MiniApps'],
+  ['home.miniAppsHint', 'Ready to use, even without a computer'],
   ['miniapp.allApps', 'All apps'],
   ['miniapp.availableOffline', 'Available offline'],
 

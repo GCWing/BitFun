@@ -1,4 +1,10 @@
 export const ZH_CN_MESSAGES: [string, string][] = [
+  ['home.welcomeTitle', '让灵感，随时继续'],
+  ['home.welcomeDetail', '连接你的电脑，查看任务进度，继续对话。'],
+  ['home.connectComputer', '连接电脑'],
+  ['home.connecting', '正在连接…'],
+  ['home.exploreMiniApps', '探索小应用'],
+  ['home.miniAppsHint', '无需连接电脑，也能即刻使用'],
   ['miniapp.allApps', '全部应用'],
   ['miniapp.availableOffline', '离线可用'],
 
