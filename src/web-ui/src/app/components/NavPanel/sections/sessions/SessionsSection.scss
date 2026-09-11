@@ -266,6 +266,18 @@
     white-space: nowrap;
   }
 
+  &__inline-item-title {
+    display: inline-flex;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    align-items: center;
+
+    .openbitfun-nav-panel__inline-item-label {
+      flex: 0 1 auto;
+    }
+  }
+
   &__inline-item-btw-badge {
     flex: 0 0 auto;
     display: inline-flex;
@@ -460,7 +472,7 @@
 
   &__inline-item-menu-popover {
     position: fixed;
-    z-index: 10000;
+    z-index: var(--openbitfun-layer-popover);
   }
 
   &__inline-item-edit {

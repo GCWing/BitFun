@@ -8,7 +8,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { OverflowText, Icon, KeyHint, Menu, MenuItem, MenuSeparator, Tooltip } from '@openbitfun/ui';
+import { Button, IconButton, OverflowText, Icon, KeyHint, Menu, MenuItem, MenuSeparator, Tooltip } from '@openbitfun/ui';
 import { getAppearanceOverlayHost } from '@/infrastructure/appearance/runtime/AppearanceOverlayHost';
 import { LayoutGrid } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -165,25 +165,34 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
       : '';
 
   return (
-    <div data-openbitfun-component="canvas-tab-overflow" data-openbitfun-part="root" data-openbitfun-state={isOpen ? 'open' : ''} ref={wrapperRef} className="canvas-tab-panorama-wrapper">
+    <div data-openbitfun-product-component="canvas-tab-overflow" data-openbitfun-product-part="root" data-openbitfun-state={isOpen ? 'open' : ''} ref={wrapperRef} className="canvas-tab-panorama-wrapper">
       <Tooltip content={tooltipContent} placement="bottom">
-        <button
-          data-openbitfun-component="canvas-tab-overflow"
-          data-openbitfun-part="trigger"
-          className={`canvas-tab-panorama-btn ${hasOverflow ? 'has-overflow' : ''} ${isOpen ? 'is-open' : ''} ${!hasMissionControl ? 'overflow-only' : ''}`}
-          onClick={handleButtonClick}
-        >
-          {hasMissionControl ? (
-            <LayoutGrid size={14} />
-          ) : (
-            <Icon name="chevron-down" size="sm" />
-          )}
-          {hasOverflow && (
-            <span data-openbitfun-component="canvas-tab-overflow" data-openbitfun-part="badge" className="canvas-tab-panorama-btn__badge">
+        {hasOverflow ? (
+          <Button
+            data-openbitfun-product-component="canvas-tab-overflow"
+            data-openbitfun-product-part="trigger"
+            size="sm"
+            variant="text"
+            aria-label={tooltipContent}
+            aria-haspopup="menu"
+            aria-expanded={isOpen}
+            onClick={handleButtonClick}
+            leadingIcon={hasMissionControl ? <LayoutGrid size={14} /> : <Icon name="chevron-down" size="sm" />}
+          >
+            <span data-openbitfun-product-component="canvas-tab-overflow" data-openbitfun-product-part="badge">
               +{overflowTabs.length}
             </span>
-          )}
-        </button>
+          </Button>
+        ) : (
+          <IconButton
+            data-openbitfun-product-component="canvas-tab-overflow"
+            data-openbitfun-product-part="trigger"
+            size="sm"
+            aria-label={tooltipContent}
+            onClick={handleButtonClick}
+            icon={<LayoutGrid size={14} />}
+          />
+        )}
       </Tooltip>
 
       {isOpen && hasOverflow && createPortal(
@@ -237,8 +246,8 @@ export const TabOverflowMenu: React.FC<TabOverflowMenuProps> = ({
                 }]}
               >
                 <OverflowText behavior="marquee"
-                  data-openbitfun-component="canvas-tab-overflow"
-                  data-openbitfun-part="itemTitle"
+                  data-openbitfun-product-component="canvas-tab-overflow"
+                  data-openbitfun-product-part="itemTitle"
                   data-openbitfun-state={[
                     activeTabId === tab.id && 'active',
                     tab.isDirty && 'dirty',

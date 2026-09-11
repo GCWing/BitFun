@@ -37,6 +37,11 @@ export class AppRootRuntime extends AppRootRuntimeComposition {
 
   async aboutToAppear(): Promise<void> {
     await this.localeController.initialize(this.host.context());
+    if (this.host.offerTaskNotifications) {
+      await this.taskCompletionNotificationPort.offerOnboarding(
+        (): Promise<boolean> => this.host.offerTaskNotifications!()
+      );
+    }
     this.syncRemotePageSummary();
     await this.remoteChatCache.init(this.host.context());
     await this.remoteSessionListCache.init(this.host.context());

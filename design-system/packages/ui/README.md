@@ -18,6 +18,43 @@ export function Example() {
 
 The package owns component anatomy, behavior, accessibility, and stable variants. It does not own theme selection persistence, product state, routes, locale resources, or platform APIs.
 
+## Voice calls
+
+`VoiceCallPanel` owns the complete compact call surface: navigation, particle
+logo, scrolling transcripts and mute/settings/end controls. Pass localized
+`title`, `labels`, transcript strings, optional `status`, and callbacks from
+the host. Returning to chat, closing the window and ending a call are separate
+callbacks so the package never decides session or window lifetime.
+
+Typography follows the shared `type.heading.panel` role for the title (18px,
+semibold) and `type.body.lg` for transcripts and status text (15px, regular,
+1.6 line height). Both use the canonical interface font stacks and follow user
+font-size preferences. Compact-height layouts keep the same typography roles.
+User bubbles apply `type.modifier.leading.tight` for 18px leading, with 12px
+padding on all sides and a 12px corner radius. They fit their content and wrap
+within the conversation width; a single line is 42px high at the default size.
+
+`VoiceParticleLogo` is also exported independently. Its `readAudio` callback
+reads `{ user, assistant, assistantSpeaking }` once per animation frame. The
+two spectra are FFT byte bins from analysers configured with `fftSize = 256`;
+pass `null` for muted or unavailable audio. `assistantSpeaking` describes the
+audible playback clock, including queued audio that outlives a provider's
+completion event. Omit the callback for the calm resting motion.
+
+The supplied Voice-Particles-Demo contour, sampling, force coefficients,
+envelopes, density and brightness profiles are preserved in a fixed simulation
+space; resizing changes only its projection. The host supplies real capture and
+playback, and keeps permission, network, transcription and audio cleanup outside
+the component. The canvas pauses offscreen, when inactive or hidden, and renders
+a still logo for reduced motion. Both components are registered in Design Lab;
+its presentation specimens do not capture or simulate speech.
+
+The panel uses the semantic on-light/on-dark endpoints: 80% dark background,
+30% light user bubble, full light text and 20% light circular controls. Render
+it on a transparent host shell to avoid applying the background opacity twice.
+The host allocates its dimensions; the product uses the existing 480 × 680
+compact-window contract. Build and source tests do not prove visual fidelity.
+
 ## Buttons
 
 Choose variants by action role: use `primary` for the main save, submit, create,
@@ -167,6 +204,12 @@ Hosts without Web Animations render the current text immediately.
 
 The **RollingText** Design Lab entry includes manual standalone and TabGroup
 examples for repeated replacement and long labels.
+
+`TabGroup.renderItem(item, node, index)` can wrap the supplied standard item in
+a tooltip, context-menu owner, or drag target. Keep `node` intact so TabGroup
+continues to own selection, keyboard navigation, label overflow, and end-action
+anatomy. Product wrappers own document states and layout, without replacing the
+tab's control styles or creating another tablist.
 
 ## Mobile controls
 
@@ -431,3 +474,26 @@ PageHeader `md` uses the settings title with a primary 15px description; `displa
 KeyHint uses 10px text on a 10px line and 2px block padding. StatusPill uses a 14px line with 2px block padding; opt into `emphasis` for short mode labels such as Ask, while ordinary status descriptions retain readable content colors. LauncherButton owns a 72px minimum width, 40px height, 10px side padding, 4px gap, 12px icon and 11px monospace text. Product shells may retain a deliberate compact greeting that expands into this geometry.
 
 Composer and ChatComposer share the 16px surface radius, 8px padding, 12px content gap, composer border, context tint, and composer shadow. Compact ChatComposer uses a 24px action track plus 8px padding on each side and two 1px borders (42px border-box height); expanded height follows editor content. The generic context shell has no duplicate outer border or surface inset. Queue and editor state remain owned by their existing slots and product adapters.
+
+ActivityItem `surface` uses a 40px minimum row with a centered outline, 12px
+radius, 9px block padding, 12px leading inset and 9px trailing inset. The 22px
+sibling actions fit inside that row; optional detail grows beneath it. Inline
+activity retains its compact geometry. Identity text can shrink alongside a
+long description while metadata and sibling actions retain their own slots.
+Lab Patterns includes long paths, large change counts, expandable detail and
+disabled actions. The current Web UI has no direct ActivityItem consumer;
+FlowChat ambient tool cards keep their separate presentation contract.
+
+Ambient FlowChat summaries, product thinking/explore headers and runtime status
+share a 14px icon column followed by a 4px gap. The icon column starts at the
+transcript body edge; heading text starts 18px after that edge. Loading, tool
+and disclosure glyphs occupy that same column. Expanded thinking prose remains
+aligned with the body edge; bordered tool detail retains its own content inset.
+The 12px/4px Figma inline trace is a smaller typography scene; the existing
+product 14px glyph size is retained when applying its gap to these summaries.
+
+FlowChat vertical composition uses an 8px item/section gap and 4px inline gap.
+Collapsed ambient tool runs use their 22px minimum line boxes without extra
+spacing between adjacent rows; expanded/prominent cards retain the section gap.
+The enclosing composition owns those gaps, and card bodies own their internal
+padding. The Lab tool sequence demonstrates both arrangements with real cards.

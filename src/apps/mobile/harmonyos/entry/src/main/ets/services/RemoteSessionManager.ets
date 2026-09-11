@@ -409,27 +409,48 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
     return {
       name: response.name || RemoteResponseMapper.basename(path),
       contentBase64: response.chunk_base64 || '',
-      offset: response.offset || offset,
+      revision: response.revision,
+      offset: response.offset ?? offset,
       chunkSize: response.chunk_size || 0,
       totalSize: response.total_size || 0,
       mimeType: response.mime_type || 'application/octet-stream'
     };
   }
 
-  async readFile(path: string, sessionId?: string, onProgress?: (downloaded: number, total: number) => void): Promise<ReadFileResult> {
+  async readFile(path: string, sessionId?: string, onProgress?: (downloaded: number, total: number) => void, maxBytes?: number): Promise<ReadFileResult> {
     const chunkSize = 3 * 1024 * 1024;
     let offset = 0;
     let fileName = RemoteResponseMapper.basename(path);
     let mimeType = 'application/octet-stream';
     let totalSize = 0;
-    const chunks: string[] = [];
+    let revision: string | undefined;
+    const generation = this.transportGeneration;
+    const transport = this.transport;
+    const chunks: Uint8Array[] = [];
     while (true) {
-      const response = await this.readFileChunk(path, offset, chunkSize, sessionId);
+      if (generation !== this.transportGeneration || transport !== this.transport) {
+        throw new Error('Remote target changed during file transfer.');
+      }
+      const response = await this.readFileChunk(path, offset, Math.min(chunkSize, maxBytes ?? chunkSize), sessionId);
+      if (generation !== this.transportGeneration || transport !== this.transport) {
+        throw new Error('Remote target changed during file transfer.');
+      }
       const readSize = response.chunkSize;
-      chunks.push(response.contentBase64);
-      fileName = response.name || fileName;
-      mimeType = response.mimeType || mimeType;
-      totalSize = response.totalSize || totalSize;
+      const bytes = Encoding.base64ToBytes(response.contentBase64);
+      if (!Number.isSafeInteger(response.totalSize) || response.totalSize < 0 ||
+        response.offset !== offset || readSize !== bytes.length || readSize > chunkSize ||
+        readSize > response.totalSize - offset || (readSize === 0 && offset < response.totalSize)) {
+        throw new Error('Remote file transfer is incomplete or inconsistent.');
+      }
+      if (maxBytes !== undefined && response.totalSize > maxBytes) throw new Error('File too large for preview.');
+      if (chunks.length > 0 && (response.totalSize !== totalSize || response.name !== fileName || response.mimeType !== mimeType || response.revision !== revision)) {
+        throw new Error('Remote file changed during transfer.');
+      }
+      chunks.push(bytes);
+      fileName = response.name;
+      mimeType = response.mimeType;
+      totalSize = response.totalSize;
+      revision = response.revision;
       offset += readSize;
       if (onProgress) {
         onProgress(offset, totalSize);
@@ -438,9 +459,15 @@ export class RemoteSessionManager implements RemoteChatCommandClient, RemoteFile
         break;
       }
     }
+    if (generation !== this.transportGeneration || transport !== this.transport) {
+      throw new Error('Remote target changed during file transfer.');
+    }
+    const bytes = new Uint8Array(offset);
+    let copied = 0;
+    chunks.forEach((chunk: Uint8Array) => { bytes.set(chunk, copied); copied += chunk.length; });
     return {
       name: fileName,
-      contentBase64: chunks.join(''),
+      contentBase64: Encoding.bytesToBase64(bytes),
       mimeType,
       size: totalSize
     };

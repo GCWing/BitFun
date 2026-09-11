@@ -1630,6 +1630,7 @@ fn remote_connect_file_response_assembly_owns_base64_wire_shape() {
     assert_eq!(content_json["size"], 17);
 
     let chunk_response = remote_file_chunk_response(Ok(RemoteWorkspaceFileChunk {
+        revision: String::new(),
         name: "report.md".to_string(),
         bytes: b"remote file".to_vec(),
         offset: 6,
@@ -1717,6 +1718,71 @@ async fn remote_connect_file_command_handler_owns_owner_flow_and_uses_host_root(
     );
 
     std::fs::remove_dir_all(base).expect("cleanup remote workspace");
+}
+
+struct UnavailableSessionFileHost;
+
+#[async_trait::async_trait]
+impl RemoteWorkspaceFileRuntimeHost for UnavailableSessionFileHost {
+    async fn resolve_remote_file_workspace_root(&self, _: Option<&str>) -> Option<PathBuf> {
+        panic!("A session provider error must never access the legacy local root")
+    }
+
+    async fn read_remote_file(
+        &self,
+        _: &str,
+        session: Option<&str>,
+        _: u64,
+    ) -> Result<Option<RemoteWorkspaceFileContent>, String> {
+        assert_eq!(session, Some("remote-session"));
+        Err("Session host is offline".into())
+    }
+
+    async fn read_remote_file_chunk(
+        &self,
+        _: &str,
+        session: Option<&str>,
+        _: u64,
+        _: u64,
+    ) -> Result<Option<RemoteWorkspaceFileChunk>, String> {
+        assert_eq!(session, Some("remote-session"));
+        Err("Session host is offline".into())
+    }
+
+    async fn remote_file_info(
+        &self,
+        _: &str,
+        session: Option<&str>,
+    ) -> Result<Option<RemoteWorkspaceFileInfo>, String> {
+        assert_eq!(session, Some("remote-session"));
+        Err("Session host is offline".into())
+    }
+}
+
+#[tokio::test]
+async fn remote_connect_file_provider_errors_never_fall_back_to_local_files() {
+    let path = "computer://output.png".to_string();
+    let session_id = Some("remote-session".to_string());
+    for command in [
+        RemoteCommand::ReadFile {
+            path: path.clone(),
+            session_id: session_id.clone(),
+        },
+        RemoteCommand::ReadFileChunk {
+            path: path.clone(),
+            session_id: session_id.clone(),
+            offset: 0,
+            limit: 3,
+        },
+        RemoteCommand::GetFileInfo { path, session_id },
+    ] {
+        assert_eq!(
+            handle_remote_workspace_file_command(&UnavailableSessionFileHost, &command).await,
+            RemoteResponse::Error {
+                message: "Session host is offline".into()
+            }
+        );
+    }
 }
 
 #[test]
@@ -2059,7 +2125,8 @@ fn remote_connect_agent_type_mapping_preserves_current_mobile_aliases() {
     assert_eq!(resolve_remote_agent_type(Some("Standard")), "Standard");
     assert_eq!(resolve_remote_agent_type(Some("balanced")), "Standard");
     assert_eq!(resolve_remote_agent_type(Some("standard")), "Standard");
-    assert_eq!(resolve_remote_agent_type(Some("minimal")), "minimal");
+    assert_eq!(resolve_remote_agent_type(Some("minimal")), "Minimal");
+    assert_eq!(resolve_remote_agent_type(Some("MINIMAL")), "Minimal");
     assert_eq!(resolve_remote_agent_type(Some("ultimate")), "Ultimate");
     assert_eq!(resolve_remote_agent_type(Some("Ultimate")), "Ultimate");
     assert_eq!(resolve_remote_agent_type(Some("cowork")), "Cowork");
@@ -3075,4 +3142,16 @@ fn control_ping_accepts_legacy_and_additive_client_identity() {
         serde_json::from_value::<LegacyCommand>(current).unwrap(),
         LegacyCommand::Ping
     ));
+}
+
+#[test]
+fn file_chunk_revision_is_additive_for_legacy_peers() {
+    let legacy = serde_json::json!({"resp":"file_chunk","name":"a.png","chunk_base64":"AQ==",
+        "offset":0,"chunk_size":1,"total_size":1,"mime_type":"image/png"});
+    let response: RemoteResponse = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(serde_json::to_value(response).unwrap(), legacy);
+    let mut current = legacy;
+    current["revision"] = serde_json::json!("1:123");
+    let response: RemoteResponse = serde_json::from_value(current.clone()).unwrap();
+    assert_eq!(serde_json::to_value(response).unwrap(), current);
 }

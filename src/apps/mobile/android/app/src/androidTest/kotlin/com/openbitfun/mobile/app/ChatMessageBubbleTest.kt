@@ -258,6 +258,7 @@ class ChatMessageBubbleTest {
         pending = false,
         typing = typing,
         showRetry = showRetry,
+        error = null,
     )
 
     private fun runningTool(): ToolCard = ToolCard(

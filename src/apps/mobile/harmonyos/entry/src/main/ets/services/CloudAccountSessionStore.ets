@@ -1,3 +1,4 @@
+import { GitHubAccountProfile, readCachedGitHubProfile } from './GitHubAccountProfile';
 import { huks } from '@kit.UniversalKeystoreKit';
 import { preferences } from '@kit.ArkData';
 import { Encoding } from './Encoding';
@@ -50,6 +51,15 @@ export class CloudAccountSessionStore {
     if (secret.length !== 32) throw new Error('Stored device identity is invalid.');
     await this.writeSealed('device_private_key_v1_cipher', 'device_private_key_v1_iv', Encoding.bytesToBase64(secret));
     return secret;
+  }
+
+  async loadProfile(userId: string): Promise<GitHubAccountProfile | undefined> {
+    const text = await this.readSealed(`github_profile_${userId}_v1_cipher`, `github_profile_${userId}_v1_iv`);
+    return readCachedGitHubProfile(userId, text || '');
+  }
+
+  async saveProfile(profile: GitHubAccountProfile): Promise<void> {
+    await this.writeSealed(`github_profile_${profile.userId}_v1_cipher`, `github_profile_${profile.userId}_v1_iv`, JSON.stringify(profile));
   }
 
   async save(session: PersistedCloudAccountSession): Promise<void> {

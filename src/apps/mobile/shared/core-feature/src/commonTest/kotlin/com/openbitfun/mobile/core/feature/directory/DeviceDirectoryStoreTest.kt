@@ -3,6 +3,15 @@ package com.openbitfun.mobile.core.feature.directory
 import com.openbitfun.mobile.core.domain.RemoteSession
 import com.openbitfun.mobile.core.feature.session.RemoteSessionStore
 import com.openbitfun.mobile.core.feature.workspace.RemoteWorkspaceStore
+import com.openbitfun.mobile.core.persistence.ChatLocalStore
+import com.openbitfun.mobile.core.persistence.DraftStore
+import com.openbitfun.mobile.core.persistence.MobilePersistenceStores
+import com.openbitfun.mobile.core.persistence.PersistedChatMessage
+import com.openbitfun.mobile.core.persistence.PersistedChatSession
+import com.openbitfun.mobile.core.persistence.PersistedRemoteSession
+import com.openbitfun.mobile.core.persistence.PersistedRemoteWorkspace
+import com.openbitfun.mobile.core.persistence.RemoteSessionListStore
+import com.openbitfun.mobile.core.persistence.RemoteWorkspaceListStore
 import com.openbitfun.mobile.core.protocol.CommandStatus
 import com.openbitfun.mobile.core.protocol.RelayJson
 import com.openbitfun.mobile.core.protocol.RemoteCommand
@@ -11,6 +20,7 @@ import com.openbitfun.mobile.core.transport.RelayTransportException
 import com.openbitfun.mobile.core.transport.RemoteCommandTransport
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -29,7 +39,7 @@ class DeviceDirectoryStoreTest {
             "a" to FakeDeviceTransport("a"),
             "b" to FakeDeviceTransport("b"),
         )
-        transports.getValue("b").sessionFailure = RelayFailure.Timeout
+        transports.getValue("b").workspaceFailure = RelayFailure.Timeout
         val store = DeviceDirectoryStore.create(this, FakeDeviceStoreFactory(transports))
 
         store.dispatch(
@@ -47,23 +57,23 @@ class DeviceDirectoryStoreTest {
         val a = store.state.value.device("a")!!
         assertEquals(DeviceDirectoryStatus.READY, a.status)
         assertEquals(listOf("/repo-a"), a.workspaces.map { it.path })
-        assertEquals(listOf("s-a"), a.sessions.map { it.id })
+        assertTrue(a.sessions.isEmpty())
 
         val failedB = store.state.value.device("b")!!
         assertEquals(DeviceDirectoryStatus.FAILED, failedB.status)
-        assertEquals(DeviceDirectoryFailure.TIMEOUT, failedB.error)
+        assertEquals(DeviceDirectoryFailure.LOAD_FAILED, failedB.error)
 
         // A retry recovers b without disturbing a's already-loaded content.
-        transports.getValue("b").sessionFailure = null
+        transports.getValue("b").workspaceFailure = null
         store.dispatch(DeviceDirectoryIntent.Retry("b"))
         advanceUntilIdle()
 
         val recoveredB = store.state.value.device("b")!!
         assertEquals(DeviceDirectoryStatus.READY, recoveredB.status)
-        assertEquals(listOf("s-b"), recoveredB.sessions.map { it.id })
+        assertTrue(recoveredB.sessions.isEmpty())
         val stillA = store.state.value.device("a")!!
         assertEquals(DeviceDirectoryStatus.READY, stillA.status)
-        assertEquals(listOf("s-a"), stillA.sessions.map { it.id })
+        assertTrue(stillA.sessions.isEmpty())
     }
 
     @Test
@@ -79,7 +89,9 @@ class DeviceDirectoryStoreTest {
         val a = store.state.value.device("a")!!
         assertEquals(DeviceDirectoryStatus.READY, a.status)
         assertEquals(1, transport.commands.count { it.cmd == "list_recent_workspaces" })
-        assertEquals(1, transport.commands.count { it.cmd == "list_sessions" })
+        assertEquals(1, transport.commands.count { it.cmd == "list_assistants" })
+        assertEquals(0, transport.commands.count { it.cmd == "get_workspace_info" })
+        assertEquals(0, transport.commands.count { it.cmd == "list_sessions" })
     }
 
     @Test
@@ -94,9 +106,9 @@ class DeviceDirectoryStoreTest {
         val first = store.state.value.device("a")!!
         assertTrue(first.expanded)
         assertEquals(DeviceDirectoryStatus.READY, first.status)
-        assertEquals(listOf("s-a"), first.sessions.map { it.id })
+        assertTrue(first.sessions.isEmpty())
         val listSessionsBefore = transport.commands.count { it.cmd == "list_sessions" }
-        assertEquals(1, listSessionsBefore)
+        assertEquals(0, listSessionsBefore)
 
         store.dispatch(DeviceDirectoryIntent.Collapse("a"))
         assertFalse(store.state.value.device("a")!!.expanded)
@@ -108,7 +120,7 @@ class DeviceDirectoryStoreTest {
         val again = store.state.value.device("a")!!
         assertTrue(again.expanded)
         assertEquals(DeviceDirectoryStatus.READY, again.status)
-        assertEquals(listOf("s-a"), again.sessions.map { it.id })
+        assertTrue(again.sessions.isEmpty())
         assertEquals(listSessionsBefore, transport.commands.count { it.cmd == "list_sessions" })
     }
 
@@ -119,7 +131,7 @@ class DeviceDirectoryStoreTest {
             "b" to FakeDeviceTransport("b"),
         )
         val bGate = CompletableDeferred<Unit>()
-        transports.getValue("b").sessionGate = bGate
+        transports.getValue("b").workspaceGate = bGate
         val store = DeviceDirectoryStore.create(this, FakeDeviceStoreFactory(transports))
 
         store.dispatch(
@@ -137,16 +149,16 @@ class DeviceDirectoryStoreTest {
         store.dispatch(DeviceDirectoryIntent.Load("b"))
         runCurrent()
 
-        // b reached its session request and is blocked, so it is still loading.
+        // b reached its workspace request and is blocked, so it is still loading.
         assertEquals(DeviceDirectoryStatus.LOADING, store.state.value.device("b")!!.status)
-        assertTrue(transports.getValue("b").commands.any { it.cmd == "list_sessions" })
+        assertTrue(transports.getValue("b").commands.any { it.cmd == "list_recent_workspaces" })
 
         store.dispatch(DeviceDirectoryIntent.Stop)
         advanceUntilIdle()
 
         // Loaded data survives; the in-flight load is cancelled, not turned into a failure.
         assertEquals(DeviceDirectoryStatus.READY, store.state.value.device("a")!!.status)
-        assertEquals(listOf("s-a"), store.state.value.device("a")!!.sessions.map { it.id })
+        assertEquals(listOf("/repo-a"), store.state.value.device("a")!!.workspaces.map { it.path })
         assertEquals(DeviceDirectoryStatus.IDLE, store.state.value.device("b")!!.status)
         assertFalse(bGate.isCompleted)
     }
@@ -162,7 +174,7 @@ class DeviceDirectoryStoreTest {
         assertEquals(DeviceDirectoryStatus.READY, store.state.value.device("a")!!.status)
 
         val gate = CompletableDeferred<Unit>()
-        transport.sessionGate = gate
+        transport.workspaceGate = gate
         store.dispatch(DeviceDirectoryIntent.Retry("a"))
         runCurrent()
         assertEquals(DeviceDirectoryStatus.LOADING, store.state.value.device("a")!!.status)
@@ -171,7 +183,7 @@ class DeviceDirectoryStoreTest {
         assertEquals(DeviceDirectoryStatus.CACHED, store.state.value.device("a")!!.status)
         assertFalse(store.state.value.device("a")!!.online)
         assertEquals(2, transport.commands.count { it.cmd == "list_recent_workspaces" })
-        transport.sessionGate = null
+        transport.workspaceGate = null
 
         store.dispatch(DeviceDirectoryIntent.Sync(listOf(DeviceDirectoryDevice("a", "Alpha", true))))
         store.dispatch(DeviceDirectoryIntent.Load("a"))
@@ -183,19 +195,111 @@ class DeviceDirectoryStoreTest {
     fun stopThenImmediateReloadIgnoresCancelledJobFinally() = runTest {
         val transport = FakeDeviceTransport("a")
         val gate = CompletableDeferred<Unit>()
-        transport.sessionGate = gate
+        transport.workspaceGate = gate
         val factory = FakeDeviceStoreFactory(mutableMapOf("a" to transport))
         val store = DeviceDirectoryStore.create(this, factory)
         store.dispatch(DeviceDirectoryIntent.Sync(listOf(DeviceDirectoryDevice("a", true))))
         store.dispatch(DeviceDirectoryIntent.Load("a"))
         runCurrent()
         store.dispatch(DeviceDirectoryIntent.Stop)
-        transport.sessionGate = null
+        transport.workspaceGate = null
         store.dispatch(DeviceDirectoryIntent.Load("a"))
         advanceUntilIdle()
         assertEquals(DeviceDirectoryStatus.READY, store.state.value.device("a")!!.status)
-        assertEquals(2, transport.commands.count { it.cmd == "list_sessions" })
+        assertEquals(2, transport.commands.count { it.cmd == "list_recent_workspaces" })
         assertFalse(gate.isCompleted)
+    }
+
+    @Test
+    fun failedRefreshRetainsTheLastWorkspaceAndSessionProjection() = runTest {
+        val transport = FakeDeviceTransport("a")
+        val store = DeviceDirectoryStore.create(this, FakeDeviceStoreFactory(mutableMapOf("a" to transport)))
+        store.dispatch(DeviceDirectoryIntent.Sync(listOf(DeviceDirectoryDevice("a", true))))
+        store.dispatch(DeviceDirectoryIntent.Load("a"))
+        advanceUntilIdle()
+        store.dispatch(DeviceDirectoryIntent.SetWorkspaceExpanded("a", "/repo-a", true))
+        advanceUntilIdle()
+        assertEquals(listOf("/repo-a"), store.state.value.device("a")!!.workspaces.map { it.path })
+        assertEquals(listOf("s-a"), store.state.value.device("a")!!.sessions.map { it.id })
+
+        transport.workspaceFailure = RelayFailure.Timeout
+        store.dispatch(DeviceDirectoryIntent.Retry("a"))
+        advanceUntilIdle()
+
+        val failed = store.state.value.device("a")!!
+        assertEquals(DeviceDirectoryStatus.FAILED, failed.status)
+        assertEquals(listOf("/repo-a"), failed.workspaces.map { it.path })
+        assertEquals(listOf("s-a"), failed.sessions.map { it.id })
+    }
+
+    @Test
+    fun assistantCatalogEntriesAreProjectedAsDeviceWorkspaces() = runTest {
+        val transport = FakeDeviceTransport("a").apply {
+            assistantJson = """[{"path":"/assistant-a","name":"Assistant A","assistant_id":"assistant-a"}]"""
+        }
+        val store = DeviceDirectoryStore.create(this, FakeDeviceStoreFactory(mutableMapOf("a" to transport)))
+        store.dispatch(DeviceDirectoryIntent.Sync(listOf(DeviceDirectoryDevice("a", true))))
+        store.dispatch(DeviceDirectoryIntent.Load("a"))
+        advanceUntilIdle()
+
+        val workspaces = store.state.value.device("a")!!.workspaces
+        assertEquals(listOf("/repo-a", "/assistant-a"), workspaces.map { it.path })
+        assertEquals("assistant", workspaces.last().kind)
+    }
+
+    @Test
+    fun workspaceDisclosureLoadsOnlyThatWorkspaceAndDeduplicatesTaps() = runTest {
+        val transport = FakeDeviceTransport("a")
+        val gate = CompletableDeferred<Unit>()
+        transport.sessionGate = gate
+        val store = DeviceDirectoryStore.create(this, FakeDeviceStoreFactory(mutableMapOf("a" to transport)))
+        store.dispatch(DeviceDirectoryIntent.Sync(listOf(DeviceDirectoryDevice("a", true))))
+        store.dispatch(DeviceDirectoryIntent.Load("a"))
+        advanceUntilIdle()
+        assertEquals(0, transport.commands.count { it.cmd == "list_sessions" })
+
+        store.dispatch(DeviceDirectoryIntent.SetWorkspaceExpanded("a", "/repo-a", true))
+        store.dispatch(DeviceDirectoryIntent.SetWorkspaceExpanded("a", "/repo-a", true))
+        runCurrent()
+
+        val loading = store.state.value.device("a")!!.workspace("/repo-a")!!
+        assertTrue(loading.expanded)
+        assertEquals(WorkspaceDirectoryStatus.LOADING, loading.status)
+        assertEquals(1, transport.commands.count { it.cmd == "list_sessions" })
+        assertEquals("/repo-a", transport.commands.first { it.cmd == "list_sessions" }.workspacePath)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+        val ready = store.state.value.device("a")!!
+        assertEquals(WorkspaceDirectoryStatus.READY, ready.workspace("/repo-a")!!.status)
+        assertEquals(listOf("s-a"), ready.sessions.map { it.id })
+    }
+
+    @Test
+    fun workspaceFailureKeepsSiblingSessionsAndCanRetry() = runTest {
+        val transport = FakeDeviceTransport("a")
+        val store = DeviceDirectoryStore.create(this, FakeDeviceStoreFactory(mutableMapOf("a" to transport)))
+        store.dispatch(DeviceDirectoryIntent.Sync(listOf(DeviceDirectoryDevice("a", true))))
+        store.dispatch(DeviceDirectoryIntent.Load("a"))
+        advanceUntilIdle()
+        store.dispatch(DeviceDirectoryIntent.SetWorkspaceExpanded("a", "/repo-a", true))
+        advanceUntilIdle()
+        assertEquals(listOf("s-a"), store.state.value.device("a")!!.sessions.map { it.id })
+
+        transport.sessionFailure = RelayFailure.Timeout
+        store.dispatch(DeviceDirectoryIntent.RetryWorkspace("a", "/other"))
+        advanceUntilIdle()
+        val failed = store.state.value.device("a")!!
+        assertEquals(WorkspaceDirectoryStatus.FAILED, failed.workspace("/other")!!.status)
+        assertEquals(listOf("s-a"), failed.sessions.map { it.id })
+
+        transport.sessionFailure = null
+        transport.sessionJson = """[{"id":"s-other","title":"Other","agent_type":"code"}]"""
+        store.dispatch(DeviceDirectoryIntent.RetryWorkspace("a", "/other"))
+        advanceUntilIdle()
+        val recovered = store.state.value.device("a")!!
+        assertEquals(WorkspaceDirectoryStatus.READY, recovered.workspace("/other")!!.status)
+        assertEquals(listOf("s-other", "s-a"), recovered.sessions.map { it.id })
     }
 
     @Test
@@ -229,19 +333,19 @@ class DeviceDirectoryStoreTest {
 
         assertTrue(store.reconcileCreatedSession(key, confirmed))
         assertTrue(store.reconcileCreatedSession(key, confirmed))
-        assertEquals(listOf("created", "s-a"), store.state.value.device("a")!!.sessions.map { it.id })
+        assertEquals(listOf("created"), store.state.value.device("a")!!.sessions.map { it.id })
         assertEquals("/assistant-not-current", store.state.value.device("a")!!.sessions.first().workspacePath)
-        assertEquals(listOf("s-b"), store.state.value.device("b")!!.sessions.map { it.id })
+        assertTrue(store.state.value.device("b")!!.sessions.isEmpty())
 
         // The first server list is behind the confirmed create; the local row survives.
-        store.dispatch(DeviceDirectoryIntent.Retry("a"))
+        store.dispatch(DeviceDirectoryIntent.RetryWorkspace("a", "/assistant-not-current"))
         advanceUntilIdle()
         assertEquals(1, store.state.value.device("a")!!.sessions.count { it.id == "created" })
 
         // Once the source returns the id, its newer fields replace the projection without duplication.
         transports.getValue("a").sessionJson =
             """[{"id":"created","title":"Server title","agent_type":"cowork","status":"idle","workspace_path":"/assistant-not-current","workspace_name":"Server assistant"}]"""
-        store.dispatch(DeviceDirectoryIntent.Retry("a"))
+        store.dispatch(DeviceDirectoryIntent.RetryWorkspace("a", "/assistant-not-current"))
         advanceUntilIdle()
         val calibrated = store.state.value.device("a")!!.sessions.single { it.id == "created" }
         assertEquals("Server title", calibrated.title)
@@ -313,6 +417,70 @@ class DeviceDirectoryStoreTest {
         assertEquals(DeviceDirectoryStatus.FAILED, x.status)
         assertEquals(DeviceDirectoryFailure.NOT_SIGNED_IN, x.error)
     }
+
+    @Test
+    fun offlineDeviceHydratesItsWorkspaceAndSessionCatalogFromDisk() = runTest {
+        val transport = FakeDeviceTransport("a")
+        val cachedSessions = MemoryDirectorySessions().apply {
+            byDevice["a"] = listOf(
+                PersistedRemoteSession(
+                    sessionId = "cached-session",
+                    title = "Cached",
+                    agentType = "code",
+                    workspacePath = "/cached/repo/",
+                ),
+            )
+        }
+        val cachedWorkspaces = MemoryDirectoryWorkspaces().apply {
+            byDevice["a"] = listOf(
+                PersistedRemoteWorkspace(path = "/cached/repo", name = "Cached repo"),
+            )
+        }
+        val factory = CachedDeviceStoreFactory(
+            transport = transport,
+            sessions = cachedSessions,
+            workspaces = cachedWorkspaces,
+        )
+        val store = DeviceDirectoryStore.create(this, factory)
+
+        store.dispatch(DeviceDirectoryIntent.Sync(listOf(DeviceDirectoryDevice("a", "Alpha", false))))
+
+        val cached = store.state.value.device("a")!!
+        assertEquals(DeviceDirectoryStatus.CACHED, cached.status)
+        assertEquals(listOf("/cached/repo"), cached.workspaces.map { it.path })
+        assertEquals(listOf("cached-session"), cached.sessions.map { it.id })
+        assertEquals(WorkspaceDirectoryStatus.READY, cached.workspace("/cached/repo/")?.status)
+        store.dispatch(DeviceDirectoryIntent.SetWorkspaceExpanded("a", "/cached/repo/", true))
+        assertEquals(0, transport.commands.count { it.cmd == "list_sessions" })
+        assertTrue(transport.commands.isEmpty())
+    }
+
+    @Test
+    fun legacySessionCacheInfersWorkspaceCatalogAfterUpgrade() = runTest {
+        val transport = FakeDeviceTransport("a")
+        val cachedSessions = MemoryDirectorySessions().apply {
+            byDevice["a"] = listOf(
+                PersistedRemoteSession(
+                    sessionId = "legacy-session",
+                    title = "Legacy",
+                    workspacePath = "/legacy/repo/",
+                    workspaceName = "Legacy repo",
+                ),
+            )
+        }
+        val store = DeviceDirectoryStore.create(
+            this,
+            CachedDeviceStoreFactory(transport, cachedSessions, MemoryDirectoryWorkspaces()),
+        )
+
+        store.dispatch(DeviceDirectoryIntent.Sync(listOf(DeviceDirectoryDevice("a", false))))
+
+        val cached = store.state.value.device("a")!!
+        assertEquals(DeviceDirectoryStatus.CACHED, cached.status)
+        assertEquals(listOf("/legacy/repo/"), cached.workspaces.map { it.path })
+        assertEquals("Legacy repo", cached.workspaces.single().name)
+        assertEquals(WorkspaceDirectoryStatus.READY, cached.workspace("/legacy/repo")?.status)
+    }
 }
 
 private class FakeDeviceStoreFactory(
@@ -337,8 +505,10 @@ private class FakeDeviceTransport(private val deviceId: String) : RemoteCommandT
     var sessionFailure: RelayFailure? = null
     var workspaceFailure: RelayFailure? = null
     var sessionGate: CompletableDeferred<Unit>? = null
+    var workspaceGate: CompletableDeferred<Unit>? = null
     var sessionJson: String =
         """[{"id":"s-$deviceId","title":"Session $deviceId","agent_type":"code"}]"""
+    var assistantJson: String = "[]"
 
     override suspend fun <T : CommandStatus> send(
         deserializer: DeserializationStrategy<T>,
@@ -349,9 +519,10 @@ private class FakeDeviceTransport(private val deviceId: String) : RemoteCommandT
         val json = when (command.cmd) {
             "list_recent_workspaces" -> {
                 workspaceFailure?.let { throw RelayTransportException(it) }
+                workspaceGate?.await()
                 """{"resp":"ok","workspaces":[{"path":"/repo-$deviceId","name":"Repo $deviceId","last_opened":"2026-08-09","workspace_kind":"local"}]}"""
             }
-            "list_assistants" -> """{"resp":"ok","assistants":[]}"""
+            "list_assistants" -> """{"resp":"ok","assistants":$assistantJson}"""
             "get_workspace_info" ->
                 """{"resp":"ok","has_workspace":true,"path":"$workspacePath","project_name":"Repo","git_branch":"main"}"""
             "list_sessions" -> {
@@ -364,4 +535,57 @@ private class FakeDeviceTransport(private val deviceId: String) : RemoteCommandT
         }
         return RelayJson.decodeFromString(deserializer, json)
     }
+}
+
+private class CachedDeviceStoreFactory(
+    private val transport: FakeDeviceTransport,
+    private val sessions: MemoryDirectorySessions,
+    private val workspaces: MemoryDirectoryWorkspaces,
+) : DeviceStoreFactory {
+    private val persistence = MobilePersistenceStores(
+        drafts = NoOpDirectoryDrafts,
+        chats = NoOpDirectoryChats,
+        remoteSessions = sessions,
+        remoteWorkspaces = workspaces,
+    )
+
+    override fun createSessionStore(scope: CoroutineScope, deviceId: String): RemoteSessionStore =
+        RemoteSessionStore.create(scope, transport, deviceId, persistence)
+
+    override fun createWorkspaceStore(scope: CoroutineScope, deviceId: String): RemoteWorkspaceStore =
+        RemoteWorkspaceStore.create(scope, transport, Dispatchers.Unconfined, deviceId, workspaces)
+}
+
+private class MemoryDirectorySessions : RemoteSessionListStore {
+    val byDevice = mutableMapOf<String, List<PersistedRemoteSession>>()
+    override fun load(deviceKey: String): List<PersistedRemoteSession> = byDevice[deviceKey].orEmpty()
+    override fun save(deviceKey: String, sessions: List<PersistedRemoteSession>, hasMore: Boolean) {
+        byDevice[deviceKey] = sessions
+    }
+    override fun hasMore(deviceKey: String): Boolean = false
+}
+
+private class MemoryDirectoryWorkspaces : RemoteWorkspaceListStore {
+    val byDevice = mutableMapOf<String, List<PersistedRemoteWorkspace>>()
+    override fun load(deviceKey: String): List<PersistedRemoteWorkspace> = byDevice[deviceKey].orEmpty()
+    override fun save(deviceKey: String, workspaces: List<PersistedRemoteWorkspace>) {
+        byDevice[deviceKey] = workspaces
+    }
+}
+
+private object NoOpDirectoryDrafts : DraftStore {
+    override fun load(draftId: String): String? = null
+    override fun save(draftId: String, text: String) = Unit
+    override fun delete(draftId: String) = Unit
+}
+
+private object NoOpDirectoryChats : ChatLocalStore {
+    override fun listSessions(agentType: String): List<PersistedChatSession> = emptyList()
+    override fun loadSession(sessionId: String): PersistedChatSession? = null
+    override fun loadMessages(sessionId: String): List<PersistedChatMessage> = emptyList()
+    override fun saveSession(session: PersistedChatSession) = Unit
+    override fun saveMessage(message: PersistedChatMessage) = Unit
+    override fun pinSession(agentType: String, sessionId: String, pinned: Boolean) = Unit
+    override fun setSessionStatus(sessionId: String, status: String) = Unit
+    override fun deleteSession(sessionId: String) = Unit
 }

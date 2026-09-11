@@ -251,7 +251,10 @@ function buildSessionCustomMetadata(
   if (session.titleSource === 'i18n' && normalizeString(session.titleI18nKey)) {
     nextCustomMetadata.titleSource = 'i18n';
     nextCustomMetadata.titleKey = session.titleI18nKey;
-    nextCustomMetadata.titleParams = session.titleI18nParams ?? null;
+    nextCustomMetadata.titleParams = {
+      ...session.titleI18nParams,
+      defaultTitleText: resolveSessionTitle(session, (key, options) => i18nService.t(key, options)),
+    };
   }
 
   return nextCustomMetadata;

@@ -35,6 +35,11 @@ export struct AppSidebarSurface {
   build() {
     AppSidebar({
       connectionState: this.remotePageState.connectionState,
+      isBusy: this.remotePageState.isBusy,
+      workspaceKind: this.remotePageState.workspaceKind,
+      workspacePath: this.remotePageState.workspacePath,
+      controlTargetDeviceId: this.remotePageState.controlTargetDeviceId,
+      supportsHarnessProfiles: this.remotePageState.supportsHostCapability(REMOTE_CAPABILITY_HARNESS_PROFILES_V1),
       accountUserId: this.remotePageState.accountUserId,
       controlTargetType: this.remotePageState.controlTargetType,
       showViewSettingsButton: false,
@@ -123,6 +128,7 @@ export struct AppSettingsSurface {
         desktopId: this.remotePageState.desktopId,
         userId: this.remotePageState.userId,
         accountUsername: this.remotePageState.accountUsername,
+        accountAvatarUrl: this.remotePageState.accountAvatarUrl,
         accountUserId: this.remotePageState.accountUserId,
         deviceId: this.deviceId,
         controlTargetType: this.remotePageState.controlTargetType,
@@ -148,6 +154,7 @@ export struct AppSettingsSurface {
       SettingsSheet({
         sheetState: this.shellState.settingsSheet,
         accountUsername: this.remotePageState.accountUsername,
+        accountAvatarUrl: this.remotePageState.accountAvatarUrl,
         authenticatedUserId: this.remotePageState.accountUserId,
         fallbackUserId: this.remotePageState.userId,
         desktopName: this.remotePageState.desktopName,

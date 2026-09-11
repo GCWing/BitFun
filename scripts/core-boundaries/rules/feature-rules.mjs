@@ -510,6 +510,8 @@ export const capabilityContractDependencyRules = [
           capabilityForwarder('git', 'git-port'),
           capabilityForwarder('remote-connect', 'agent-api'),
           capabilityForwarder('remote-connect', 'remote-workspace-ports'),
+          // Session output delivery reads through the injected filesystem, including SSH.
+          capabilityForwarder('remote-connect', 'workspace-ports'),
           capabilityForwarder('remote-ssh', 'remote-exec-port'),
           capabilityForwarder('remote-ssh', 'remote-workspace-ports'),
           capabilityForwarder('remote-ssh', 'workspace-ports'),

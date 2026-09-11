@@ -86,6 +86,17 @@ public data class ToolCard public constructor(
     public val actions: Set<ToolAction>,
     public val expandable: Boolean,
 ) {
+    /** Whether a finished tool can join the compact consecutive-activity summary. */
+    public val foldIntoSummary: Boolean
+        get() {
+            if (actions.isNotEmpty() || kind == ToolKind.QUESTION) return false
+            if (phase != ToolPhase.COMPLETED && phase != ToolPhase.CANCELLED) return false
+            val normalizedName = name.filterNot { it == '_' || it == '-' || it.isWhitespace() }.lowercase()
+            val planWrite = normalizedName in setOf("write", "writefile", "createfile") &&
+                filePath.lowercase().endsWith(".plan.md")
+            return normalizedName != "createplan" && !planWrite
+        }
+
     public constructor(
         id: String,
         name: String,

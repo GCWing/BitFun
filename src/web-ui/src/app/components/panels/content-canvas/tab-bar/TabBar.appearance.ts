@@ -1,6 +1,7 @@
 import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 export const canvasTabBarAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'canvas-tab-bar',
+  componentAttribute: 'data-openbitfun-product-component',
   parts: [
     { id: 'root', visualRole: 'toolbar', continuityGroup: 'canvas-tabs' },
     { id: 'list', visualRole: 'continuous-surface', continuityGroup: 'canvas-tabs' },

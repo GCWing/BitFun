@@ -1,3 +1,5 @@
+import { useGitHubAccountProfile } from '../hooks/useGitHubAccountProfile';
+import AccountAvatar from '../components/AccountAvatar';
 import React, { useEffect, useLayoutEffect, useRef, useCallback, useMemo, useState } from 'react';
 import {
   MobileButton,
@@ -72,54 +74,6 @@ type CompactWorkspaceLoadStatus = 'idle' | 'loading' | 'ready' | 'failed';
 
 function compactWorkspaceKey(workspace: RecentWorkspaceEntry): string {
   return workspaceIdentityKey(workspace);
-}
-
-function mergeCompactWorkspaces(
-  recent: RecentWorkspaceEntry[],
-  currentWorkspace: {
-    path?: string;
-    project_name?: string;
-    workspace_kind?: 'normal' | 'assistant' | 'remote';
-    remote_connection_id?: string;
-    remote_ssh_host?: string;
-  } | null,
-  sessions: SessionInfo[],
-): RecentWorkspaceEntry[] {
-  const merged: RecentWorkspaceEntry[] = [];
-  const seen = new Set<string>();
-  const append = (workspace: RecentWorkspaceEntry) => {
-    if (!workspace.path) return;
-    const key = compactWorkspaceKey(workspace);
-    if (seen.has(key)) return;
-    seen.add(key);
-    merged.push(workspace);
-  };
-
-  if (currentWorkspace?.path) {
-    append({
-      path: currentWorkspace.path,
-      name: currentWorkspace.project_name || currentWorkspace.path.split('/').filter(Boolean).pop() || currentWorkspace.path,
-      last_opened: '',
-      workspace_kind: currentWorkspace.workspace_kind,
-      remote_connection_id: currentWorkspace.remote_connection_id,
-      remote_ssh_host: currentWorkspace.remote_ssh_host,
-    });
-  }
-  recent.forEach(append);
-  sessions.forEach((session) => {
-    if (!session.workspace_path) return;
-    if (!session.workspace_identity && merged.some((workspace) => (
-      workspace.path === session.workspace_path
-    ))) return;
-    append({
-      path: session.workspace_path,
-      name: session.workspace_name || session.workspace_path.split('/').filter(Boolean).pop() || session.workspace_path,
-      last_opened: session.updated_at,
-      remote_connection_id: session.workspace_identity?.remote_connection_id,
-      remote_ssh_host: session.workspace_identity?.remote_ssh_host,
-    });
-  });
-  return merged;
 }
 
 type SessionListTargetOwner = {
@@ -323,12 +277,14 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
     setCurrentAssistant,
     setPairedDisplayMode,
     authenticatedUserId,
-    authenticatedUserLabel,
     connectionHealth,
     controlTarget,
     setControlTarget,
     resetForDeviceSwitch,
   } = useMobileStore();
+  const githubProfile = useGitHubAccountProfile(authenticatedUserId);
+  const authenticatedUserLabel = authenticatedUserId
+    ? githubProfile ? `@${githubProfile.login}` : t('settings.githubAccount') : null;
   const { isDark, toggleTheme } = useTheme();
   const logoMark = isDark ? logoMarkLight : logoMarkDark;
   const [creating, setCreating] = useState(false);
@@ -354,6 +310,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
     remote_ssh_host?: string;
   }>>([]);
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
+  const [workspaceCatalogSource, setWorkspaceCatalogSource] = useState<'opened' | 'recent' | null>(null);
 
   // Search, rename & delete state
   const [searchQuery, setSearchQuery] = useState('');
@@ -560,6 +517,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
   const offsetRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const listRequestSeqRef = useRef(0);
+  const workspaceCatalogRequestSeqRef = useRef(0);
   const initLoadedPathRef = useRef<string | undefined>(undefined);
   const touchStartY = useRef(0);
   const isPulling = useRef(false);
@@ -593,6 +551,8 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
       setDeleting(false);
       setAssistantList([]);
       setWorkspaceList([]);
+      setWorkspaceCatalogSource(null);
+      workspaceCatalogRequestSeqRef.current += 1;
       setShowAssistantPicker(false);
       setShowWorkspacePicker(false);
       setMenuSession(null);
@@ -658,6 +618,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
         offsetRef.current = cached.sessions.length;
       }
       setWorkspaceList(cached.workspaces);
+      setWorkspaceCatalogSource(cached.workspaceCatalogSource ?? 'recent');
 
       const cachedByWorkspace: Record<string, SessionInfo[]> = {};
       const cachedStatuses: Record<string, CompactWorkspaceLoadStatus> = {};
@@ -753,18 +714,23 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
   const loadWorkspaceList = useCallback(async () => {
     const targetEpoch = captureSessionListEpoch();
     if (targetEpoch === null) return;
+    const requestSeq = ++workspaceCatalogRequestSeqRef.current;
     try {
-      const workspaces = await sessionMgr.listRecentWorkspaces();
-      if (!isSessionListCurrent(targetEpoch)) return;
+      const catalog = compact
+        ? await sessionMgr.listWorkspaceCatalog()
+        : { workspaces: await sessionMgr.listRecentWorkspaces(), source: 'recent' as const };
+      if (!isSessionListCurrent(targetEpoch) || requestSeq !== workspaceCatalogRequestSeqRef.current) return;
       liveDataSeqRef.current += 1;
-      setWorkspaceList(workspaces);
-      remoteCache.saveWorkspaceCatalog(cacheScope, workspaces);
+      setWorkspaceList(catalog.workspaces);
+      setWorkspaceCatalogSource(catalog.source);
+      remoteCache.saveWorkspaceCatalog(cacheScope, catalog.workspaces, catalog.source);
     } catch (e: any) {
-      if (isSessionListCurrent(targetEpoch) && !isRemoteControlTargetChangedError(e)) {
+      if (requestSeq === workspaceCatalogRequestSeqRef.current
+        && isSessionListCurrent(targetEpoch) && !isRemoteControlTargetChangedError(e)) {
         setError(e.message);
       }
     }
-  }, [cacheScope, captureSessionListEpoch, isSessionListCurrent, sessionMgr, setError]);
+  }, [cacheScope, captureSessionListEpoch, compact, isSessionListCurrent, sessionMgr, setError]);
 
   const loadCompactDirectory = useCallback(async () => {
     if (!compact) return;
@@ -789,15 +755,18 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
   const loadCompactWorkspaceCatalog = useCallback(async (expectedTargetEpoch: number) => {
     if (!compact || !client) return;
     setCompactDirectoryLoading(true);
+    const requestSeq = ++workspaceCatalogRequestSeqRef.current;
     try {
-      const workspaces = await sessionMgr.listRecentWorkspaces();
-      if (client.controlTargetEpoch !== expectedTargetEpoch) return;
+      const catalog = await sessionMgr.listWorkspaceCatalog();
+      if (client.controlTargetEpoch !== expectedTargetEpoch || requestSeq !== workspaceCatalogRequestSeqRef.current) return;
       liveDataSeqRef.current += 1;
-      setWorkspaceList(workspaces);
-      remoteCache.saveWorkspaceCatalog(cacheScope, workspaces);
+      setWorkspaceList(catalog.workspaces);
+      setWorkspaceCatalogSource(catalog.source);
+      remoteCache.saveWorkspaceCatalog(cacheScope, catalog.workspaces, catalog.source);
     } catch (error: unknown) {
       if (
         client.controlTargetEpoch === expectedTargetEpoch
+        && requestSeq === workspaceCatalogRequestSeqRef.current
         && !isRemoteControlTargetChangedError(error)
       ) {
         setError(String((error as { message?: string })?.message || error));
@@ -1323,9 +1292,19 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
   }, [cacheScope, captureSessionListEpoch, currentAssistant?.path, displayMode, isSessionListCurrent, searchQuery, sessionMgr, setCurrentWorkspace, setSessions]);
 
   useEffect(() => {
-    const poll = setInterval(refreshData, 10000);
-    return () => clearInterval(poll);
-  }, [refreshData]);
+    const poll = setInterval(() => {
+      void refreshData();
+      if (compact) void loadWorkspaceList();
+    }, 10000);
+    const refreshDirectory = () => {
+      if (compact && document.visibilityState === 'visible') void loadWorkspaceList();
+    };
+    document.addEventListener('visibilitychange', refreshDirectory);
+    return () => {
+      clearInterval(poll);
+      document.removeEventListener('visibilitychange', refreshDirectory);
+    };
+  }, [compact, loadWorkspaceList, refreshData]);
 
   useEffect(() => {
     const workspacePath = displayMode === 'assistant' ? currentAssistant?.path : currentWorkspace?.path;
@@ -1564,7 +1543,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
     const visibleSessions = sessions.filter((session) => (
       query.length === 0 || (session.name || '').toLocaleLowerCase().includes(query)
     ));
-    const compactWorkspaces = mergeCompactWorkspaces(workspaceList, currentWorkspace, sessions);
+    const compactWorkspaces = workspaceList;
     const activeDeviceId = client?.targetDeviceId
       ?? null;
     const projectedCompactDevices = !activeDeviceId || compactDevices.some((device) => (
@@ -1664,6 +1643,9 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
                 <MobileIconButton appearance="plain" size="sm" aria-label={t('workspace.selectWorkspace')} onClick={onOpenWorkspace} icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>} />
               </div>
               <div className="harmony-sidebar__rows">
+                {workspaceCatalogSource === 'recent' && (
+                  <MobileBanner tone="info">{t('sessions.legacyWorkspaceCatalog')}</MobileBanner>
+                )}
                 {compactDirectoryLoading && compactWorkspaces.length === 0 && (
                   <MobileStatus className="harmony-sidebar__empty" loading title={t('common.loading')} />
                 )}
@@ -1819,6 +1801,8 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
 
         <CompactSettingsSheet
           accountLabel={authenticatedUserLabel}
+          accountUserId={authenticatedUserId}
+          accountAvatarUrl={githubProfile?.avatarUrl}
           devices={projectedCompactDevices}
           isDark={isDark}
           onClose={() => setCompactSettingsOpen(false)}
@@ -1867,7 +1851,8 @@ const SessionListPage: React.FC<SessionListPageProps> = ({
             {authenticatedUserLabel && (
               <span className="session-list__header-account-name">
                 <span className={`session-list__health-dot session-list__health-dot--${connectionHealth}`} title={(() => { switch (connectionHealth) { case 'connected': return t('sessions.connectionConnected'); case 'checking': return t('sessions.connectionChecking'); case 'unreachable': return t('sessions.connectionUnreachable'); default: return t('sessions.connectionUnpaired'); } })()} />
-                {authenticatedUserLabel}
+                <AccountAvatar url={githubProfile?.avatarUrl} />
+                <span title={t('settings.githubId', { id: authenticatedUserId || '' })}>{authenticatedUserLabel}</span>
                 {controlTarget && controlTarget.deviceName && (
                   <span className="session-list__header-target" title={t('devices.controllingDevice', { name: controlTarget.deviceName })}>
                     {controlTarget.deviceName}

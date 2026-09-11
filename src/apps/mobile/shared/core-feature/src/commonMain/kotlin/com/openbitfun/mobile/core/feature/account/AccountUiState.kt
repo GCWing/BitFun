@@ -57,15 +57,36 @@ public sealed interface AccountUiState {
          * that arrived, so a failed refresh costs the user nothing they had.
          */
         public val refreshFailure: AccountFailureReason?,
+        public val avatarUrl: String?,
     ) : AccountUiState {
+        public constructor(
+            userId: String, relayUrl: String, username: String, devices: List<AccountDeviceUi>,
+            selectedDeviceId: String?, selectedDeviceName: String?, refreshing: Boolean,
+            refreshFailure: AccountFailureReason?,
+        ) : this(userId, relayUrl, username, devices, selectedDeviceId, selectedDeviceName, refreshing, refreshFailure, null)
+
+        public constructor(
+            userId: String, username: String, devices: List<AccountDeviceUi>,
+            selectedDeviceId: String?, selectedDeviceName: String?,
+        ) : this(userId, com.openbitfun.mobile.core.transport.DEFAULT_CLOUD_RELAY_URL, username, devices,
+            selectedDeviceId, selectedDeviceName, false, null, null)
+
         public constructor(
             userId: String,
             username: String,
-            relayUrl: String = com.openbitfun.mobile.core.transport.DEFAULT_CLOUD_RELAY_URL,
+            relayUrl: String,
             devices: List<AccountDeviceUi>,
             selectedDeviceId: String?,
             selectedDeviceName: String?,
         ) : this(userId, relayUrl, username, devices, selectedDeviceId, selectedDeviceName, false, null)
+
+        public constructor(
+            userId: String,
+            username: String,
+            devices: List<AccountDeviceUi>,
+            selectedDeviceId: String?,
+            selectedDeviceName: String?,
+        ) : this(userId, username, com.openbitfun.mobile.core.transport.DEFAULT_CLOUD_RELAY_URL, devices, selectedDeviceId, selectedDeviceName)
     }
     public data class Failed public constructor(
         public val reason: AccountFailureReason,

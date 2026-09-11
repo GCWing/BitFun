@@ -215,7 +215,12 @@ test "$code" = "404"'
 先用旧机 rsync 过来的目录（保留 0.2.14 起的多版本，供旧 Desktop / Dispatch），
 再跑一次 in-repo 同步补最新版。不要对空目录只 sync 一次就当完成。
 
-Windows 网页安装包文件名以 GitHub `latest.json` 的 `manual_installers` 为准
+1.X 发布前必须更新仓库内同步脚本。新桌面端清单是 `latest-v1.json`，CLI 清单是
+`linux-binaries-v1.json`；保留旧 `latest.json`、`linux-binaries.json` 和 `0.2.*`
+下载目录，避免给旧客户端推送 1.X 或破坏旧下载。GitHub Latest 中的旧清单由
+发布工作流从 v0.2.19 原样保留。完整规则见 [发布指南](../../docs/development/releasing.md)。
+
+Windows 网页安装包文件名以 GitHub `latest-v1.json` 的 `manual_installers` 为准
 （现在是 `OpenBitFun_${version}_windows-x86_64-installer.exe`）。不要再写死
 `openbitfun-installer.exe`。
 
@@ -237,7 +242,7 @@ python3 -c "import json; print(json.load(open(\"/srv/openbitfun-release/download
 ```
 
 `downloads.json` 的 `version` 必须等于
-`https://github.com/GCWing/OpenBitFun/releases/latest/download/latest.json` 的
+`https://github.com/GCWing/OpenBitFun/releases/latest/download/latest-v1.json` 的
 `version`。日志里若再出现 `Failed to download openbitfun-installer.exe`，说明跑到了
 旧脚本，停下来改 cron，不要手工改清单。
 
@@ -546,7 +551,8 @@ docker exec openbitfun-relay /app/relay-admin --db /app/data/openbitfun_relay.db
 公网验收（从能解析 DNS 的机器）：
 
 - `https://openbitfun.com/download` 显示的版本 = `downloads.json`
-- `https://openbitfun.com/release/latest.json` 与 GitHub latest 同版本
+- `https://openbitfun.com/release/latest-v1.json` 与 GitHub latest 同版本
+- `https://openbitfun.com/release/latest.json` 和 `linux-binaries.json` 保持 0.2.X，不得指向 1.X
 - `https://remote.openbit.fun/relay/health`
 - `https://market.openbitfun.com/miniapp/api/v1/health`
 - `https://market.openbitfun.com/skin/`（按 Skin 手册）

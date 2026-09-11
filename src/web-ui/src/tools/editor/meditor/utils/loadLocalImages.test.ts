@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import { loadLocalImages } from './loadLocalImages';
+import { activateSurface } from '@/infrastructure/peer-device/deviceSurface';
 
 const { readFileContent } = vi.hoisted(() => ({ readFileContent: vi.fn() }));
 vi.mock('@/infrastructure/api', () => ({ workspaceAPI: { readFileContent } }));
@@ -34,4 +35,26 @@ describe('local image source changes', () => {
     expect(image.alt).toBe('New image');
     expect(image.classList.contains('local-image-error')).toBe(false);
   });
+  it('keeps identical image paths isolated by their document origin', async () => {
+    activateSurface('local');
+    const renderImage = () => {
+      const container = document.createElement('div');
+      const image = document.createElement('img');
+      image.dataset.localImage = 'true';
+      image.dataset.localPath = '/workspace/scoped-image.png';
+      container.append(image);
+      return { container, image };
+    };
+    const a = renderImage();
+    const b = renderImage();
+    const localRead = vi.fn(async () => 'bG9jYWw=');
+    const remoteRead = vi.fn(async () => 'cmVtb3Rl');
+    await loadLocalImages(a.container, { scope: { surfaceId: 'local' }, files: { readFileContent: localRead } });
+    await loadLocalImages(b.container, { scope: { surfaceId: 'local', remoteConnectionId: 'ssh-a' }, files: { readFileContent: remoteRead } });
+    expect(a.image.src).toBe('data:image/png;base64,bG9jYWw=');
+    expect(b.image.src).toBe('data:image/png;base64,cmVtb3Rl');
+    expect(localRead).toHaveBeenCalledOnce();
+    expect(remoteRead).toHaveBeenCalledOnce();
+  });
+
 });

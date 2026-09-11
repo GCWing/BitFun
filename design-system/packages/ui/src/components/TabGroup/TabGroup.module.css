@@ -145,6 +145,12 @@
     transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
+  .labelSuffix {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
   .endAction > :where(button, [role="button"]) {
     display: inline-flex;
     align-items: center;

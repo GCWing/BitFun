@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { aiApi } from '@/infrastructure/api/service-api/AIApi';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { snapshotAPI } from '@/infrastructure/api/service-api/SnapshotAPI';
 import { stateMachineManager } from '../state-machine';
@@ -18,17 +17,10 @@ import { flowChatStore } from '../store/FlowChatStore';
 import { isProjectedSessionEmpty } from '../utils/flowChatTurnIdentity';
 import { flowChatManager } from '../services/FlowChatManager';
 import type { UnlistenFn } from '@tauri-apps/api/event';
-import { i18nService } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { WorkspaceKind } from '@/shared/types';
 import { generateTempTitle } from '../utils/titleUtils';
 import { createLogger } from '@/shared/utils/logger';
-import { getModelMaxTokens } from '../services/flow-chat-manager/SessionModule';
-import {
-  createI18nSessionTitleDescriptor,
-  getNextDefaultSessionTitleCount,
-  normalizeDefaultSessionTitleMode,
-} from '../utils/sessionTitle';
+import { flowChatSessionConfigForWorkspace } from '@/app/utils/projectSessionWorkspace';
 
 const log = createLogger('useFlowChat');
 
@@ -65,149 +57,12 @@ export const useFlowChat = () => {
 
   // Create a session using Agentic API v2.
   const createSession = useCallback(async (config?: Partial<SessionConfig>): Promise<string> => {
-    
-    try {
-      if (!workspacePath) {
-        throw new Error('Workspace path is required to create a session');
-      }
-      
-      const isRemote = workspace?.workspaceKind === WorkspaceKind.Remote;
-      const remoteConnectionId = isRemote ? workspace?.connectionId : undefined;
-      const remoteSshHost = isRemote ? workspace?.sshHost : undefined;
-
-      const agentTypeForSession = (config?.agentType || 'Standard').trim() || 'Standard';
-      const maxContextTokens = await getModelMaxTokens(config?.modelName, agentTypeForSession);
-      const sessionTitleMode =
-        workspace?.workspaceKind === WorkspaceKind.Assistant
-          ? 'claw'
-          : normalizeDefaultSessionTitleMode(agentTypeForSession);
-      const sessionCount = getNextDefaultSessionTitleCount(
-        flowChatStore.getState().sessions.values(),
-        {
-          mode: sessionTitleMode,
-          workspaceId: workspace?.id,
-          workspacePath,
-          remoteConnectionId,
-          remoteSshHost,
-        },
-      );
-      const titleDescriptor = createI18nSessionTitleDescriptor(
-        'flow-chat:session.newWithIndex',
-        (key, options) => i18nService.t(key, options),
-        { count: sessionCount },
-      );
-      const sessionName = titleDescriptor.text;
-
-      const response = await agentAPI.createSession({
-        sessionName,
-        agentType: agentTypeForSession,
-        workspacePath,
-        workspaceId: workspace?.id ?? config?.workspaceId,
-        remoteConnectionId,
-        remoteSshHost,
-        config: {
-          modelName: config?.modelName || 'default',
-          enableTools: true,
-          safeMode: true,
-          autoCompact: true,
-          maxContextTokens: maxContextTokens,
-          enableContextCompression: true,
-          remoteConnectionId,
-          remoteSshHost,
-        }
-      });
-      
-      log.info('Session created successfully', { 
-        sessionId: response.sessionId,
-        sessionName: response.sessionName,
-        agentType: response.agentType
-      });
-      
-      const sessionConfig: SessionConfig = {
-        modelName: config?.modelName || 'default',
-        ...config,
-        workspaceId: workspace?.id ?? config?.workspaceId,
-      };
-
-      flowChatStore.createSession(
-        response.sessionId, 
-        sessionConfig, 
-        undefined,  // Terminal sessions are managed by the backend.
-        sessionName,
-        maxContextTokens,
-        response.agentType || agentTypeForSession,
-        workspacePath,
-        remoteConnectionId,
-        remoteSshHost,
-        titleDescriptor,
-      );
-      
-      return response.sessionId;
-      
-    } catch (error) {
-      log.error('Failed to create session', { error });
-
-      const isRemoteFb = workspace?.workspaceKind === WorkspaceKind.Remote;
-      const remoteConnectionIdFb = isRemoteFb ? workspace?.connectionId : undefined;
-      const remoteSshHostFb = isRemoteFb ? workspace?.sshHost : undefined;
-      
-      // Fallback to a frontend-only session without Terminal.
-      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-        try {
-          await aiApi.createAISession({
-            agent_type: config?.agentType || 'Standard',
-            model_name: config?.modelName || 'default',
-            description: `FlowChat session ${sessionId}`
-          });
-        } catch (snapshotError) {
-          log.warn('Failed to create snapshot session in fallback mode', { error: snapshotError });
-        }
-      
-      const sessionConfig: SessionConfig = {
-        modelName: config?.modelName || 'default',
-        ...config,
-        workspaceId: workspace?.id ?? config?.workspaceId,
-      };
-
-      const fallbackAgentType = (config?.agentType || 'Standard').trim() || 'Standard';
-      const fallbackTitleMode =
-        workspace?.workspaceKind === WorkspaceKind.Assistant
-          ? 'claw'
-          : normalizeDefaultSessionTitleMode(fallbackAgentType);
-      const sessionCount = getNextDefaultSessionTitleCount(
-        flowChatStore.getState().sessions.values(),
-        {
-          mode: fallbackTitleMode,
-          workspaceId: workspace?.id,
-          workspacePath,
-          remoteConnectionId: remoteConnectionIdFb,
-          remoteSshHost: remoteSshHostFb,
-        },
-      );
-      const titleDescriptor = createI18nSessionTitleDescriptor(
-        'flow-chat:session.newWithIndex',
-        (key, options) => i18nService.t(key, options),
-        { count: sessionCount },
-      );
-      const sessionName = titleDescriptor.text;
-      flowChatStore.createSession(
-        sessionId,
-        sessionConfig,
-        undefined,
-        sessionName,
-        undefined,
-        undefined,
-        workspacePath,
-        remoteConnectionIdFb,
-        remoteSshHostFb,
-        titleDescriptor,
-      );
-      
-      log.warn('Using fallback mode without Terminal');
-
-      return sessionId;
-    }
+    if (!workspacePath) throw new Error('Workspace path is required to create a session');
+    return flowChatManager.createChatSession({
+      ...config,
+      ...(workspace ? flowChatSessionConfigForWorkspace(workspace) : { workspacePath }),
+      workspaceId: workspace?.id ?? config?.workspaceId,
+    }, config?.agentType);
   }, [workspacePath, workspace]);
 
   const switchSession = useCallback(async (sessionId: string) => {

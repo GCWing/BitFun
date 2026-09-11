@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import OpenBitFunMobileCore
 
 extension MobileAppModel {
@@ -31,17 +32,18 @@ extension MobileAppModel {
         remoteCreateRequestEpoch = remoteTargetEpoch
         remoteCreateRequestDeviceKey = nil
         pendingRemoteWorkspaceCreate = nil
+        pendingRemoteSessionRefreshWorkspacePath = nil
         pendingRemoteAssistantCreate = false
         remoteSessionSelected = false
     }
 
-    func selectRemoteDevice(_ device: MobileAccountDevice) {
+    func selectRemoteDevice(_ device: MobileAccountDevice, preserveDrawer: Bool = false) {
         guard device.online else {
             showToast(localized("这台桌面设备当前离线"))
             return
         }
         surface = .remote
-        drawerOpen = false
+        if !preserveDrawer { drawerOpen = false }
         let targetKey = "account:\(device.id)"
         guard remoteExpectedDeviceKey != targetKey else { return }
         invalidateTargetScopedFileTransfers()
@@ -66,6 +68,7 @@ extension MobileAppModel {
         remoteWorkspaces = []
         workspaceCatalog = []
         pendingRemoteWorkspaceCreate = nil
+        pendingRemoteSessionRefreshWorkspacePath = nil
         pendingRemoteAssistantCreate = false
         selectedRemoteWorkspaceKind = ""
         messages = []
@@ -79,6 +82,7 @@ extension MobileAppModel {
     }
 
     func logoutAccount() {
+        completionNotifier.reset()
 
             invalidateTargetScopedFileTransfers()
 
@@ -136,6 +140,11 @@ extension MobileAppModel {
     }
 
     func loginAccount() {
+        if accountAuthorizationURL != nil {
+            openAccountAuthorization()
+            return
+        }
+        guard !accountBusy else { return }
 
             invalidateTargetScopedFileTransfers()
 
@@ -166,6 +175,17 @@ extension MobileAppModel {
         coreAdapter?.loginAccount()
     }
 
+    func openAccountAuthorization() {
+        guard let url = accountAuthorizationURL else { return }
+        UIApplication.shared.open(url) { [weak self] opened in
+            guard !opened else { return }
+            Task { @MainActor [weak self] in
+                guard let self, self.accountAuthorizationURL == url else { return }
+                self.coreErrorMessage = self.localized("无法打开授权页面，请重试。")
+            }
+        }
+    }
+
     func retryAccountFailure() {
         guard accountFailureStage == "DEVICE_LIST", accountFailureCanRetry, !accountBusy else { return }
         accountBusy = true
@@ -177,7 +197,11 @@ extension MobileAppModel {
               generation == accountGeneration else { return }
         accountGeneration = generation
         accountBusy = state is AccountUiStateSigningIn || state is AccountUiStateAuthorizing
+        let previousAuthorizationURL = accountAuthorizationURL
         accountAuthorizationURL = (state as? AccountUiStateAuthorizing).flatMap { URL(string: $0.authorizationUrl) }
+        if accountSheetOpen, let url = accountAuthorizationURL, url != previousAuthorizationURL {
+            openAccountAuthorization()
+        }
         if let ready = state as? AccountUiStateReady {
             let readyTargetKey = ready.selectedDeviceId.map { "account:\($0)" }
             if let adapterTargetKey = coreAdapter?.currentRemoteTargetKey,
@@ -190,6 +214,7 @@ extension MobileAppModel {
             accountFailureCanRetry = false
             coreErrorMessage = nil
             accountUser = ready.username
+            accountAvatarURL = ready.avatarUrl
             accountUserID = ready.userId
             accountDeviceName = ready.selectedDeviceName
             accountDeviceCount = ready.devices.count
@@ -198,10 +223,12 @@ extension MobileAppModel {
             remoteCreateDeviceError = ready.refreshFailure != nil
                 ? localized("设备列表加载失败，请稍后重试。") : nil
             accountDevices = ready.devices.map { device in
-                MobileAccountDevice(
+                let targetKey = "account:\(device.id)"
+                return MobileAccountDevice(
                     id: device.id,
                     name: device.name,
-                    online: device.online,
+                    online: device.online ||
+                        (targetKey == remoteExpectedDeviceKey && remoteConnected && remoteInitialSessionReady),
                     selected: device.id == ready.selectedDeviceId
                 )
             }
@@ -218,9 +245,13 @@ extension MobileAppModel {
                 coreAdapter?.selectAccountDevice(id: target.id)
                 return
             }
-            remoteConnected = ready.selectedDeviceId != nil
+            let selectedTargetKey = ready.selectedDeviceId.map { "account:\($0)" }
+            let retainsReachableAccountTarget = selectedTargetKey == remoteExpectedDeviceKey && remoteConnected
+            if !retainsReachableAccountTarget {
+                remoteConnected = false
+                connectionPhase = ready.selectedDeviceId == nil ? .disconnected : .reconnecting
+            }
             surface = .remote
-            connectionPhase = .connected
             if ready.refreshFailure != nil {
                 showToast(localized("设备列表刷新失败，仍显示上次结果"))
             }
@@ -277,6 +308,23 @@ extension MobileAppModel {
                 invalidateTerminalAccountAuthority()
 
         }
+    }
+
+    func promoteLiveAccountTargetPresence(targetKey: String) {
+        let prefix = "account:"
+        guard targetKey.hasPrefix(prefix), remoteConnected else { return }
+        let deviceID = String(targetKey.dropFirst(prefix.count))
+        guard let index = accountDevices.firstIndex(where: { $0.id == deviceID }),
+              !accountDevices[index].online else { return }
+        let device = accountDevices[index]
+        accountDevices[index] = MobileAccountDevice(
+            id: device.id,
+            name: device.name,
+            online: true,
+            selected: device.selected
+        )
+        accountDirectoryGeneration = coreAdapter?.syncDeviceDirectory(accountDevices) ??
+            (accountDirectoryGeneration &+ 1)
     }
 
     func accountErrorMessage(_ reason: String, stage: String? = nil) -> String {

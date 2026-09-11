@@ -3,6 +3,9 @@ import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
+import remarkStringify from 'remark-stringify';
+import { parseEntities } from 'parse-entities';
+import type { PhrasingContent, Root, Strong, Emphasis, Delete, Link as MarkdownLink } from 'mdast';
 import rehypeRaw from 'rehype-raw';
 import type { JSONContent } from '@tiptap/core';
 import { createBlockId } from './blockId';
@@ -303,7 +306,7 @@ function parseHtmlAttributes(raw: string): Record<string, string> {
       continue;
     }
 
-    attributes[name.toLowerCase()] = doubleQuoted ?? singleQuoted ?? unquoted ?? '';
+    attributes[name.toLowerCase()] = parseEntities(doubleQuoted ?? singleQuoted ?? unquoted ?? '', { attribute: true });
   }
 
   return attributes;
@@ -409,12 +412,19 @@ function convertHtmlInlineTokens(
 
   for (const token of tokens) {
     if (token.kind === 'text') {
-      appendText(token.value);
+      appendText(parseEntities(token.value));
+      continue;
+    }
+
+    const supportedAttrs = token.tagName === 'a' ? ['href', 'title']
+      : token.tagName === 'img' ? ['src', 'alt', 'title'] : [];
+    if (Object.keys(token.attrs).some(name => !supportedAttrs.includes(name))) {
+      appendRawHtml(token.raw);
       continue;
     }
 
     if (token.kind === 'self' && token.tagName === 'br') {
-      content.push({ type: 'hardBreak' });
+      content.push({ type: 'hardBreak', ...(activeMarks.length > 0 ? { marks: activeMarks } : {}) });
       continue;
     }
 
@@ -429,6 +439,18 @@ function convertHtmlInlineTokens(
         ...(activeMarks.length > 0 ? { marks: activeMarks } : {}),
       });
       continue;
+    }
+
+    if (['del', 's', 'strike', 'u'].includes(token.tagName)) {
+      const type = token.tagName === 'u' ? 'underline' : 'strike';
+      if (token.kind === 'open') {
+        activeMarks = [...activeMarks, { type }];
+        continue;
+      }
+      if (token.kind === 'close') {
+        const nextMarks = removeLastMatchingMark(activeMarks, mark => mark.type === type);
+        if (nextMarks) { activeMarks = nextMarks; continue; }
+      }
     }
 
     if (token.kind === 'open' && HTML_BOLD_TAGS.has(token.tagName)) {
@@ -488,8 +510,8 @@ function convertHtmlInlineTokens(
     }
 
     if (token.tagName === 'a') {
-      if (token.kind === 'open' && token.attrs.href) {
-        activeMarks = [...activeMarks, { type: 'link', attrs: { href: token.attrs.href } }];
+      if (token.kind === 'open' && Object.prototype.hasOwnProperty.call(token.attrs, 'href')) {
+        activeMarks = [...activeMarks, { type: 'link', attrs: { href: token.attrs.href, ...(token.attrs.title !== undefined ? { title: token.attrs.title } : {}) } }];
         continue;
       }
 
@@ -570,11 +592,11 @@ function convertInlineNodes(nodes: MdastNode[], marks: Mark[] = []): JSONContent
       case 'link':
         content.push(...convertInlineNodes(node.children ?? [], [
           ...activeMarks,
-          { type: 'link', attrs: { href: node.url ?? '' } },
+          { type: 'link', attrs: { href: node.url ?? '', ...(node.title !== null && node.title !== undefined ? { title: node.title } : {}) } },
         ]));
         return;
       case 'break':
-        content.push({ type: 'hardBreak' });
+        content.push({ type: 'hardBreak', ...(activeMarks.length > 0 ? { marks: activeMarks } : {}) });
         return;
       default:
         content.push(...convertInlineNodes(node.children ?? [], activeMarks));
@@ -595,6 +617,12 @@ function isTaskList(node: MdastNode): boolean {
 }
 
 function convertList(node: MdastNode): JSONContent[] {
+  const hasTasks = node.children?.some(item => typeof item.checked === 'boolean');
+  if (hasTasks && (node.ordered || !isTaskList(node)) && node.source !== undefined) {
+    // Native task lists cannot represent unchecked-vs-non-task membership or
+    // ordered task markers. Preserve just this list, including nested lists.
+    return [createRenderOnlyBlock(node.source, 'list')];
+  }
   if (isTaskList(node)) {
     return [{
       type: 'taskList',
@@ -694,61 +722,12 @@ function convertBlock(node: MdastNode): JSONContent[] {
   }
 }
 
-function escapeMarkdownPlainText(text: string): string {
-  return text
-    .replace(/\\/g, '\\\\')
-    .replace(/([`*[\]|])/g, '\\$1')
-    .replace(/_/g, (match, offset, input) => {
-      const previous = input[offset - 1] ?? '';
-      const next = input[offset + 1] ?? '';
-      const isWordBoundaryUnderscore = /[A-Za-z0-9]/.test(previous) && /[A-Za-z0-9]/.test(next);
-      return isWordBoundaryUnderscore ? match : `\\${match}`;
-    });
-}
-
-function wrapInlineCodeText(text: string): string {
-  const runs = text.match(/`+/g) ?? [];
-  const longestRun = runs.reduce((max, run) => Math.max(max, run.length), 0);
-  const fence = '`'.repeat(longestRun + 1);
-  const needsPadding = text.startsWith('`') || text.endsWith('`');
-  const normalizedText = needsPadding ? ` ${text} ` : text;
-  return `${fence}${normalizedText}${fence}`;
-}
-
-function applyLinkMarks(markdown: string, marks: Mark[] = []): string {
-  return marks
-    .filter(mark => mark.type === 'link')
-    .reduce((result, mark) => `[${result}](${String(mark.attrs?.href ?? '')})`, markdown);
-}
-
-function escapeMarkdownImageText(value: string): string {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/[[\]]/g, '\\$&');
-}
-
-function escapeMarkdownUrl(value: string): string {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/([()])/g, '\\$1');
-}
-
 function escapeHtmlText(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-}
-
-function renderMarkdownImageBase(node: JSONContent): string {
-  const alt = escapeMarkdownImageText(String(node.attrs?.alt ?? ''));
-  const src = escapeMarkdownUrl(String(node.attrs?.src ?? ''));
-  const title = typeof node.attrs?.title === 'string' && node.attrs.title
-    ? ` "${node.attrs.title.replace(/"/g, '\\"')}"`
-    : '';
-
-  return `![${alt}](${src}${title})`;
 }
 
 function walkMdast(node: MdastNode | null | undefined, visit: (current: MdastNode) => void): void {
@@ -769,7 +748,7 @@ function parseMarkdownTree(markdown: string): MdastNode {
     .use(remarkMath)
     .parse(markdown) as MdastNode;
   walkMdast(tree, node => {
-    if (node.type === 'inlineMath' || node.type === 'math' || node.type === 'code') {
+    if (node.type === 'inlineMath' || node.type === 'math' || node.type === 'code' || node.type === 'list') {
       const raw = markdown.slice(node.position?.start?.offset, node.position?.end?.offset);
       const indent = Math.max(0, (node.position?.start?.column ?? 1) - 1);
       node.source = raw.split('\n').map((line, index) => index === 0 ? line
@@ -819,7 +798,21 @@ function normalizeComparableJson(
 }
 
 function normalizeTiptapDoc(doc: JSONContent): ComparableJsonValue {
-  return normalizeComparableJson(doc as ComparableJsonValue, new Set(['blockId', 'alignGroup']));
+  const normalized = normalizeComparableJson(doc as ComparableJsonValue, new Set(['blockId', 'alignGroup'])) as JSONContent;
+  const mergeTextRuns = (node: JSONContent): JSONContent => {
+    if (!node.content) return node;
+    const content: JSONContent[] = [];
+    for (const child of node.content.map(mergeTextRuns)) {
+      const last = content.at(-1);
+      if (last?.type === 'text' && child.type === 'text' &&
+          JSON.stringify(last.marks ?? []) === JSON.stringify(child.marks ?? []) &&
+          JSON.stringify(last.attrs) === JSON.stringify(child.attrs)) {
+        last.text = (last.text ?? '') + (child.text ?? '');
+      } else content.push(child);
+    }
+    return { ...node, content };
+  };
+  return mergeTextRuns(normalized) as ComparableJsonValue;
 }
 
 function walkTiptapDoc(
@@ -956,7 +949,8 @@ function parseSingleHtmlElement(
 
 function convertStructuredHtmlBlock(html: string): JSONContent[] | null {
   const tagToken = parseSingleHtmlTagToken(html.trim());
-  if (tagToken && tagToken.kind === 'self' && tagToken.tagName === 'img') {
+  if (tagToken && tagToken.kind === 'self' && tagToken.tagName === 'img' &&
+      Object.keys(tagToken.attrs).every(name => ['src', 'alt', 'title'].includes(name))) {
     return [createParagraph([{
       type: 'markdownImage',
       attrs: {
@@ -972,7 +966,7 @@ function convertStructuredHtmlBlock(html: string): JSONContent[] | null {
     return null;
   }
 
-  if (element.tagName !== 'p') {
+  if (element.tagName !== 'p' || Object.keys(element.attrs).some(name => name !== 'align')) {
     return null;
   }
 
@@ -1120,6 +1114,8 @@ function convertDetailsSummaryInlineChildren(
       return null;
     }
 
+    const allowedProperties = node.tagName === 'a' ? ['href', 'title'] : [];
+    if (Object.keys(node.properties ?? {}).some(key => !allowedProperties.includes(key))) return null;
     const childNodes = node.children ?? [];
 
     switch (node.tagName) {
@@ -1138,6 +1134,12 @@ function convertDetailsSummaryInlineChildren(
         if (!next) {
           return null;
         }
+        content.push(...next);
+        continue;
+      }
+      case 'u': {
+        const next = convertDetailsSummaryInlineChildren(childNodes, [...marks, { type: 'underline' }]);
+        if (!next) return null;
         content.push(...next);
         continue;
       }
@@ -1161,7 +1163,7 @@ function convertDetailsSummaryInlineChildren(
 
         const next = convertDetailsSummaryInlineChildren(childNodes, [
           ...marks,
-          { type: 'link', attrs: { href } },
+          { type: 'link', attrs: { href, ...(typeof node.properties?.title === 'string' ? { title: node.properties.title } : {}) } },
         ]);
         if (!next) {
           return null;
@@ -1198,6 +1200,7 @@ function convertDetailsMarkdownRegion(markdown: string): JSONContent | null {
 
   const { attrSource, bodyRaw } = matchedRegion;
   const { summaryNode } = detailsAst;
+  if (Object.keys(summaryNode.properties ?? {}).length > 0) return createRenderOnlyBlock(markdown, 'details');
   const attrs = parseHtmlAttributes(attrSource);
   const attrNames = Object.keys(attrs);
   if (attrNames.some(name => name !== 'open')) {
@@ -1327,96 +1330,145 @@ export function canRoundTripMarkdownWithTiptap(markdown: string): boolean {
   return analyzeMarkdownEditability(markdown).mode === 'lossless';
 }
 
-function getTextFormattingMarks(marks: Mark[] = []): string[] {
-  return ['bold', 'italic', 'strike'].filter(type => marks.some(mark => mark.type === type));
+// Use the same syntax extensions as the parser. Context-aware escaping belongs
+// to the Markdown serializer, including destinations, entities and code padding.
+const inlineMarkdownSerializer = unified()
+  .use(remarkGfm)
+  .use(remarkMath)
+  .use(remarkStringify, {
+    emphasis: '*',
+    strong: '*',
+    resourceLink: true,
+    handlers: { break: () => '  \n' },
+  });
+
+type InlineContainer = Strong | Emphasis | Delete | MarkdownLink;
+
+function markdownFormattingMarks(node: JSONContent): Mark[] {
+  const marks = (node.marks as Mark[] | undefined) ?? [];
+  return ['link', 'bold', 'italic', 'strike'].flatMap(type => {
+    const mark = marks.find(candidate => candidate.type === type);
+    return mark ? [{ type, ...(type === 'link' ? { attrs: {
+      href: String(mark.attrs?.href ?? ''),
+      title: typeof mark.attrs?.title === 'string' ? mark.attrs.title : null,
+    } } : {}) }] : [];
+  });
 }
 
-function openFormattingMark(type: string, value: string): string {
-  switch (type) {
-    case 'bold':
-      return `${value}**`;
-    case 'italic':
-      return `${value}*`;
-    case 'strike':
-      return `${value}~~`;
-    default:
-      return value;
-  }
+function inlineSemanticKey(content: JSONContent[]): string {
+  const runs: Array<{ type: string; text?: string; marks: string; attrs?: unknown }> = [];
+  content.forEach(node => {
+    const marks = [...markdownFormattingMarks(node),
+      ...['code', 'underline'].flatMap(type => node.marks?.some(mark => mark.type === type) ? [{ type }] : [])]
+      .map(mark => JSON.stringify(mark)).sort().join('|');
+    const last = runs.at(-1);
+    if (node.type === 'text' && last?.type === 'text' && last.marks === marks) {
+      last.text += node.text ?? '';
+    } else {
+      runs.push({ type: node.type ?? '', ...(node.type === 'text' ? { text: node.text ?? '' } : { attrs: node.attrs }), marks });
+    }
+  });
+  return JSON.stringify(runs);
 }
 
-function closeFormattingMark(type: string, value: string): string {
-  switch (type) {
-    case 'bold':
-      return `${value}**`;
-    case 'italic':
-      return `${value}*`;
-    case 'strike':
-      return `${value}~~`;
-    default:
-      return value;
-  }
+// Markdown delimiters cannot represent every range produced by rich-text edits.
+// Use equivalent inline HTML only when the emitted Markdown fails a range check.
+// Encode literal syntax and whitespace so Markdown inside HTML stays literal.
+function renderInlineSourceHtml(content: JSONContent[]): string {
+  return content.map(node => {
+    let value: string;
+    if (node.type === 'text') {
+      value = Array.from(node.text ?? '', character => /[\s&<>"`*_~$\[\]\\]/.test(character)
+        ? `&#${character.codePointAt(0)};` : character).join('');
+    } else if (node.type === 'hardBreak') {
+      value = '<br>';
+    } else if (node.type === 'markdownImage') {
+      value = `<img src="${escapeHtmlText(String(node.attrs?.src ?? ''))}" alt="${escapeHtmlText(String(node.attrs?.alt ?? ''))}"${
+        typeof node.attrs?.title === 'string' ? ` title="${escapeHtmlText(node.attrs.title)}"` : ''}>`;
+    } else if (node.type === 'inlineMath') {
+      value = String(node.attrs?.markdown ?? '');
+    } else if (node.type === 'rawHtmlInline') {
+      value = String(node.attrs?.html ?? '');
+    } else {
+      value = renderInlineSourceHtml(node.content ?? []);
+    }
+    for (const [mark, tag] of [['code', 'code'], ['bold', 'strong'], ['italic', 'em'], ['strike', 'del'], ['underline', 'u']]) {
+      if (node.marks?.some(candidate => candidate.type === mark)) value = `<${tag}>${value}</${tag}>`;
+    }
+    const link = node.marks?.find(mark => mark.type === 'link');
+    if (link) {
+      const title = typeof link.attrs?.title === 'string' ? ` title="${escapeHtmlText(link.attrs.title)}"` : '';
+      value = `<a href="${escapeHtmlText(String(link.attrs?.href ?? ''))}"${title}>${value}</a>`;
+    }
+    return value;
+  }).join('');
 }
 
 function renderInline(content: JSONContent[] = []): string {
-  let result = '';
-  const activeFormatting: string[] = [];
+  const children: PhrasingContent[] = [];
+  const formatting = content.map(node => markdownFormattingMarks(node).map(mark => ({
+    mark, key: JSON.stringify(mark),
+  })));
+  const ends: Map<string, number>[] = new Array(content.length);
+  for (let index = content.length - 1; index >= 0; index -= 1) {
+    ends[index] = new Map(formatting[index].map(({ key }) => [
+      key, ends[index + 1]?.get(key) ?? index + 1,
+    ]));
+  }
+  const active: Array<{ key: string; node: InlineContainer }> = [];
+  const currentChildren = (): PhrasingContent[] => active.length
+    ? active[active.length - 1].node.children as PhrasingContent[] : children;
 
-  const syncFormatting = (nextFormatting: string[]) => {
-    while (activeFormatting.length > 0 && !nextFormatting.includes(activeFormatting[activeFormatting.length - 1])) {
-      const last = activeFormatting.pop();
-      if (last) {
-        result = closeFormattingMark(last, result);
-      }
-    }
-
-    nextFormatting.forEach((format) => {
-      if (!activeFormatting.includes(format)) {
-        result = openFormattingMark(format, result);
-        activeFormatting.push(format);
-      }
+  content.forEach((node, index) => {
+    const next = formatting[index];
+    const firstEnded = active.findIndex(entry => !next.some(mark => mark.key === entry.key));
+    if (firstEnded >= 0) active.splice(firstEnded);
+    // Long-lived ranges are outermost. Closing an outer range also closes
+    // its inner ranges; continuing ranges reopen rather than leaking marks.
+    next.sort((a, b) => ends[index].get(b.key)! - ends[index].get(a.key)!);
+    next.forEach(({ mark, key }) => {
+      if (active.some(entry => entry.key === key)) return;
+      const wrapper: InlineContainer = mark.type === 'link'
+        ? { type: 'link', url: String(mark.attrs?.href ?? ''), title: mark.attrs?.title as string | null, children: [] }
+        : { type: mark.type === 'bold' ? 'strong' : mark.type === 'italic' ? 'emphasis' : 'delete', children: [] };
+      currentChildren().push(wrapper);
+      active.push({ key, node: wrapper });
     });
-  };
 
-  content.forEach((node: JSONContent) => {
-    const marks = (node.marks as Mark[] | undefined) ?? [];
-    const formattingMarks = getTextFormattingMarks(marks);
-    syncFormatting(formattingMarks);
-
-    if (node.type === 'text') {
-      const hasCodeMark = marks.some(mark => mark.type === 'code');
-      const baseText = hasCodeMark
-        ? wrapInlineCodeText(node.text ?? '')
-        : escapeMarkdownPlainText(node.text ?? '');
-
-      result += applyLinkMarks(baseText, marks);
-      return;
+    let leaf: PhrasingContent;
+    switch (node.type) {
+      case 'text':
+        leaf = { type: node.marks?.some(mark => mark.type === 'code') ? 'inlineCode' : 'text', value: node.text ?? '' };
+        break;
+      case 'hardBreak':
+        leaf = { type: 'break' };
+        break;
+      case 'inlineMath':
+        leaf = { type: 'html', value: String(node.attrs?.markdown ?? '') };
+        break;
+      case 'rawHtmlInline':
+        leaf = { type: 'html', value: String(node.attrs?.html ?? '') };
+        break;
+      case 'markdownImage':
+        leaf = { type: 'image', url: String(node.attrs?.src ?? ''), alt: String(node.attrs?.alt ?? ''),
+          title: typeof node.attrs?.title === 'string' ? node.attrs.title : null };
+        break;
+      default:
+        leaf = { type: 'html', value: renderInline(node.content ?? []) };
     }
-
-    if (node.type === 'hardBreak') {
-      result += '  \n';
-      return;
-    }
-
-    if (node.type === 'inlineMath') {
-      result += applyLinkMarks(String(node.attrs?.markdown ?? ''), marks);
-      return;
-    }
-
-    if (node.type === 'rawHtmlInline') {
-      result += String(node.attrs?.html ?? '');
-      return;
-    }
-
-    if (node.type === 'markdownImage') {
-      result += applyLinkMarks(renderMarkdownImageBase(node), marks);
-      return;
-    }
-
-    result += renderInline(node.content ?? []);
+    const siblings = currentChildren();
+    const previous = siblings.at(-1);
+    if ((leaf.type === 'text' || leaf.type === 'inlineCode') && previous?.type === leaf.type) {
+      (previous as typeof leaf).value += leaf.value;
+    } else siblings.push(leaf);
   });
-
-  syncFormatting([]);
-  return result;
+  const tree: Root = { type: 'root', children: [{ type: 'paragraph', children }] };
+  const markdown = inlineMarkdownSerializer.stringify(tree).replace(/\n$/, '');
+  const parsed = parseMarkdownTree(markdown).children ?? [];
+  const recovered = parsed.length === 1 && parsed[0].type === 'paragraph'
+    ? convertInlineNodes(parsed[0].children ?? []) : [];
+  return inlineSemanticKey(recovered) === inlineSemanticKey(content)
+    ? markdown : renderInlineSourceHtml(content);
 }
 
 function renderInlineHtml(content: JSONContent[] = []): string {
@@ -1437,10 +1489,12 @@ function renderInlineHtml(content: JSONContent[] = []): string {
       if (marks.some(mark => mark.type === 'strike')) {
         result = `<del>${result}</del>`;
       }
+      if (marks.some(mark => mark.type === 'underline')) result = `<u>${result}</u>`;
 
       const linkMarks = marks.filter(mark => mark.type === 'link');
       linkMarks.forEach((mark) => {
-        result = `<a href="${escapeHtmlText(String(mark.attrs?.href ?? ''))}">${result}</a>`;
+        const title = typeof mark.attrs?.title === 'string' ? ` title="${escapeHtmlText(mark.attrs.title)}"` : '';
+        result = `<a href="${escapeHtmlText(String(mark.attrs?.href ?? ''))}"${title}>${result}</a>`;
       });
 
       return result;
@@ -1456,6 +1510,10 @@ function renderInlineHtml(content: JSONContent[] = []): string {
 
 function parseAlignmentDirective(html: string, state: AlignmentState): boolean {
   const tagPattern = /<\/?div\b[^>]*>/gi;
+  if ((html.match(tagPattern) ?? []).some(raw => {
+    const token = parseSingleHtmlTagToken(raw);
+    return !token || Object.keys(token.attrs).some(name => name !== 'align');
+  })) return false;
   let matched = false;
   let cursor = 0;
   let match: RegExpExecArray | null;
@@ -1666,11 +1724,12 @@ function renderListItem(
   const [first, ...rest] = children;
   const firstRendered = first.type === 'paragraph'
     ? renderInline(first.content ?? [])
-    : renderBlock(first, depth + 1);
+    : renderBlock(first, 0);
 
-  const lines: string[] = [`${indent}${marker}${firstRendered}`];
+  const lines: string[] = [`${indent}${marker}${firstRendered.replace(/\n/g, `\n${continuationIndent}`)}`];
 
   rest.forEach((child: JSONContent) => {
+    if (child.type === 'paragraph') lines.push('');
     lines.push(prefixMarkdownLines(renderBlock(child, 0), continuationIndent));
   });
 
@@ -1703,7 +1762,10 @@ function renderBlock(node: JSONContent, depth = 0): string {
       const text = (node.content ?? [])
         .map((child: JSONContent) => (child.type === 'text' ? child.text ?? '' : renderInline(child.content ?? [])))
         .join('');
-      return `\`\`\`${language}\n${text}\n\`\`\``;
+      const marker = language.includes('`') ? '~' : '`';
+      const runs = text.match(marker === '`' ? /`+/g : /~+/g) ?? [];
+      const fence = marker.repeat(runs.reduce((length, run) => Math.max(length, run.length + 1), 3));
+      return `${fence}${language}\n${text}\n${fence}`;
     }
     case 'horizontalRule':
       return '---';
@@ -1785,16 +1847,38 @@ export function markdownToTiptapDoc(markdown: string): JSONContent {
   };
 }
 
-/** Last-resort source-backed block for documents whose structure cannot round-trip.
- * Rendered blocks remain editable; never feed lossy conversion into the editor.
+/** Keep conversion failures local to their source region. The global analysis
+ * remains strict; a problem in one block must not turn unrelated text into source.
  */
 export function markdownToEditableTiptapDoc(markdown: string): JSONContent {
-  if (analyzeMarkdownEditability(markdown).mode === 'unsafe') {
-    return { type: 'doc', content: withTopLevelBlockIds([
-      createRenderOnlyBlock(markdown, 'markdown'),
-    ]) };
+  if (analyzeMarkdownEditability(markdown).mode !== 'unsafe') {
+    return markdownToTiptapDoc(markdown);
   }
-  return markdownToTiptapDoc(markdown);
+  const frontmatter = splitMarkdownFrontmatter(markdown);
+  const body = frontmatter ? frontmatter.body : markdown;
+  const children = parseMarkdownTree(body).children ?? [];
+  const content: JSONContent[] = frontmatter
+    ? [createFrontmatterBlock(frontmatter, getLeadingBlankLines(body))] : [];
+  for (let index = 0; index < children.length; index += 1) {
+    const child = children[index];
+    // HTML containers and alignment wrappers are indivisible source regions;
+    // splitting them could change the meaning of their descendants.
+    const region = consumeRawHtmlRegion(children, index, body);
+    const last = region ? region.nextIndex - 1 : index;
+    const start = getNodeStartOffset(child);
+    const end = getNodeEndOffset(children[last]);
+    if (start === null || end === null) {
+      throw new Error('Markdown parser omitted source positions');
+    }
+    const source = body.slice(start, end);
+    if (analyzeMarkdownEditability(source).mode === 'unsafe') {
+      content.push(createRenderOnlyBlock(source, child.type ?? 'markdown'));
+    } else {
+      content.push(...(markdownToTiptapDoc(source).content ?? []));
+    }
+    index = last;
+  }
+  return { type: 'doc', content: withTopLevelBlockIds(content) };
 }
 
 export function tiptapDocToMarkdown(

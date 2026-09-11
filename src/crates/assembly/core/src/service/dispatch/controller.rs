@@ -208,6 +208,8 @@ pub struct DispatchQueryJobRequest {
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_chunk: Option<openbitfun_services_core::dispatch_contract::DispatchFileChunkRequest>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -1109,24 +1111,29 @@ pub async fn query_job(
     let DispatchTarget::Ssh { connection_id, .. } = &record.target else {
         anyhow::bail!("SSH dispatch query requires an SSH target");
     };
-    if request.kind == "readFile" {
+    if matches!(request.kind.as_str(), "readFile" | "readFileChunk") {
         let probe = dispatch_ssh::probe(manager, connection_id, None).await?;
-        validate_file_query_capability(probe.protocol.as_ref())?;
+        validate_file_query_capability(probe.protocol.as_ref(), &request.kind)?;
     }
     dispatch_ssh::query(manager, connection_id, &serde_json::to_value(request)?).await
 }
 
-pub(super) fn validate_file_query_capability(protocol: Option<&Value>) -> anyhow::Result<()> {
+pub(super) fn validate_file_query_capability(
+    protocol: Option<&Value>,
+    kind: &str,
+) -> anyhow::Result<()> {
+    let required = if kind == "readFileChunk" {
+        openbitfun_services_core::dispatch_contract::DISPATCH_FILE_CHUNKS_CAPABILITY
+    } else {
+        openbitfun_services_core::dispatch_contract::DISPATCH_READ_FILE_CAPABILITY
+    };
     let supported = protocol
         .and_then(|value| value.get("capabilities"))
         .and_then(Value::as_array)
         .is_some_and(|capabilities| {
-            capabilities.iter().any(|capability| {
-                capability.as_str()
-                    == Some(
-                        openbitfun_services_core::dispatch_contract::DISPATCH_READ_FILE_CAPABILITY,
-                    )
-            })
+            capabilities
+                .iter()
+                .any(|capability| capability.as_str() == Some(required))
         });
     if !supported {
         anyhow::bail!("This target does not support remote file previews. Update its CLI or sync changes to view files.");
@@ -1141,7 +1148,7 @@ pub(super) fn validate_query_request(request: &DispatchQueryJobRequest) -> anyho
     if request.kind.trim().is_empty() || request.kind.len() > 64 {
         anyhow::bail!("Dispatch query kind is invalid");
     }
-    if request.kind == "readFile"
+    if matches!(request.kind.as_str(), "readFile" | "readFileChunk")
         && request
             .file_path
             .as_deref()
@@ -1149,8 +1156,26 @@ pub(super) fn validate_query_request(request: &DispatchQueryJobRequest) -> anyho
     {
         anyhow::bail!("Dispatch file query requires a filePath");
     }
-    if request.kind != "readFile" && request.file_path.is_some() {
+    if !matches!(request.kind.as_str(), "readFile" | "readFileChunk") && request.file_path.is_some()
+    {
         anyhow::bail!("Only a dispatch file query accepts a filePath");
+    }
+    if request.kind == "readFileChunk" {
+        let chunk = request
+            .file_chunk
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Dispatch chunk query requires fileChunk"))?;
+        if chunk.limit == 0
+            || chunk.limit
+                > openbitfun_services_core::dispatch_contract::DISPATCH_FILE_CHUNK_MAX_BYTES
+        {
+            anyhow::bail!("Invalid dispatch output chunk size");
+        }
+        if chunk.offset > 0 && chunk.expected_revision.as_deref().is_none_or(str::is_empty) {
+            anyhow::bail!("A file revision is required to resume this download");
+        }
+    } else if request.file_chunk.is_some() {
+        anyhow::bail!("Only a chunk query accepts fileChunk");
     }
     // Which kinds exist is the target's contract; an unknown kind comes back
     // as a clear target-side error instead of drifting a second list here.
@@ -1712,15 +1737,27 @@ mod tests {
         let request: DispatchQueryJobRequest = serde_json::from_value(old.clone()).unwrap();
         assert!(validate_query_request(&request).is_ok());
         assert_eq!(serde_json::to_value(request).unwrap(), old);
-        assert!(
-            validate_file_query_capability(Some(&json!({"capabilities": ["session_query"]})))
-                .is_err()
-        );
-        assert!(validate_file_query_capability(Some(
-            &json!({"capabilities": ["query_file_content"]})
-        ))
+        assert!(validate_file_query_capability(
+            Some(&json!({"capabilities": ["session_query"]})),
+            "readFile"
+        )
+        .is_err());
+        assert!(validate_file_query_capability(
+            Some(&json!({"capabilities": ["query_file_content"]})),
+            "readFile"
+        )
         .is_ok());
-        assert!(validate_file_query_capability(None).is_err());
+        assert!(validate_file_query_capability(None, "readFile").is_err());
+        assert!(validate_file_query_capability(
+            Some(&json!({"capabilities": ["query_file_content"]})),
+            "readFileChunk"
+        )
+        .is_err());
+        assert!(validate_file_query_capability(
+            Some(&json!({"capabilities": ["query_file_chunks_v1"]})),
+            "readFileChunk"
+        )
+        .is_ok());
     }
 
     #[test]

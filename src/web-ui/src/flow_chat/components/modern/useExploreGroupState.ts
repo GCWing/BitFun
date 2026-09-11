@@ -21,8 +21,9 @@ interface UseExploreGroupStateResult {
 
 export function useExploreGroupState(
   virtualItems: VirtualItem[],
+  initialStates?: Map<string, boolean>,
 ): UseExploreGroupStateResult {
-  const [exploreGroupStates, setExploreGroupStates] = useState<Map<string, boolean>>(new Map());
+  const [exploreGroupStates, setExploreGroupStates] = useState<Map<string, boolean>>(() => initialStates ?? new Map());
   const virtualItemsRef = useRef(virtualItems);
   virtualItemsRef.current = virtualItems;
 

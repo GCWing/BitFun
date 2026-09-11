@@ -1,5 +1,15 @@
 # FlowChat Virtualization
 
+## Embedded session lifetime
+
+`BtwSessionPanel` keeps a lightweight tab-owned wrapper while its content is
+inactive. Its transcript and observers unmount immediately. `BtwVirtualSessionList`
+shares the virtualizer and stable row keys; `useBtwPanelViewport` saves a visible
+row key and intra-row offset while reading, then restores against estimated and
+mounted geometry. Readers following output return to the live tail. The shared
+`useExploreGroupState` accepts initial expansion state for this remount boundary;
+the primary transcript retains its existing default and session lifetime.
+
 ## Result visibility and read receipts
 
 `useSessionCompletionReceipt` reads the final projected non-user item for the
@@ -186,3 +196,35 @@ package.
 - `virtualMessageListLayout.ts`
 - `VirtualItemRenderer.tsx` + `.scss`
 - `VirtualMessageList.tsx`
+
+## Transcript row columns
+
+Thinking, Explore, ambient tool summaries and the runtime-status footer use
+`control.flowChat.rowIconSize` (14px) and `rowIconGap` (4px). The outer content
+column owns its responsive inset. Borderless rows add no leading padding or
+transparent border; text-only replies and expanded thinking begin at that same
+body edge. A summary with an icon starts its label 18px later. Tool/arrow/status
+layers keep their slot during state changes. Native SVG artwork may contain
+internal whitespace; do not compensate for it with per-tool margins.
+
+Thinking/Explore labels use secondary content directly and their icons use the
+caption role, avoiding a second opacity multiplier. These layout rules do not
+change virtual-item identity, measurement ownership or viewport writes.
+
+## Transcript vertical rhythm
+
+The shared item gap is 8px and the inline gap is 4px. Thinking, Explore and
+retry disclosure headers share the ambient 22px minimum line box, growing with
+text. Consecutive collapsed ambient tools remain continuous lines with no added
+inter-item gap. The existing projection flag preserves that rule across virtual
+model-round boundaries; expanded and prominent cards keep the ordinary 8px gap.
+
+The item-rhythm mixin belongs to ModelRoundItem, retry-attempt contents,
+Explore contents and the subagent projection. Leaves carry no outer margin.
+Enclosed contents remove their last gap; model rounds retain it until the virtual
+Turn boundary removes it. Expanded Task wrappers use the same parent-owned gap
+as other items; their body owns its internal padding. Export wrappers and the
+Lab sequence own their own gaps. Thinking/Explore content has an 8px top inset;
+bounded Explore retains 8px bottom padding for its scroll fade. There is no
+negative adjacent-region margin. The resident runtime slot stays 24px high and
+continues to participate in the existing footer/reservation contract.

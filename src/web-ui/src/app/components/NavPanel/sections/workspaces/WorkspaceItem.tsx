@@ -110,7 +110,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     renameWorkspace,
   } = useWorkspaceContext();
   const { switchLeftPanelTab } = useApp();
-  const openNavScene = useNavSceneStore(s => s.openNavScene);
+  const openWorkspaceResources = useNavSceneStore(s => s.openWorkspaceResources);
   const historySessionOpenTransition = useSyncExternalStore(
     subscribeHistorySessionOpenTransition,
     getHistorySessionOpenTransitionSnapshot,
@@ -515,12 +515,6 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     };
   }, [menuOpen, workspace]);
 
-  const handleActivate = useCallback(async () => {
-    if (!isActive) {
-      await setActiveWorkspace(workspace.id);
-    }
-  }, [isActive, setActiveWorkspace, workspace.id]);
-
   const handleCollapseToggle = useCallback(() => {
     setSessionsCollapsed(prev => !prev);
   }, []);
@@ -790,18 +784,10 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     }
   }, [setActiveWorkspace, t, workspace]);
 
-  const handleOpenFiles = useCallback(async () => {
-    try {
-      await handleActivate();
-      switchLeftPanelTab('files');
-      openNavScene('file-viewer');
-    } catch (error) {
-      notificationService.error(
-        error instanceof Error ? error.message : t('nav.workspaces.revealFailed'),
-        { duration: 4000 }
-      );
-    }
-  }, [handleActivate, openNavScene, switchLeftPanelTab, t]);
+  const handleOpenFiles = useCallback(() => {
+    switchLeftPanelTab('files');
+    openWorkspaceResources(workspace.id);
+  }, [openWorkspaceResources, switchLeftPanelTab, workspace.id]);
 
   if (workspace.workspaceKind === WorkspaceKind.Assistant) {
     return (

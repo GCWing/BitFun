@@ -49,6 +49,21 @@ struct SettingsView: View {
                             }
                             .buttonStyle(.plain)
                         }
+                        SettingsGroup(title: "通知") {
+                            Button {
+                                Task { await TaskCompletionNotifier.manageNotifications() }
+                            } label: {
+                                SettingsValueRow(
+                                    icon: "bell",
+                                    title: "任务完成通知",
+                                    value: "",
+                                    showsChevron: true
+                                )
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("settings.notifications")
+                        }
                         accountDevicesSection
                         SettingsGroup(title: "关于") {
                             VStack(spacing: 0) {

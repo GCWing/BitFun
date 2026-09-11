@@ -680,8 +680,7 @@ const GenericFileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     }
     
     try {
-      const { editorJumpService } = await import('../../shared/services/EditorJumpService');
-      await editorJumpService.jumpToFile(filePath, lineNumber, 1);
+      fileTabManager.openFileAndJump(filePath, lineNumber, 1);
     } catch (error) {
       log.error('Failed to jump to line', { filePath, lineNumber, error });
     }

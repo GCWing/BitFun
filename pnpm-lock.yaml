@@ -453,6 +453,9 @@ importers:
       morphdom:
         specifier: ^2.7.8
         version: 2.7.8
+      parse-entities:
+        specifier: ^4.0.2
+        version: 4.0.2
       partial-json:
         specifier: ^0.1.7
         version: 0.1.7
@@ -507,6 +510,9 @@ importers:
       remark-rehype:
         specifier: ^11.1.2
         version: 11.1.2
+      remark-stringify:
+        specifier: ^11.0.0
+        version: 11.0.0
       unified:
         specifier: ^11.0.5
         version: 11.0.5
@@ -523,6 +529,9 @@ importers:
       '@eslint/js':
         specifier: ^9.24.0
         version: 9.39.4
+      '@types/mdast':
+        specifier: ^4.0.4
+        version: 4.0.4
       '@types/node':
         specifier: ^20.10.0
         version: 20.19.37

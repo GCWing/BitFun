@@ -12,6 +12,18 @@
   background: var(--openbitfun-color-surface-scene);
   box-shadow: none;
 
+  // An open Session panel owns its toolbar/content insets. Reclaim the shell's
+  // trailing gutter here so both toolbar dividers reach the window edge.
+  // Only the visible host participates; retained background sessions do not.
+  .openbitfun-workspace-body__scene-surface > &:has(
+    > .openbitfun-scene-viewport__clip
+    > .openbitfun-scene-viewport__scene--active
+    .openbitfun-session-scene__aux-pane:not(.openbitfun-session-scene__aux-pane--collapsed)
+  ) {
+    inline-size: calc(100% + var(--openbitfun-space-4));
+    margin-inline-end: calc(0px - var(--openbitfun-space-4));
+  }
+
   // The ecosystem catalog owns its own content padding and starts at the scene edge.
   .openbitfun-workspace-body__scene-surface > &:has(
     > .openbitfun-scene-viewport__clip

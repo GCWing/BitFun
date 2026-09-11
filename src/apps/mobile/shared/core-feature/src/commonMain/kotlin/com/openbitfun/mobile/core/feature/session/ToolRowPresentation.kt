@@ -71,12 +71,10 @@ public sealed interface ToolRow {
     }
 
     /**
-     * Consecutive finished lookups, folded into one line.
+     * Consecutive finished background activities, folded into one line.
      *
-     * An agent reading six files before answering produces six rows that say
-     * nothing individually; the source collapses them and so does this. Only
-     * finished ones — anything still running, failed, or waiting on the user is
-     * why the user is looking at the column at all.
+     * Anything still running, failed, waiting on the user, or representing a
+     * buildable plan remains visible on its own row.
      */
     public data class Collapsed public constructor(
         public val tools: List<ToolCard>,
@@ -113,7 +111,7 @@ public fun collapseToolRows(tools: List<ToolCard>): List<ToolRow> {
     }
 
     tools.forEach { tool ->
-        if (tool.isCollapsibleLookup()) {
+        if (tool.foldIntoSummary) {
             pending += tool
         } else {
             flush()
@@ -122,12 +120,6 @@ public fun collapseToolRows(tools: List<ToolCard>): List<ToolRow> {
     }
     flush()
     return rows
-}
-
-private fun ToolCard.isCollapsibleLookup(): Boolean {
-    if (actions.isNotEmpty()) return false
-    if (phase != ToolPhase.COMPLETED && phase != ToolPhase.CANCELLED) return false
-    return kind == ToolKind.DOCUMENT || kind == ToolKind.FOLDER || kind == ToolKind.SEARCH
 }
 
 internal fun toolKind(tool: RemoteToolStatusResponse): ToolKind = when {

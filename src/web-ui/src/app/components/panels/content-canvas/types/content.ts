@@ -70,7 +70,6 @@ export const TAB_EVENTS = {
   /** Create tab in agent mode */
   AGENT_CREATE_TAB: 'agent-create-tab',
   /** Create tab in project mode */
-  PROJECT_CREATE_TAB: 'project-create-tab',
   /** Create tab in Git scene canvas */
   GIT_CREATE_TAB: 'git-create-tab',
   /** Expand right panel */

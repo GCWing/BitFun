@@ -11,6 +11,8 @@
   .statusLayer,
   .iconLayer {
     display: inline-flex;
+    inline-size: 100%;
+    block-size: 100%;
     align-items: center;
     justify-content: center;
     transition: opacity var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);

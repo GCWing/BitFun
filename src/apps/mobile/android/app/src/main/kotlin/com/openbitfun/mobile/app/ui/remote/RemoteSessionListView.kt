@@ -51,6 +51,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.sp
+import com.openbitfun.mobile.core.feature.session.HarnessProfilePolicy
+import com.openbitfun.mobile.core.feature.session.HarnessProfile
 import com.openbitfun.mobile.app.R
 import com.openbitfun.mobile.app.state.SessionViewSettings
 import com.openbitfun.mobile.app.ui.settings.SessionViewSettingsSheet
@@ -278,6 +280,7 @@ internal fun RemoteSessionListContent(
                         val sectionKey = sectionKey(section)
                         val collapsed = sectionKey in collapsedSectionKeys
                         SectionHeader(
+                            supportsHarnessProfiles = HarnessProfilePolicy.supported((workspaceState as? RemoteWorkspaceUiState.Ready)?.hostCapabilities.orEmpty()),
                             section = section,
                             collapsed = collapsed,
                             createMenuOpen = section is SessionListSection.Project &&
@@ -591,6 +594,7 @@ private fun ProjectTreeHeader(projectCount: Int) {
 /** One collapsible group heading; project ones form the folder tree. */
 @Composable
 private fun SectionHeader(
+    supportsHarnessProfiles: Boolean,
     section: SessionListSection,
     collapsed: Boolean,
     createMenuOpen: Boolean,
@@ -645,6 +649,7 @@ private fun SectionHeader(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             ProjectCreateControl(
+                supportsHarnessProfiles = supportsHarnessProfiles,
                 path = section.path,
                 expanded = createMenuOpen,
                 onToggle = { onToggleCreateMenu?.invoke() },
@@ -684,6 +689,8 @@ internal fun ChatCreateControl(onCreate: () -> Unit) {
 
 @Composable
 internal fun ProjectCreateControl(
+    supportsHarnessProfiles: Boolean = false,
+    enabled: Boolean = true,
     path: String,
     expanded: Boolean,
     onToggle: () -> Unit,
@@ -693,6 +700,7 @@ internal fun ProjectCreateControl(
     Box {
         IconButton(
             onClick = onToggle,
+            enabled = enabled,
             modifier = Modifier
                 .size(36.dp)
                 .testTag(SESSION_PROJECT_CREATE_TEST_TAG_PREFIX + path),
@@ -713,12 +721,21 @@ internal fun ProjectCreateControl(
             tonalElevation = 0.dp,
             shadowElevation = 18.dp,
         ) {
+            if (supportsHarnessProfiles) {
+                HarnessProfile.entries.forEach { profile ->
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { HarnessProfileLabel(profile) },
+                        onClick = { onCreateAgent(profile.agentType) },
+                    )
+                }
+            } else {
             CompactCreateMenuItem(
                 label = stringResource(R.string.sessions_filter_code),
                 enabled = true,
                 onClick = { onCreateAgent("code") },
                 modifier = Modifier,
             )
+            }
             CompactCreateMenuItem(
                 label = stringResource(R.string.sessions_filter_cowork),
                 enabled = true,

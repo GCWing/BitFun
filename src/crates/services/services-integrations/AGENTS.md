@@ -32,6 +32,11 @@ slices that are outside pure product logic but still platform-neutral.
   by Remote Connect, remote SSH, and offline migration. Keep it free of network,
   SSH transport, and runtime orchestration dependencies so owner readers and
   writers can validate staged data without enabling those heavier families.
+- `remote_connect::file_projection` performs bounded output reads through the
+  session-selected `WorkspaceFileSystem`; `remote-connect` therefore selects
+  `runtime-ports/workspace-ports` without enabling an SSH implementation. Core
+  supplies the session root and provider. IM adapters consume authorized bytes
+  and must not re-resolve paths on the bot host.
 - Remote workspace facts, session metadata, file projection DTOs, and
   workspace/projection host traits belong in `openbitfun-runtime-ports`.
 - Workspace-root source selection, persistence/workspace service reads,
@@ -145,6 +150,7 @@ cargo test -p openbitfun-services-integrations --no-default-features --features 
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features remote-ssh-concrete --lib remote_ssh::relay_deploy::tests::
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features remote-connect --lib remote_connect::relay_client::tests::
 cargo test -p openbitfun-services-integrations --no-default-features --features file-watch --test file_watch_contracts
+cargo test --locked -p openbitfun-services-integrations --no-default-features --features workspace-search --test workspace_search_contracts
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features deep-research --lib deep_research::tests::
 cargo test --locked -p openbitfun-services-integrations --no-default-features --features review-platform --lib review_platform
 pnpm run check:core-boundaries

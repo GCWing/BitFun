@@ -3,6 +3,8 @@ package com.openbitfun.mobile.core.feature.workspace
 import com.openbitfun.mobile.core.protocol.CommandStatus
 import com.openbitfun.mobile.core.protocol.RelayJson
 import com.openbitfun.mobile.core.protocol.RemoteCommand
+import com.openbitfun.mobile.core.persistence.PersistedRemoteWorkspace
+import com.openbitfun.mobile.core.persistence.RemoteWorkspaceListStore
 import com.openbitfun.mobile.core.transport.RemoteCommandTransport
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -52,6 +54,73 @@ class RemoteWorkspaceStoreTest {
 
         assertEquals("/next", transport.commands.first { it.cmd == "set_workspace" }.path)
         assertFalse(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).busy)
+    }
+
+    @Test
+    fun cachedCatalogStaysVisibleWhenTheLiveRefreshFails() = runTest {
+        val cache = MemoryWorkspaceListStore().apply {
+            rows["device-a"] = listOf(
+                PersistedRemoteWorkspace("/cached", "Cached", "yesterday", "local"),
+                PersistedRemoteWorkspace("/assistant", "Assistant", "", "assistant"),
+            )
+        }
+        val store = RemoteWorkspaceStore.create(
+            this,
+            FailingWorkspaceTransport(),
+            StandardTestDispatcher(testScheduler),
+            "device-a",
+            cache,
+        )
+
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        val cached = assertIs<RemoteWorkspaceUiState.Ready>(store.state.value)
+        assertTrue(cached.busy)
+        assertEquals(listOf("/cached"), cached.workspaces.map { it.path })
+        assertEquals(listOf("/assistant"), cached.assistants.map { it.path })
+        advanceUntilIdle()
+
+        val failed = assertIs<RemoteWorkspaceUiState.Ready>(store.state.value)
+        assertFalse(failed.busy)
+        assertTrue(failed.loadFailure)
+        assertEquals(listOf("/cached"), failed.workspaces.map { it.path })
+        assertEquals(listOf("/assistant"), failed.assistants.map { it.path })
+    }
+
+    @Test
+    fun successfulCatalogRefreshReplacesAndPersistsCachedRows() = runTest {
+        val cache = MemoryWorkspaceListStore()
+        val store = RemoteWorkspaceStore.create(
+            this,
+            FakeWorkspaceTransport(),
+            StandardTestDispatcher(testScheduler),
+            "device-a",
+            cache,
+        )
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+
+        assertEquals(listOf("/repo", "/assistant"), cache.rows.getValue("device-a").map { it.path })
+        assertFalse(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).loadFailure)
+    }
+
+    @Test
+    fun unavailableWorkspaceCacheDoesNotOverrideRemoteCatalog() = runTest {
+        val store = RemoteWorkspaceStore.create(
+            this,
+            FakeWorkspaceTransport(),
+            StandardTestDispatcher(testScheduler),
+            "device-a",
+            FailingWorkspaceListStore(),
+        )
+
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+
+        val ready = assertIs<RemoteWorkspaceUiState.Ready>(store.state.value)
+        assertEquals(listOf("/repo"), ready.workspaces.map { it.path })
+        assertEquals(listOf("/assistant"), ready.assistants.map { it.path })
+        assertFalse(ready.busy)
+        assertFalse(ready.loadFailure)
     }
 
     @Test
@@ -349,6 +418,43 @@ class RemoteWorkspaceStoreTest {
     }
 
     @Test
+    fun imagePreviewReadsEveryChunkFromItsOriginSession() = runTest {
+        val transport = FakeWorkspaceTransport(downloadChunks = true, imageChunks = true)
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler))
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("computer://preview.png", "Preview", "origin-session"))
+        advanceUntilIdle()
+        val image = assertIs<RemoteFilePreviewUiState.Image>(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).preview)
+        assertContentEquals("fn main() {}".encodeToByteArray(), image.bytes)
+        val reads = transport.commands.filter { it.cmd == "read_file_chunk" }
+        assertEquals(listOf(0, 6), reads.map { it.offset })
+        assertTrue(reads.all { it.sessionId == "origin-session" })
+    }
+
+    @Test
+    fun changedRevisionRejectsAnOtherwiseValidImageTransfer() = runTest {
+        val transport = FakeWorkspaceTransport(downloadChunks = true, imageChunks = true, revisionChanges = true)
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler))
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("preview.png", "Preview", "origin-session"))
+        advanceUntilIdle()
+        assertIs<RemoteFilePreviewUiState.Failed>(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).preview)
+    }
+
+    @Test
+    fun incompleteImageIsAnErrorInsteadOfATruncatedPreview() = runTest {
+        val transport = FakeWorkspaceTransport(downloadChunks = true, imageChunks = true, truncate = true)
+        val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler))
+        store.dispatch(RemoteWorkspaceIntent.Load)
+        advanceUntilIdle()
+        store.dispatch(RemoteWorkspaceIntent.OpenFile("preview.png", "Preview", "origin-session"))
+        advanceUntilIdle()
+        assertIs<RemoteFilePreviewUiState.Failed>(assertIs<RemoteWorkspaceUiState.Ready>(store.state.value).preview)
+    }
+
+    @Test
     fun downloadsAFileInChunksAndWaitsForThePlatformSaver() = runTest {
         val transport = FakeWorkspaceTransport(downloadChunks = true)
         val store = RemoteWorkspaceStore.create(this, transport, StandardTestDispatcher(testScheduler))
@@ -509,6 +615,9 @@ private class DelayedPreviewTransport : RemoteCommandTransport {
 private class FakeWorkspaceTransport(
     private val downloadChunks: Boolean = false,
     private val readFileUnsupported: Boolean = false,
+    private val imageChunks: Boolean = false,
+    private val truncate: Boolean = false,
+    private val revisionChanges: Boolean = false,
 ) : RemoteCommandTransport {
     val commands = mutableListOf<RemoteCommand>()
     var fileInfoError: String? = null
@@ -547,6 +656,27 @@ private class FakeWorkspaceTransport(
             }
             else -> error("Unexpected command ${command.cmd}")
         }
-        return RelayJson.decodeFromString(deserializer, json)
+        var response = if (imageChunks) json.replace("main.rs", "preview.png").replace("text/plain", "image/png") else json
+        if (truncate && command.cmd == "read_file_chunk" && command.offset != 0) {
+            response = response.replace("bigpIHt9", "").replace("\"chunk_size\":6", "\"chunk_size\":0")
+        }
+        if (revisionChanges && command.cmd == "read_file_chunk") {
+            response = response.dropLast(1) + ",\"revision\":\"12:${command.offset}\"}"
+        }
+        return RelayJson.decodeFromString(deserializer, response)
     }
+}
+
+private class MemoryWorkspaceListStore : RemoteWorkspaceListStore {
+    val rows = mutableMapOf<String, List<PersistedRemoteWorkspace>>()
+    override fun load(deviceKey: String): List<PersistedRemoteWorkspace> = rows[deviceKey].orEmpty()
+    override fun save(deviceKey: String, workspaces: List<PersistedRemoteWorkspace>) {
+        rows[deviceKey] = workspaces
+    }
+}
+
+private class FailingWorkspaceListStore : RemoteWorkspaceListStore {
+    override fun load(deviceKey: String): List<PersistedRemoteWorkspace> = error("workspace cache read failed")
+    override fun save(deviceKey: String, workspaces: List<PersistedRemoteWorkspace>): Unit =
+        error("workspace cache write failed")
 }

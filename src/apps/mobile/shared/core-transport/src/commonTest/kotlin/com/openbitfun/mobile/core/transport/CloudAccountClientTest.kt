@@ -27,6 +27,25 @@ import kotlin.test.assertTrue
 
 class CloudAccountClientTest {
     @Test
+    fun publicProfileDoesNotForwardCredentialsAndChecksImmutableIdentity() = runTest {
+        val client = CloudAccountClient(relayHttpClient(MockEngine { request ->
+            assertEquals("https://api.github.com/user/42", request.url.toString())
+            assertEquals(null, request.headers["Authorization"])
+            json("""{"id":42,"login":"octocat","avatar_url":"https://avatars.githubusercontent.com/u/42"}""")
+        }))
+        assertEquals("octocat", client.githubProfile("42")?.username)
+        assertEquals(null, client.githubProfile("../42"))
+        val wrong = CloudAccountClient(relayHttpClient(MockEngine {
+            json("""{"id":99,"login":"other"}""")
+        }))
+        assertEquals(null, wrong.githubProfile("42"))
+        val unsafeAvatar = CloudAccountClient(relayHttpClient(MockEngine {
+            json("""{"id":42,"login":"octocat","avatar_url":"http://localhost/private"}""")
+        }))
+        assertEquals(null, unsafeAvatar.githubProfile("42")?.avatarUrl)
+    }
+
+    @Test
     fun authorizationAcceptsTheIdentityAuthorityGithubUrlAndRejectsOtherDestinations() = runTest {
         for (url in listOf("https://github.com/login/oauth/authorize?state=test", "https://github.com.evil.example/login/oauth/authorize", "https://github.com/login", "https://user@github.com/login/oauth/authorize", "http://github.com/login/oauth/authorize")) {
             val engine = MockEngine { json("""{"transactionId":"txn","transactionSecret":"secret","authorizationUrl":"$url","expiresAt":9999999999,"pollIntervalSeconds":3}""") }

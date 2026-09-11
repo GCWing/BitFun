@@ -15,7 +15,9 @@ use openbitfun_product_domains::miniapp::market::{
     CursorPage, InstalledMarketOrigin, MarketListingDetail, MarketListingSummary, MarketRelease,
     MarketSubmission, MarketSubmissionDraftRequest,
 };
-use openbitfun_product_domains::product_release::OPENBITFUN_INITIAL_RELEASE_VERSION;
+use openbitfun_product_domains::product_release::{
+    supports_market_minimum_version, OPENBITFUN_INITIAL_RELEASE_VERSION,
+};
 use openbitfun_services_integrations::miniapp_market::{
     submit_installed_app, validate_market_package, FavoriteAggregate, MarketBrowseRequest,
     MarketClient, RatingAggregate, ValidatedMarketPackage,
@@ -676,7 +678,7 @@ fn validate_minimum_openbitfun_version(minimum: &str) -> Result<(), String> {
     }
     let current = semver::Version::parse(env!("CARGO_PKG_VERSION"))
         .map_err(|_| "The current OpenBitFun version is invalid.".to_string())?;
-    if current < minimum {
+    if !supports_market_minimum_version(&current, &minimum) {
         return Err(format!(
             "This MiniApp requires OpenBitFun {minimum} or newer. Current version: {current}."
         ));

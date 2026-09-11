@@ -1,10 +1,8 @@
-use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, UserContextPolicy};
-use crate::agentic::tools::framework::ToolExposure;
+use crate::agentic::agents::{Agent, UserContextPolicy};
 use async_trait::async_trait;
 
 pub struct DeepResearchMode {
     default_tools: Vec<String>,
-    tool_exposure_overrides: AgentToolPolicyOverrides,
 }
 
 impl Default for DeepResearchMode {
@@ -15,9 +13,6 @@ impl Default for DeepResearchMode {
 
 impl DeepResearchMode {
     pub fn new() -> Self {
-        let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
-        tool_exposure_overrides.insert("WebSearch".to_string(), ToolExposure::Direct);
-        tool_exposure_overrides.insert("WebFetch".to_string(), ToolExposure::Direct);
         Self {
             default_tools: vec![
                 "Task".to_string(),
@@ -50,7 +45,6 @@ impl DeepResearchMode {
                 "TodoWrite".to_string(),
                 "AskUserQuestion".to_string(),
             ],
-            tool_exposure_overrides,
         }
     }
 }
@@ -79,10 +73,6 @@ impl Agent for DeepResearchMode {
 
     fn default_tools(&self) -> Vec<String> {
         self.default_tools.clone()
-    }
-
-    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
-        &self.tool_exposure_overrides
     }
 
     fn user_context_policy(&self) -> UserContextPolicy {

@@ -79,7 +79,8 @@
       "unsaved": "即時語音設定有尚未儲存的修改。"
     },
     "call": {
-      "title": "OpenBitFun 即時通話",
+      "title": "即時通話",
+      "close": "關閉通話視窗",
       "button": "開始即時語音通話",
       "launcherCompactLabel": "Hi",
       "launcherLabel": "Hello",

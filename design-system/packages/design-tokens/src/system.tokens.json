@@ -258,6 +258,14 @@
         "lineHeight": { "$value": "{lineHeight.tight}" },
         "letterSpacing": { "$value": "{letterSpacing.normal}" }
       },
+      "panel": {
+        "$description": "Compact panel titles, including VoiceCallPanel, use 18px between the 17px navigation and 20px compact-page roles.",
+        "fontFamily": { "$value": "{font.family.control}" },
+        "fontSize": { "$value": "{font.size.2xl}" },
+        "fontWeight": { "$value": "{font.weight.semibold}" },
+        "lineHeight": { "$value": "{lineHeight.tight}" },
+        "letterSpacing": { "$value": "{letterSpacing.normal}" }
+      },
       "section": {
         "fontFamily": { "$value": "{font.family.control}" },
         "fontSize": { "$value": "{font.size.lg}" },
@@ -321,6 +329,10 @@
       "$description": "Single-property semantic modifiers for intentional deviations from a complete typography role.",
       "leading": {
         "none": { "lineHeight": { "$value": "{lineHeight.none}" } },
+        "tight": {
+          "$description": "Compact text leading for message bubbles: 18px at the default 15px body size, scaling with user typography.",
+          "lineHeight": { "$value": "{lineHeight.tight}" }
+        },
         "dense": { "lineHeight": { "$value": "{lineHeight.dense}" } },
         "snug": { "lineHeight": { "$value": "{lineHeight.snug}" } },
         "balanced": { "lineHeight": { "$value": "{lineHeight.balanced}" } },
@@ -495,19 +507,21 @@
     "flowChat": {
       "$description": "Shared FlowChat rhythm for product and package-owned conversation surfaces.",
       "$type": "dimension",
-      "flowItemGap": { "$value": "0.42rem" },
+      "rowIconSize": { "$value": "{control.icon.sizeSm}" },
+      "rowIconGap": { "$value": "{space.1}" },
+      "flowItemGap": { "$value": "{space.2}" },
       "turnGap": { "$value": "{space.4}" },
-      "inlineGap": { "$value": "0.35rem" },
-      "controlGap": { "$value": "0.5rem" },
-      "controlPaddingBlock": { "$value": "0.35rem" },
+      "inlineGap": { "$value": "{space.1}" },
+      "controlGap": { "$value": "{space.2}" },
+      "controlPaddingBlock": { "$value": "{space.1}" },
       "controlPaddingInline": { "$value": "0.75rem" },
       "contentPaddingInline": { "$value": "3rem" },
       "contentPaddingInlineMobile": { "$value": "1.5rem" },
-      "cardGap": { "$value": "0.42rem" },
+      "cardGap": { "$value": "{control.flowChat.flowItemGap}" },
       "cardRadius": { "$value": "{radius.base}" },
       "cardPaddingBlock": { "$value": "0.625rem" },
       "cardPaddingInline": { "$value": "0.75rem" },
-      "cardExpandedPaddingBlock": { "$value": "0.5rem" },
+      "cardExpandedPaddingBlock": { "$value": "{space.2}" },
       "cardExpandedPaddingInline": { "$value": "0.625rem" },
       "codeBlockPaddingBlock": { "$value": "0.55rem" },
       "codeBlockPaddingInline": { "$value": "0.75rem" }
@@ -603,12 +617,12 @@
       "$type": "dimension",
       "inlineGap": { "$value": "{space.1}" },
       "inlineIconSize": { "$value": "12px" },
-      "surfaceHeight": { "$value": "30px" },
+      "surfaceHeight": { "$value": "40px" },
       "surfaceGap": { "$value": "{space.2}" },
-      "surfacePaddingBlock": { "$value": "{space.1}" },
-      "surfacePaddingInlineStart": { "$value": "{space.2}" },
-      "surfacePaddingInlineEnd": { "$value": "3px" },
-      "surfaceRadius": { "$value": "{radius.base}" },
+      "surfacePaddingBlock": { "$value": "9px" },
+      "surfacePaddingInlineStart": { "$value": "{space.3}" },
+      "surfacePaddingInlineEnd": { "$value": "9px" },
+      "surfaceRadius": { "$value": "{radius.lg}" },
       "surfaceIconSize": { "$value": "14px" },
       "contentGap": { "$value": "{space.1}" },
       "dividerBlockSize": { "$value": "16px" }
@@ -678,6 +692,14 @@
   },
   "layout": {
     "$type": "dimension",
+    "searchDialog": {
+      "width": { "$value": "{overlay.dialog.maxInlineSizeXlarge}" },
+      "height": { "$value": "460px" },
+      "padding": { "$value": "{space.5}" },
+      "queryHeight": { "$value": "30px" },
+      "scopeGap": { "$value": "{space.5}" },
+      "resultsGap": { "$value": "30px" }
+    },
     "overflowText": {
       "fadeExtent": { "$value": "{space.4}" }
     },
@@ -967,7 +989,7 @@
     "modalActive": { "$value": 250 },
     "fullscreen": { "$value": 280 },
     "overlayHost": { "$value": 300 },
-    "tooltip": { "$value": 350 },
+    "tooltip": { "$value": 370 },
     "popover": { "$value": 360 },
     "toast": { "$value": 400 },
     "notification": { "$value": 400 },

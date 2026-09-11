@@ -141,6 +141,7 @@ vi.mock('@/shared/notification-system', () => ({
 vi.mock('@/infrastructure/event-bus', () => ({
   globalEventBus: {
     emit: vi.fn(),
+    on: vi.fn(() => () => {}),
   },
 }));
 

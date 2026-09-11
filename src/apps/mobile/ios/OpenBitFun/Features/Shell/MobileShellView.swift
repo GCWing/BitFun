@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct MobileShellView: View {
     @ObservedObject var model: MobileAppModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var wideSidebarCollapsed = false
     @State private var sessionActionsOpen = false
     @State private var sidebarActionSession: ChatSession?
@@ -135,6 +136,14 @@ struct MobileShellView: View {
             input: adaptiveInput,
             kind: .settings
         )
+        let compactAccountLogin = model.accountUser == nil && model.accountFailureStage != "DEVICE_LIST"
+            && !dynamicTypeSize.isAccessibilitySize
+        let accountPlacement = compactAccountLogin ? SettingsPlacement(
+            mode: settingsPlacement.mode,
+            width: settingsPlacement.width,
+            height: Int32(min(CGFloat(model.coreErrorMessage == nil ? 280 : 380), max(240, CGFloat(height) - 40))),
+            maxHeight: settingsPlacement.maxHeight
+        ) : settingsPlacement
         let connectPlacement = SettingsPlacementPolicy.shared.resolve(
             input: adaptiveInput,
             kind: .connect
@@ -269,7 +278,7 @@ struct MobileShellView: View {
         }
         .openBitFunAdaptiveModal(
             isPresented: $model.accountSheetOpen,
-            placement: settingsPlacement
+            placement: accountPlacement
         ) {
             AccountSettingsView(model: model)
         }
@@ -342,7 +351,12 @@ struct MobileShellView: View {
                 RemoteConnectedHomeView(model: model)
                 ComposerBar(model: model)
             } else {
-                ChatTimelineView(model: model)
+                ZStack {
+                    ChatTimelineView(model: model)
+                    if model.surface == .remote && model.remoteConversationLoading {
+                        ConversationLoadingState()
+                    }
+                }
                 ComposerBar(model: model)
             }
         }

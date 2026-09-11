@@ -8,9 +8,11 @@ export const tabGroupMeta = {
   props: [
     { name: "items", type: "readonly TabGroupItem[]" },
     { name: "items[].labelTransitionKey", type: "string | number" },
+    { name: "items[].labelSuffix", type: "ReactNode" },
     { name: "value", type: "string" },
     { name: "defaultValue", type: "string" },
     { name: "onValueChange", type: "(value: string) => void" },
+    { name: "renderItem", type: "(item: TabGroupItem, node: ReactNode, index: number) => ReactNode" },
     { defaultValue: "md", name: "size", type: "sm | md" },
   ],
   states: ["selected", "unselected", "hover", "active", "disabled"],

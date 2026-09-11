@@ -1,3 +1,4 @@
+import type { ResourceFileAccess } from '@/infrastructure/api/ResourceFileContext';
 import { PluginKey } from '@tiptap/pm/state';
 
 export interface InlineAiPreviewLabels {
@@ -16,6 +17,7 @@ export interface InlineAiPreviewWidgetState {
   response: string;
   error: string | null;
   basePath?: string;
+  fileAccess?: ResourceFileAccess | null;
   canAccept: boolean;
   labels: InlineAiPreviewLabels;
   onAccept: () => void;

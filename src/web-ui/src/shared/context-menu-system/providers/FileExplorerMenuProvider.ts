@@ -4,6 +4,7 @@ import { IMenuProvider } from '../types/provider.types';
 import { MenuItem } from '../types/menu.types';
 import { MenuContext, ContextType, FileNodeContext } from '../types/context.types';
 import { commandExecutor } from '../commands/CommandExecutor';
+import { canRevealInExplorer } from '../commands/builtin/file/RevealInExplorerCommand';
 import { globalEventBus } from '../../../infrastructure/event-bus';
 import { i18nService } from '../../../infrastructure/i18n';
 import { workspaceManager } from '../../../infrastructure/services/business/workspaceManager';
@@ -49,7 +50,9 @@ export class FileExplorerMenuProvider implements IMenuProvider {
 
   async getMenuItems(context: MenuContext): Promise<MenuItem[]> {
     const items: MenuItem[] = [];
-    const localFileActionsDisabled = isRemoteWorkspace(workspaceManager.getState().currentWorkspace);
+    const localFileActionsDisabled = context.resourceScope
+      ? Boolean(context.resourceScope.remoteConnectionId) || context.resourceScope.surfaceId !== getActiveSurfaceId()
+      : isRemoteWorkspace(workspaceManager.getState().currentWorkspace);
     const surfaceId = getActiveSurfaceId();
     const newTerminalItem = (directory: string, workspacePath: string): MenuItem => ({
       id: 'file-new-terminal',
@@ -57,7 +60,7 @@ export class FileExplorerMenuProvider implements IMenuProvider {
       icon: 'Terminal',
       onClick: () => {
         window.dispatchEvent(new CustomEvent('terminal-create-requested', {
-          detail: { workingDirectory: directory, workspacePath, surfaceId },
+          detail: { workingDirectory: directory, workspacePath, surfaceId, resourceScope: context.resourceScope },
         }));
       },
     });
@@ -133,6 +136,7 @@ export class FileExplorerMenuProvider implements IMenuProvider {
               filePath: fileContext.filePath,
               fileName: fileContext.fileName,
               workspacePath: fileContext.workspacePath,
+              scope: fileContext.resourceScope,
               editorType: 'code-editor',
             });
             return;
@@ -152,6 +156,7 @@ export class FileExplorerMenuProvider implements IMenuProvider {
               filePath: fileContext.filePath,
               fileName: fileContext.fileName,
               workspacePath: fileContext.workspacePath,
+              scope: fileContext.resourceScope,
               editorType: 'html-preview',
             });
           }
@@ -346,7 +351,7 @@ export class FileExplorerMenuProvider implements IMenuProvider {
       label: i18nService.t('common:file.reveal'),
       icon: 'FolderOpen',
       command: 'file.reveal-in-explorer',
-      disabled: localFileActionsDisabled,
+      disabled: !canRevealInExplorer(context),
       onClick: async (ctx) => {
         await commandExecutor.execute('file.reveal-in-explorer', ctx);
       }

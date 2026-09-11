@@ -7,7 +7,6 @@ export const conversationModeSurfaceAppearanceDescriptor: AppearanceSurfaceDescr
     { id: 'body' },
     { id: 'modeSwitch' },
     { id: 'modeSwitchButton' },
-    { id: 'voiceModeIcon' },
   ],
   states: [
     { id: 'chat', selector: { kind: 'self', suffix: '[data-openbitfun-state~="chat"]' } },

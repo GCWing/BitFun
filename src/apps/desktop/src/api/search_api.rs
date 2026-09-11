@@ -112,6 +112,14 @@ async fn workspace_search_unavailable_message(
         );
     }
 
+    if !openbitfun_services_integrations::workspace_search::workspace_search_supports_local_root(
+        root_path,
+    )
+    .await
+    {
+        return Some(NON_GIT_WORKSPACE_MESSAGE.to_string());
+    }
+
     None
 }
 

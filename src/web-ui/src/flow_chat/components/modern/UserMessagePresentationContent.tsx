@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ComposerPresentation } from '../../utils/composerPresentation';
-import { MessageReferenceCapsule, messageInlineTokenIcon } from './MessageReferenceCapsule';
+import { MessageReferenceCapsule } from './MessageReferenceCapsule';
+import { messageInlineTokenIcon } from './messageReferenceIcons';
 
 export const UserMessagePresentationContent: React.FC<{
   presentation: ComposerPresentation;

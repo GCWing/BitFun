@@ -351,6 +351,18 @@ $panel-height: 680px;
   }
 }
 
+// VoiceCallPanel owns the one translucent surface and all call anatomy.
+.openbitfun-fmc[data-openbitfun-communication-mode='voice'] .openbitfun-fmc__panel {
+  border: 0;
+  border-radius: calc(var(--openbitfun-space-8) + var(--openbitfun-space-1));
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+
+  &::before { content: none; }
+}
+
 @keyframes fmc-progress {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }

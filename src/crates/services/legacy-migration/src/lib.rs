@@ -1,6 +1,7 @@
 //! Offline, source-read-only import primitives for legacy BitFun data.
 
 mod diagnostics;
+mod directory;
 mod engine;
 mod error;
 mod handoff;
@@ -12,6 +13,7 @@ mod storage;
 mod tasks;
 
 pub use diagnostics::{export_failure_diagnostics, release_observation};
+pub use directory::{copy_directory, visit_directory};
 pub use engine::{
     compute_plan_hash, CancellationToken, CrashInjector, CrashPoint, DomainContext, DomainScan,
     LegacyDomainAdapter, MigrationEngine, NoCrashInjection,

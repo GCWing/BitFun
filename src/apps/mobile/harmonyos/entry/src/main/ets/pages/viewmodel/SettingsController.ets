@@ -1,3 +1,4 @@
+import { GitHubAccountProfile, GitHubProfileLoader } from '../../services/GitHubAccountProfile';
 import { normalizeAccountRelayUrl } from '../../services/AccountDeviceLink';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { stampRemoteSessionsDevice } from '../../services/RemoteSessionIdentity';
@@ -49,6 +50,7 @@ export interface CloudAccountSettingsHooks {
 export interface CloudAccountSettingsDependencies {
   readonly client: CloudAccountClient;
   readonly sessionStore: CloudAccountSessionStore;
+  readonly profileLoader?: GitHubProfileLoader;
   readonly sessionManager: RemoteSessionManager;
   readonly remoteState: RemotePageState;
   readonly hooks: CloudAccountSettingsHooks;
@@ -88,6 +90,7 @@ export class SettingsController {
     const cloud = this.requireCloud();
     await cloud.sessionStore.init(context);
     await this.restoreCloudAccountSession();
+    void this.refreshCloudAccountProfile();
   }
 
   hasCloudAccountSession(): boolean {
@@ -177,6 +180,7 @@ export class SettingsController {
     } catch (err) {
       RemoteLogger.warn(`cloud account session persistence failed: ${String(err)}`);
     }
+    void this.refreshCloudAccountProfile();
     RemoteLogger.info('cloud account session active, refreshing account devices');
     RemoteLogger.info(`cloud account login success user=${session.userId}`);
     return session.userId;
@@ -188,6 +192,7 @@ export class SettingsController {
     this.cloudRelayUrl = relayUrl.trim();
     this.selectedRelayUrl = this.cloudRelayUrl;
     this.cloudAccountUsername = username.trim();
+    remoteState.setAccountAvatarUrl('');
     remoteState.setAccountUserId(session.userId);
     remoteState.setAccountUsername(this.cloudAccountUsername);
   }
@@ -582,6 +587,40 @@ export class SettingsController {
     }
   }
 
+  async refreshCloudAccountProfile(): Promise<void> {
+    const cloud = this.requireCloud();
+    const session = this.cloudSession;
+    const loader = cloud.profileLoader;
+    if (!session || !loader) return;
+    const version = this.accountLoginVersion;
+    const isCurrent = (): boolean => this.cloudSession === session && this.accountLoginVersion === version;
+    const apply = (profile: GitHubAccountProfile): void => {
+      if (!isCurrent() || profile.userId !== session.userId) return;
+      this.cloudAccountUsername = profile.login;
+      cloud.remoteState.setAccountUsername(profile.login);
+      cloud.remoteState.setAccountAvatarUrl(profile.avatarUrl);
+    };
+    try {
+      const cached = await cloud.sessionStore.loadProfile(session.userId);
+      if (!isCurrent()) return;
+      if (cached) {
+        apply(cached);
+        const age = Date.now() - cached.fetchedAt;
+        if (age >= 0 && age < 24 * 60 * 60 * 1000) return;
+      }
+    } catch (_err) { RemoteLogger.warn('GitHub profile cache unavailable'); }
+    if (!isCurrent()) return;
+    try {
+      const profile = await loader.load(session.userId);
+      if (!isCurrent() || profile.userId !== session.userId) return;
+      apply(profile);
+      await cloud.sessionStore.saveProfile(profile);
+    } catch (_err) {
+      // Optional public metadata must never expire or block the authenticated session.
+      RemoteLogger.warn('GitHub profile refresh unavailable; keeping account session');
+    }
+  }
+
   private async restoreCloudAccountSession(): Promise<void> {
     const cloud = this.requireCloud();
     try {
@@ -665,6 +704,7 @@ export class SettingsController {
     cloud.hooks.onAccountDevices([]);
     cloud.remoteState.setAccountUserId('');
     cloud.remoteState.setAccountUsername('');
+    cloud.remoteState.setAccountAvatarUrl('');
   }
 
   private prepareAccountDeviceConnection(deviceId: string): void {

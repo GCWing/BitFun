@@ -22,6 +22,8 @@ export const ambientToolCardMeta = {
     "color.status.danger.content",
     "control.height.md",
     "control.toolCard.ambientRowMinBlockSize",
+    "control.flowChat.rowIconSize",
+    "control.flowChat.rowIconGap",
     "font.family.sans",
     "font.size.sm",
     "font.size.xl",

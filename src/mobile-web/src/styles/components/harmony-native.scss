@@ -1429,3 +1429,21 @@
   }
   &[data-checked='true'] { justify-content: flex-end; }
 }
+
+.mobile-account-avatar {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 50%;
+
+  img { width: 100%; height: 100%; object-fit: cover; }
+}
+
+.harmony-sidebar__account-avatar .mobile-account-avatar {
+  width: 100%;
+  height: 100%;
+}

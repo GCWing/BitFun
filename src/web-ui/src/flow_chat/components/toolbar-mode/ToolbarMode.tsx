@@ -27,7 +27,6 @@ import { useAnchoredPopoverPosition } from '@/shared/utils/useAnchoredPopoverPos
 import { SessionMenu, useFlowChatSessions } from '../session-menu';
 import {
   ConversationModeSurface,
-  ConversationVoiceModeIcon,
 } from '../voice/ConversationModeSurface';
 import { useRealtimeVoiceCall } from '../voice/RealtimeVoiceCallContext';
 
@@ -169,9 +168,10 @@ export const ToolbarMode: React.FC = () => {
   const handleStartDrag = useCallback(async (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     // Avoid dragging when interacting with UI controls.
-    if (target.closest?.(
+    const isCallHeader = target.closest?.('[data-openbitfun-component="voice-call-panel"] [data-openbitfun-part="header"]');
+    if (target.closest?.('button, input') || (!isCallHeader && target.closest?.(
       'button, input, .openbitfun-session-menu, .openbitfun-toolbar-mode__overflow-menu, .openbitfun-toolbar-mode__stream-content, .openbitfun-toolbar-mode__session-surface'
-    )) {
+    ))) {
       return;
     }
     try {
@@ -235,19 +235,15 @@ export const ToolbarMode: React.FC = () => {
   ].filter(Boolean).join(' ');
 
   return (
-    <div data-openbitfun-component="toolbar-mode" data-openbitfun-part="root" data-openbitfun-state={[
+    <div data-openbitfun-component="toolbar-mode" data-openbitfun-part="root" data-openbitfun-communication-mode={isExpanded && isVoiceMode ? 'voice' : 'chat'} data-openbitfun-state={[
       isExpanded && 'expanded',
       currentStreamState.isStreaming && 'processing',
       toolbarState.hasError && 'error',
       toolbarState.hasPendingConfirmation && 'confirm',
     ].filter(Boolean).join(' ') || undefined} className={containerClassName} onMouseDown={handleStartDrag}>
-      <div className="openbitfun-toolbar-mode__header" data-openbitfun-component="toolbar-mode" data-openbitfun-part="header">
+      {!(isExpanded && isVoiceMode) && <div className="openbitfun-toolbar-mode__header" data-openbitfun-component="toolbar-mode" data-openbitfun-part="header">
         <div className="openbitfun-toolbar-mode__header-left" data-openbitfun-component="toolbar-mode" data-openbitfun-part="headerLeft">
-          {isExpanded
-            ? (isVoiceMode
-                ? <ConversationVoiceModeIcon />
-                : <SessionMenu onOpenChange={handleSessionMenuOpenChange} />)
-            : null}
+          {isExpanded ? <SessionMenu onOpenChange={handleSessionMenuOpenChange} /> : null}
         </div>
 
         <div className="openbitfun-toolbar-mode__title-wrapper" data-openbitfun-component="toolbar-mode" data-openbitfun-part="title">
@@ -345,7 +341,7 @@ export const ToolbarMode: React.FC = () => {
             )}
           </div>
         </div>
-      </div>
+      </div>}
 
       {isExpanded ? (
         /* ConversationModeSurface is also used by the Hello bubble. It owns
@@ -355,7 +351,7 @@ export const ToolbarMode: React.FC = () => {
           data-openbitfun-component="toolbar-mode"
           data-openbitfun-part="sessionSurface"
         >
-          <ConversationModeSurface switchTestId="toolbar-realtime-voice-mode-switch">
+          <ConversationModeSurface onCloseVoice={handleToggleExpanded} switchTestId="toolbar-realtime-voice-mode-switch">
             <ChatPane
               width={0}
               isFullscreen={false}

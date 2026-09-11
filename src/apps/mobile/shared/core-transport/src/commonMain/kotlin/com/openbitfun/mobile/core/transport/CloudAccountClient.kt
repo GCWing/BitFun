@@ -303,6 +303,20 @@ public class CloudAccountClient internal constructor(
         }
     }
 
+    /** GitHub public metadata only: never attach the relay token or master key. */
+    public suspend fun githubProfile(userId: String): GitHubProfile? {
+        if (userId.isEmpty() || userId.first() == '0' || !userId.all { it in '0'..'9' }) return null
+        val response = client.request("https://api.github.com/user/$userId") {
+            method = HttpMethod.Get
+            accept(ContentType.Application.Json)
+            headers.append("User-Agent", "OpenBitFun-Mobile")
+        }
+        if (response.status.value != 200) return null
+        val profile = RelayJson.decodeFromString<GitHubProfile>(response.bodyAsText())
+        return profile.takeIf { it.userId == userId && Regex("[A-Za-z0-9][A-Za-z0-9-]{0,38}").matches(it.username) }
+            ?.let { it.copy(avatarUrl = it.avatarUrl?.takeIf { url -> url.startsWith("https://avatars.githubusercontent.com/") }) }
+    }
+
     public companion object {
         public fun generateDeviceSecret(): ByteArray = DeviceIdentity.generateSecret()
 
@@ -456,4 +470,13 @@ private fun encodePathSegment(value: String): String = value.encodeToByteArray()
     val character = unsigned.toChar()
     if (character.isLetterOrDigit() || character in "-._~") character.toString()
     else "%" + unsigned.toString(16).uppercase().padStart(2, '0')
+}
+
+@Serializable
+public data class GitHubProfile(
+    @SerialName("id") private val id: Long,
+    @SerialName("login") public val username: String,
+    @SerialName("avatar_url") public val avatarUrl: String? = null,
+) {
+    public val userId: String get() = id.toString()
 }

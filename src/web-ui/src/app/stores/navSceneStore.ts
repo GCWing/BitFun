@@ -19,13 +19,33 @@ import {
   type InteractionMotion,
 } from '@/shared/utils/motionPreference';
 import type { SceneTabId } from '../components/SceneBar/types';
+import { getActiveSurfaceId } from '@/infrastructure/peer-device/deviceSurface';
+import type { WorkspaceInfo } from '@/shared/types';
+
+export interface ResourceWorkspaceTarget {
+  surfaceId: string;
+  workspaceId: string;
+}
+
+/** An explicit browse target never falls back to another workspace or device. */
+export function resolveResourceWorkspace(
+  target: ResourceWorkspaceTarget | null,
+  surfaceId: string,
+  openedWorkspaces: ReadonlyMap<string, WorkspaceInfo>,
+  currentWorkspace: WorkspaceInfo | null,
+): WorkspaceInfo | null {
+  if (!target) return currentWorkspace;
+  return target.surfaceId === surfaceId ? openedWorkspaces.get(target.workspaceId) ?? null : null;
+}
 
 interface NavSceneState {
   showSceneNav: boolean;
   navSceneId: SceneTabId | null;
+  resourceWorkspace: ResourceWorkspaceTarget | null;
   navigationMotion: InteractionMotion;
   navigationSequence: number;
   openNavScene: (id: SceneTabId) => void;
+  openWorkspaceResources: (workspaceId: string) => void;
   closeNavScene: () => void;
   goBack: () => void;
   goForward: () => void;
@@ -34,17 +54,27 @@ interface NavSceneState {
 export const useNavSceneStore = create<NavSceneState>((set) => ({
   showSceneNav: false,
   navSceneId: null,
+  resourceWorkspace: null,
   navigationMotion: 'instant',
   navigationSequence: 0,
   openNavScene: (id) => set(state => ({
     showSceneNav: true,
     navSceneId: id,
+    resourceWorkspace: id === 'file-viewer' ? null : state.resourceWorkspace,
+    navigationMotion: getInteractionMotion(),
+    navigationSequence: state.navigationSequence + 1,
+  })),
+  openWorkspaceResources: (workspaceId) => set(state => ({
+    showSceneNav: true,
+    navSceneId: 'file-viewer',
+    resourceWorkspace: { surfaceId: getActiveSurfaceId(), workspaceId },
     navigationMotion: getInteractionMotion(),
     navigationSequence: state.navigationSequence + 1,
   })),
   closeNavScene: () => set(state => ({
     showSceneNav: false,
     navSceneId: null,
+    resourceWorkspace: null,
     navigationMotion: getInteractionMotion(),
     navigationSequence: state.navigationSequence + 1,
   })),

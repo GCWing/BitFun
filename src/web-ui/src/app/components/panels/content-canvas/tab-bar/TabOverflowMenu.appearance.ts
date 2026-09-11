@@ -1,6 +1,7 @@
 import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 export const canvasTabOverflowAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'canvas-tab-overflow',
+  componentAttribute: 'data-openbitfun-product-component',
   parts: [
     { id: 'root' }, { id: 'trigger' }, { id: 'badge' }, { id: 'itemTitle' },
   ],

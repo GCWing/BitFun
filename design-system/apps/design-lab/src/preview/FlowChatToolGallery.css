@@ -10,6 +10,25 @@
   margin-top: 42px;
 }
 
+.flow-chat-tool-sequence {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--openbitfun-space-5);
+}
+
+.flow-chat-tool-sequence__rows {
+  min-inline-size: 0;
+}
+
+.flow-chat-tool-sequence__rows > * + * {
+  margin-block-start: var(--openbitfun-control-flow-chat-flow-item-gap);
+}
+
+.flow-chat-tool-sequence__rows > [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-attention='ambient'][data-openbitfun-expanded-shell='false']
+  + [data-openbitfun-component='flow-chat-tool-card'][data-openbitfun-attention='ambient'][data-openbitfun-expanded-shell='false'] {
+  margin-block-start: 0;
+}
+
 .flow-chat-tool-gallery > .component-catalog-section-heading {
   margin-block: 0 -8px;
   padding-top: 34px;

@@ -203,6 +203,13 @@ class FakeTaskCompletionNotificationPort implements TaskCompletionNotificationPo
 
 export default function lifecycleUnitTest() {
   describe('TaskCompletionNotificationController', () => {
+    it('does not request permission when tracking a task', 0, () => {
+      const port = new FakeTaskCompletionNotificationPort();
+      const controller = new TaskCompletionNotificationController(port);
+      controller.track({ source: 'remote', sessionId: 'session-1', turnId: 'turn-1' });
+      expect(port.prepareCount).assertEqual(0);
+    });
+
     it('publishes once only after the exact background task finishes', 0, () => {
       const port = new FakeTaskCompletionNotificationPort();
       const controller = new TaskCompletionNotificationController(port);

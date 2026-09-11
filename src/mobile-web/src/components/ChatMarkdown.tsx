@@ -29,6 +29,7 @@ import yaml from 'react-syntax-highlighter/dist/esm/languages/prism/yaml';
 import { MobileButton, MobileIconButton, MobileLink } from '@openbitfun/ui/mobile';
 import { useI18n } from '../i18n';
 import { useTheme } from '../theme';
+import { RemoteArtifactImage } from './RemoteArtifactImage';
 
 const SYNTAX_LANGUAGES = { bash, c, cpp, csharp, css, diff, go, java, javascript, json, jsx, kotlin, markdown, markup, php, python, ruby, rust, sql, swift, tsx, typescript, yaml };
 Object.entries(SYNTAX_LANGUAGES).forEach(([name, grammar]) => SyntaxHighlighter.registerLanguage(name, grammar));
@@ -121,7 +122,7 @@ const DOWNLOADABLE_EXTENSIONS = new Set([
   'mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma',
   'mp4', 'avi', 'mkv', 'mov', 'webm', 'wmv', 'flv',
   'csv', 'tsv', 'sqlite', 'db', 'parquet',
-  'epub', 'mobi',
+  'epub', 'mobi', 'html', 'htm',
   'apk', 'ipa', 'exe', 'msi', 'deb', 'rpm',
   'ttf', 'otf', 'woff', 'woff2',
 ]);
@@ -202,6 +203,7 @@ function isLocalFileLink(href: string): string | null {
 }
 
 function resolveFileReferenceHref(href: string): string | null {
+  if (/^openbitfun:\/\/(?:runtime|current-session)\//.test(href)) return href;
   if (
     href.startsWith(COMPUTER_LINK_PREFIX) ||
     href.startsWith(FILE_LINK_PREFIX) ||
@@ -226,16 +228,19 @@ function projectFileReferences(content: string): ProjectedFileReference[] {
     references.push({ path });
   };
 
+  // Code examples describe references but do not offer attachments.
+  const prose = content.replace(/(^|\n)[ \t]{0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:\n[ \t]{0,3}\2[^\n]*(?=\n|$)|$)/g, '$1')
+    .replace(/(`+)[^`]*?\1/g, '');
   // Markdown attachment links stay readable inline; their richer cards are
   // projected into a separate block below the message, matching HarmonyOS.
-  const markdownLinkPattern = /(?<!!)\[[^\]\n]*\]\(\s*(?:<([^>\n]+)>|([^\s)\n]+))(?:\s+["'][^"'\n]*["'])?\s*\)/g;
-  for (const match of content.matchAll(markdownLinkPattern)) {
+  const markdownLinkPattern = /!?\[[^\]\n]*\]\(\s*(?:<([^>\n]+)>|([^\s)\n]+))(?:\s+["'][^"'\n]*["'])?\s*\)/g;
+  for (const match of prose.matchAll(markdownLinkPattern)) {
     addReference(match[1] || match[2] || '');
   }
 
   // Preserve support for assistant output that emits a bare computer/file URI.
   const bareReferencePattern = /(?:computer|file):\/\/[^\s<>()\]]+/g;
-  for (const match of content.matchAll(bareReferencePattern)) {
+  for (const match of prose.matchAll(bareReferencePattern)) {
     addReference(match[0].replace(/[.,;:!?，。；：！？]+$/, ''));
   }
 
@@ -415,6 +420,14 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFil
       );
     },
 
+    img({ src, alt, title }: React.ImgHTMLAttributes<HTMLImageElement>) {
+      if (!src) return <span>{alt}</span>;
+      if (/^(https?:|data:image\/|\/\/)/i.test(src)) {
+        return <img className="markdown-output-image" src={src} alt={alt || ''} title={title} loading="lazy" />;
+      }
+      return <RemoteArtifactImage path={normalizeFileLikeHref(src)} alt={alt} title={title} onDownload={onFileDownload} />;
+    },
+
     a({ href, children }: any) {
       const filePath = typeof href === 'string' ? resolveFileReferenceHref(href) : null;
       if (filePath && onFileDownload) {
@@ -422,7 +435,7 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFil
           <MobileButton
             appearance="plain"
             className="file-link"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFileDownload(filePath); }}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); void onFileDownload(filePath).catch(() => {}); }}
             type="button"
           >
             {children}
@@ -469,14 +482,15 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFil
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={components}
-        urlTransform={(url) => {
-          if (url.startsWith('computer://')) return url;
+        urlTransform={(url, key) => {
+          if (key === 'src' && /^data:image\/(?:png|jpeg|gif|webp|bmp|svg\+xml|avif);base64,/i.test(url)) return url;
+          if (/^[A-Za-z]:[\\/]/.test(url)) return url;
+          if (url.startsWith('computer://') || /^openbitfun:\/\/(?:runtime|current-session)\//.test(url)) return url;
           if (/^(https?|mailto|tel|file):/i.test(url) || url.startsWith('#') || url.startsWith('/')) {
             return url;
           }
           // Preserve relative paths without a protocol (e.g. "report.pptx",
-          // "./output.pdf").  Content is from our own AI so javascript:/data:
-          // injection is not a concern; those contain ':' and are blocked above.
+          // "./output.pdf"). Unknown schemes remain blocked.
           if (!url.includes(':')) return url;
           return '';
         }}

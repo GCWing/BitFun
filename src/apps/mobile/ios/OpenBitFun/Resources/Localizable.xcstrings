@@ -1,6 +1,16 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "无法打开授权页面，请重试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not open the authorization page. Please try again."
+          }
+        }
+      }
+    },
     "OpenBitFun 桌面版": {
       "localizations": {
         "en": {
@@ -937,6 +947,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Could not load workspaces. Tap to retry."
+          }
+        }
+      }
+    },
+    "这台电脑暂时无法读取": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This computer cannot be read right now"
           }
         }
       }
@@ -2551,12 +2571,12 @@
         }
       }
     },
-    "已完成 %lld 项读取与搜索": {
+    "已完成 %lld 项操作": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Completed %lld read and search operations"
+            "value": "Completed %lld operations"
           }
         }
       }
@@ -4047,16 +4067,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld more workspaces"
-          }
-        }
-      }
-    },
-    "这台电脑暂时无法读取": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This computer cannot be read right now"
           }
         }
       }
@@ -7897,6 +7907,116 @@
           "stringUnit": {
             "state": "translated",
             "value": "该设备已离线，或不属于当前 GitHub 账户。"
+          }
+        }
+      }
+    },
+    "极简": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimal"
+          }
+        }
+      }
+    },
+    "标准": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standard"
+          }
+        }
+      }
+    },
+    "极致": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultimate"
+          }
+        }
+      }
+    },
+    "任务已完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Task completed"
+          }
+        }
+      }
+    },
+    "打开 OpenBitFun 查看结果。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open OpenBitFun to view the result."
+          }
+        }
+      }
+    },
+    "开启任务完成提醒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Task completion notifications"
+          }
+        }
+      }
+    },
+    "稍后": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Later"
+          }
+        }
+      }
+    },
+    "开启通知": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable notifications"
+          }
+        }
+      }
+    },
+    "允许 OpenBitFun 在任务完成时发送通知。你可以稍后在系统设置中更改。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow OpenBitFun to notify you when tasks finish. You can change this later in system settings."
+          }
+        }
+      }
+    },
+    "通知": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications"
+          }
+        }
+      }
+    },
+    "任务完成通知": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Task completion notifications"
           }
         }
       }

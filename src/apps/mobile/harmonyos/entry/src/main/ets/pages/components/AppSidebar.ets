@@ -1,3 +1,4 @@
+import { HarnessProfileMenu } from './HarnessProfileMenu';
 import { MobileDesignGeometry, MobileDesignTypography } from '../../generated/MobileDesignTokens';
 import { RemoteI18n } from '../../i18n/RemoteI18n';
 import { CARD, INK, LINE, PAGE_BG, PAGE_BG_FADE, SHADOW_FAINT, SHADOW_SUBTLE, SOFT, SUBTLE, TRANSPARENT } from './Theme';
@@ -9,13 +10,19 @@ import { SidebarConnectionActionPolicy } from '../policy/SidebarConnectionAction
 @ComponentV2
 export struct AppSidebar {
   @Param connectionState: string = 'idle';
+  @Param isBusy: boolean = false;
+  @Param workspaceKind: string = 'normal';
+  @Param workspacePath: string = '';
+  @Param controlTargetDeviceId: string = '';
+  @Param supportsHarnessProfiles: boolean = false;
+  @Local showCreateMenu: boolean = false;
   @Param accountUserId: string = '';
   @Param controlTargetType: string = 'none';
   @Param showCollapseButton: boolean = false;
   @Param showViewSettingsButton: boolean = false;
   @Param showWorkspaceSection: boolean = false;
   @Event onClose: () => void = () => {};
-  @Event onNewChat: () => void = () => {};
+  @Event onNewChat: (agentType: string) => void = (_agentType: string) => {};
   @Event onEnterCode: () => void = () => {};
   @Event onScanDesktop: () => void = () => {};
   @Event onCollapse: () => void = () => {};
@@ -162,7 +169,7 @@ export struct AppSidebar {
         .fontSize(MobileDesignTypography.bodyMedium.size)
         .fontColor(INK)
         .placeholderColor(SUBTLE)
-        .padding({ left: 14, right: 14 })
+        .padding(0)
         .backgroundColor(SOFT)
         .borderRadius(8)
         .margin({ top: 12 })
@@ -195,7 +202,7 @@ export struct AppSidebar {
       .height(50)
       .alignItems(VerticalAlign.Center)
       .onClick(() => {
-        this.onNewChat();
+        this.onEnterCode();
       })
 
       if (this.showCollapseButton) {
@@ -215,8 +222,8 @@ export struct AppSidebar {
     Row() {
       Button() {
         Row({ space: 8 }) {
-          SidebarGlyph({ kind: 'remote' })
-          Text(RemoteI18n.t('sidebar.devices'))
+          SidebarGlyph({ kind: 'edit' })
+          Text(RemoteI18n.t('sidebar.newChat'))
             .fontSize(MobileDesignTypography.titleMedium.size)
             .fontWeight(FontWeight.Medium)
             .fontColor(INK)
@@ -229,10 +236,23 @@ export struct AppSidebar {
       .border({ width: 0.5, color: LINE })
       .borderRadius(22)
       .shadow({ radius: 24, color: SHADOW_SUBTLE, offsetY: 7 })
+      .enabled(SidebarConnectionActionPolicy.canCreateSession(this.connectionState, this.isBusy))
+      .opacity(SidebarConnectionActionPolicy.canCreateSession(this.connectionState, this.isBusy) ? 1 : 0.45)
+      .accessibilityText(RemoteI18n.t('sidebar.newChat'))
       .stateEffect(true)
-      .onClick(() => {
-        this.onNewChat();
+      .bindPopup(this.showCreateMenu, {
+        builder: () => { this.CreateModeMenu() },
+        placement: Placement.Top,
+        popupColor: TRANSPARENT,
+        enableArrow: false,
+        autoCancel: true,
+        mask: false,
+        targetSpace: 6,
+        onStateChange: (event) => {
+          if (!event.isVisible) this.showCreateMenu = false;
+        }
       })
+      .onClick(() => { this.requestChat(); })
 
       Blank()
 
@@ -299,6 +319,33 @@ export struct AppSidebar {
     }
       .width('100%')
       .zIndex(2)
+  }
+
+  @Monitor('controlTargetDeviceId', 'workspacePath', 'workspaceKind', 'connectionState', 'isBusy', 'supportsHarnessProfiles')
+  private closeStaleCreateMenu(): void {
+    this.showCreateMenu = false;
+  }
+
+  private requestChat(): void {
+    if (!SidebarConnectionActionPolicy.canCreateSession(this.connectionState, this.isBusy)) return;
+    const action = SidebarConnectionActionPolicy.chatAction(this.workspaceKind, this.supportsHarnessProfiles);
+    if (action === 'choose-harness') {
+      this.showCreateMenu = !this.showCreateMenu;
+      return;
+    }
+    this.onNewChat(action === 'assistant' ? 'claw' : 'code');
+  }
+
+  @Builder
+  private CreateModeMenu() {
+    HarnessProfileMenu({
+      onSelect: (agentType: string) => {
+        this.showCreateMenu = false;
+        if (SidebarConnectionActionPolicy.canCreateSession(this.connectionState, this.isBusy)) {
+          this.onNewChat(agentType);
+        }
+      }
+    })
   }
 
   private shouldShowPrimaryNavigation(): boolean {

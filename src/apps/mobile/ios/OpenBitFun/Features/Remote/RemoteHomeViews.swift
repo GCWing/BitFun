@@ -1,4 +1,5 @@
 import OpenBitFunMobileCore
+import OpenBitFunMobileCore
 import SwiftUI
 
 struct RemoteHomeView: View {
@@ -59,7 +60,31 @@ struct RemoteConnectedHomeView: View {
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .frame(maxWidth: 280)
-            Button(action: model.createRemoteSessionFromHome) {
+            Group {
+                if model.selectedRemoteWorkspaceKind != "assistant",
+                   HarnessProfilePolicy.shared.supported(capabilities: model.remoteHostCapabilities) {
+                    Menu {
+                        ForEach([HarnessProfile.minimal, .standard, .ultimate], id: \.name) { profile in
+                            Button { model.createRemoteSessionFromHome(agentType: profile.agentType) } label: {
+                                HarnessProfileLabel(model: model, profile: profile)
+                            }
+                        }
+                    } label: { createLabel }
+                } else {
+                    Button { model.createRemoteSessionFromHome() } label: { createLabel }
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(model.remoteCreateSubmitting || !model.remoteCreateInteraction.canSubmit)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 24)
+        .padding(.bottom, 56)
+        .background(OpenBitFunTheme.page)
+    }
+    private var createLabel: some View {
                 HStack(spacing: 8) {
                     if model.remoteCreateSubmitting {
                         ProgressView().controlSize(.small).tint(OpenBitFunTheme.contentOnAction)
@@ -71,16 +96,6 @@ struct RemoteConnectedHomeView: View {
                 .frame(width: 148, height: 46)
                 .background(OpenBitFunTheme.accent)
                 .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .disabled(model.remoteCreateSubmitting || !model.remoteCreateInteraction.canSubmit)
-            .padding(.top, 12)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 24)
-        .padding(.bottom, 56)
-        .background(OpenBitFunTheme.page)
     }
 }
 
@@ -113,4 +128,6 @@ struct ConnectionStatusBar: View {
         .frame(height: 48)
         .background(OpenBitFunTheme.soft)
     }
+
+
 }

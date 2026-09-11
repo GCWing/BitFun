@@ -10,8 +10,6 @@ import {
   useBottomTerminalCanvasStore,
   useCanvasStore,
   useGitCanvasStore,
-  usePanelViewCanvasStore,
-  useProjectCanvasStore,
 } from '../stores';
 import type { CanvasStoreMode } from '../stores/canvasStore';
 import { TAB_EVENTS, type PanelContent } from '../types';
@@ -23,6 +21,12 @@ import {
   expandSessionBottomTerminalPane,
 } from '@/app/scenes/session/sessionPanelLayout';
 import { fileTabManager } from '@/shared/services/FileTabManager';
+import { useContentResourceStore } from '@/app/workbench/contentResourceStore';
+import { useSceneStore } from '@/app/stores/sceneStore';
+import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
+import { resolveSessionSceneTarget } from '@/app/services/sessionSceneTarget';
+import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
+import { getActiveSurfaceId } from '@/infrastructure/peer-device/deviceSurface';
 import { drainPendingTabs } from '@/shared/services/pendingTabQueue';
 import { usePanelTabCoordinator } from './usePanelTabCoordinator';
 import { useTabLifecycle } from './useTabLifecycle';
@@ -52,7 +56,7 @@ function PanelProbe({ bottom = false }: { bottom?: boolean }) {
   return <CanvasProbe mode={bottom ? 'bottom-terminal' : 'agent'} onReveal={expandPanel} />;
 }
 
-function Hosts({ project = true }: { project?: boolean }) {
+function Hosts() {
   return <>
     <CanvasStoreModeContext.Provider value="agent">
       <PanelProbe />
@@ -60,14 +64,8 @@ function Hosts({ project = true }: { project?: boolean }) {
     <CanvasStoreModeContext.Provider value="bottom-terminal">
       <PanelProbe bottom />
     </CanvasStoreModeContext.Provider>
-    {project && <CanvasStoreModeContext.Provider value="project">
-      <CanvasProbe mode="project" />
-    </CanvasStoreModeContext.Provider>}
     <CanvasStoreModeContext.Provider value="git">
       <CanvasProbe mode="git" />
-    </CanvasStoreModeContext.Provider>
-    <CanvasStoreModeContext.Provider value="panel-view">
-      <CanvasProbe mode="panel-view" />
     </CanvasStoreModeContext.Provider>
   </>;
 }
@@ -77,13 +75,15 @@ const content = (title: string): PanelContent => ({ type: 'text-viewer', title, 
 describe('canvas host panel ownership', () => {
   let root: Root;
   let container: HTMLDivElement;
-  const stores = [useAgentCanvasStore, useProjectCanvasStore, useGitCanvasStore,
-    usePanelViewCanvasStore, useBottomTerminalCanvasStore];
+  const stores = [useAgentCanvasStore, useGitCanvasStore, useBottomTerminalCanvasStore];
 
   beforeEach(() => {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     clearAgentCanvasForPeerSwitch();
     stores.forEach(store => store.getState().reset());
+    useContentResourceStore.setState({ resources: {} });
+    useSceneStore.getState().resetForPeerSwitch();
+    flowChatStore.setState(state => ({ ...state, sessions: new Map(), activeSessionId: null }));
     ['agent', 'project', 'git'].forEach(mode => drainPendingTabs(mode as 'agent' | 'project' | 'git'));
     appManager.updateLayout({
       chatCollapsed: false,
@@ -98,6 +98,7 @@ describe('canvas host panel ownership', () => {
   afterEach(async () => {
     await act(async () => root.unmount());
     clearAgentCanvasForPeerSwitch();
+    flowChatStore.setState(state => ({ ...state, sessions: new Map(), activeSessionId: null }));
     stores.forEach(store => store.getState().reset());
     container.remove();
   });
@@ -105,7 +106,6 @@ describe('canvas host panel ownership', () => {
   it.each([true, false])('preserves a session panel with collapsed=%s through file-view lifetime', async collapsed => {
     appManager.updateLayout({ rightPanelCollapsed: collapsed });
     useAgentCanvasStore.getState().addTab(content('session'), 'active');
-    useProjectCanvasStore.getState().addTab(content('restored-file'), 'active');
     const before = appManager.getState().layout;
     await act(async () => root.render(<Hosts />));
     expect(appManager.getState().layout).toEqual(before);
@@ -120,14 +120,16 @@ describe('canvas host panel ownership', () => {
         fileTabManager.openFile(options);
         fileTabManager.openFile({ ...options, jumpToLine: 12 });
       });
-      const tabs = useProjectCanvasStore.getState().primaryGroup.tabs;
-      expect(tabs).toHaveLength(2);
+      const tabs = Object.values(useContentResourceStore.getState().resources);
+      expect(tabs).toHaveLength(1);
       expect(tabs.find(tab => tab.content.data?.filePath === '/workspace/example.ts')?.content.data).toMatchObject({
-        filePath: '/workspace/example.ts', remoteConnectionId: 'ssh-workspace', jumpToRange: { start: 12 },
+        filePath: '/workspace/example.ts', remoteConnectionId: 'ssh-workspace', jumpToLine: 12,
       });
       expect(rightPanelRequests).toBe(0);
-      await act(async () => useProjectCanvasStore.getState().closeAllTabs());
-      await act(async () => root.render(<Hosts project={false} />));
+      await act(async () => {
+        useSceneStore.getState().openTabs.filter(tab => tab.contentId).forEach(tab => useSceneStore.getState().closeScene(tab.id));
+      });
+      await act(async () => root.render(<Hosts />));
       await act(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => resolve())); });
       expect(appManager.getState().layout).toEqual(before);
       expect(useAgentCanvasStore.getState().primaryGroup.tabs).toHaveLength(1);
@@ -136,31 +138,56 @@ describe('canvas host panel ownership', () => {
     }
   });
 
-  it('drains the first file open into its target without expanding the session panel', async () => {
-    await act(async () => root.render(<Hosts project={false} />));
-    fileTabManager.openFile({ filePath: '/workspace/queued.ts', mode: 'project', sceneJustOpened: true });
-    expect(useProjectCanvasStore.getState().primaryGroup.tabs).toHaveLength(0);
+  it('registers the first file immediately without a mounted content host', async () => {
     await act(async () => root.render(<Hosts />));
-    expect(useProjectCanvasStore.getState().primaryGroup.tabs).toHaveLength(1);
+    fileTabManager.openFile({ filePath: '/workspace/queued.ts', mode: 'project', sceneJustOpened: true });
+    expect(Object.values(useContentResourceStore.getState().resources)).toHaveLength(1);
+    await act(async () => root.render(<Hosts />));
+    expect(Object.values(useContentResourceStore.getState().resources)).toHaveLength(1);
     expect(appManager.getState().layout.rightPanelCollapsed).toBe(true);
   });
 
-  it('reveals a session file for new and duplicate requests without broadcasting to standalone canvases', async () => {
+  it('opens session file links in the right panel and reveals an existing file again', async () => {
+    flowChatStore.setState(state => ({ ...state, activeSessionId: 'session-a', sessions: new Map([['session-a', {
+      sessionId: 'session-a', title: 'Session', status: 'idle', config: {}, dialogTurns: [],
+      createdAt: 1, lastActiveAt: 1, error: null, workspacePath: '/workspace', sessionKind: 'normal',
+    }]]) }));
+    useSceneStore.getState().openSessionScene(resolveSessionSceneTarget(
+      flowChatStore.getActiveSession()!, workspaceManager.getState().openedWorkspaces.values(), getActiveSurfaceId(),
+    ));
     await act(async () => root.render(<Hosts />));
-    const options = { filePath: '/workspace/session.ts', mode: 'agent' as const };
+    const options = { filePath: '/workspace/session.ts', workspacePath: '/workspace', mode: 'agent' as const };
     await act(async () => {
       fileTabManager.openFile(options);
+      collapseSessionAuxPane();
       fileTabManager.openFile(options);
+      window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail: {
+        type: 'code-editor', title: 'session.ts', data: { ...options, jumpToLine: 7 },
+      } }));
     });
     expect(appManager.getState().layout.rightPanelCollapsed).toBe(false);
     expect(useAgentCanvasStore.getState().primaryGroup.tabs).toHaveLength(1);
-    expect(usePanelViewCanvasStore.getState().primaryGroup.tabs).toHaveLength(0);
-    expect(useProjectCanvasStore.getState().primaryGroup.tabs).toHaveLength(0);
+    expect(useAgentCanvasStore.getState().primaryGroup.tabs[0].content.data.jumpToLine).toBe(7);
+    expect(Object.values(useContentResourceStore.getState().resources)).toHaveLength(0);
+    expect(useSceneStore.getState().activeTabId).toMatch(/^session:/);
+  });
 
-    collapseSessionAuxPane();
-    await act(async () => fileTabManager.openFile(options));
-    expect(appManager.getState().layout.rightPanelCollapsed).toBe(false);
-    expect(useAgentCanvasStore.getState().primaryGroup.tabs).toHaveLength(1);
+  it('routes legacy content events to the top when the selected session has no open tab', async () => {
+    flowChatStore.setState(state => ({ ...state, activeSessionId: 'cached-session', sessions: new Map([['cached-session', {
+      sessionId: 'cached-session', title: 'Session', status: 'idle', config: {}, dialogTurns: [],
+      createdAt: 1, lastActiveAt: 1, error: null, workspacePath: '/workspace', sessionKind: 'normal',
+    }]]) }));
+    await act(async () => root.render(<Hosts />));
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(TAB_EVENTS.AGENT_CREATE_TAB, { detail: {
+        type: 'code-editor', title: 'session.ts', data: { filePath: '/workspace/session.ts', workspacePath: '/workspace' },
+      } }));
+    });
+    expect(useSceneStore.getState().activeTabId).toMatch(/^content:/);
+    expect(useSceneStore.getState().openTabs.some(tab => tab.session)).toBe(false);
+    expect(Object.values(useContentResourceStore.getState().resources)).toHaveLength(1);
+    expect(useAgentCanvasStore.getState().primaryGroup.tabs).toHaveLength(0);
+    expect(appManager.getState().layout.rightPanelCollapsed).toBe(true);
   });
 
   it('preserves manual collapse across content changes, workspace restore and host remount', async () => {

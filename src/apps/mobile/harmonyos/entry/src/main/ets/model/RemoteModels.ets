@@ -490,6 +490,7 @@ export interface FileInfo {
 }
 
 export interface ReadFileChunkResponse extends CommandStatusResponse {
+  revision?: string;
   name?: string;
   chunk_base64?: string;
   offset?: number;
@@ -506,6 +507,7 @@ export interface ReadFileResult {
 }
 
 export interface ReadFileChunkResult {
+  revision?: string;
   name: string;
   contentBase64: string;
   offset: number;

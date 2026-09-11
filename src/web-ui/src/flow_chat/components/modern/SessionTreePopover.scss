@@ -250,7 +250,7 @@
     position: fixed;
     top: auto;
     right: auto;
-    z-index: 10000;
+    z-index: calc(var(--openbitfun-layer-popover) + 1);
   }
 
   &__node-copy {

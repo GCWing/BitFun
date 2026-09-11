@@ -910,7 +910,7 @@
     min-inline-size: 180px;
     max-inline-size: min(320px, calc(100vw - 24px));
     max-block-size: min(560px, calc(100vh - 16px));
-    z-index: 10000;
+    z-index: var(--openbitfun-layer-popover);
     transform-origin: top left;
     animation: openbitfun-footer-menu-in var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-decelerate) forwards;
   }

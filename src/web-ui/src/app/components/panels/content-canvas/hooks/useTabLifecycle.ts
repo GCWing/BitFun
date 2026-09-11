@@ -12,14 +12,13 @@ import { useCallback, useEffect } from 'react';
 import {
   useCanvasStore,
   useAgentCanvasStore,
-  useProjectCanvasStore,
   useGitCanvasStore,
   useBottomTerminalCanvasStore,
-  usePanelViewCanvasStore,
 } from '../stores';
 import type { CanvasStoreMode } from '../stores/canvasStore';
 import type { EditorGroupId, PanelContent, CreateTabEventDetail } from '../types';
 import { TAB_EVENTS } from '../types';
+import { openCanvasContent, openContentInBestTarget } from '@/shared/services/workbenchContentService';
 import { useI18n } from '@/infrastructure/i18n';
 import { drainPendingTabs } from '@/shared/services/pendingTabQueue';
 import { confirmDialog } from '@/infrastructure/confirm-dialog';
@@ -66,17 +65,9 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
     onReveal,
   } = options;
   const { t } = useI18n('components');
-  const canvasStoreApi =
-    mode === 'project'
-      ? useProjectCanvasStore
-      : mode === 'git'
-        ? useGitCanvasStore
-        : mode === 'bottom-terminal'
-          ? useBottomTerminalCanvasStore
-          : mode === 'panel-view'
-            ? usePanelViewCanvasStore
-            : useAgentCanvasStore;
-  
+  const canvasStoreApi = mode === 'git' ? useGitCanvasStore
+    : mode === 'bottom-terminal' ? useBottomTerminalCanvasStore : useAgentCanvasStore;
+
   const {
     addTab,
     promoteTab,
@@ -297,17 +288,8 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
    * Listen for external tab creation events.
    */
   useEffect(() => {
-    // Popped-out tabs are transferred directly into their independent store.
-    // This host must not also consume the session's tab-open requests.
-    if (mode === 'panel-view' && !createTabEventName) return;
-    const eventName = createTabEventName ??
-      (mode === 'project'
-        ? TAB_EVENTS.PROJECT_CREATE_TAB
-        : mode === 'git'
-          ? TAB_EVENTS.GIT_CREATE_TAB
-          : mode === 'bottom-terminal'
-            ? TAB_EVENTS.BOTTOM_TERMINAL_CREATE_TAB
-            : TAB_EVENTS.AGENT_CREATE_TAB);
+    const eventName = createTabEventName ?? (mode === 'git' ? TAB_EVENTS.GIT_CREATE_TAB
+      : mode === 'bottom-terminal' ? TAB_EVENTS.BOTTOM_TERMINAL_CREATE_TAB : TAB_EVENTS.AGENT_CREATE_TAB);
 
     const handleCreateTab = (event: CustomEvent<CreateTabEventDetail>) => {
       const {
@@ -326,8 +308,15 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
         type,
         title,
         data,
-        metadata: { ...metadata, duplicateCheckKey },
+        metadata: { ...metadata, duplicateCheckKey: duplicateCheckKey ?? metadata?.duplicateCheckKey },
       };
+
+      if (mode !== 'bottom-terminal') {
+        const openOptions = { resourceKey: duplicateCheckKey, replaceExisting, targetGroup, splitView: enableSplitView };
+        if (mode === 'git') openCanvasContent('git', content, openOptions);
+        else openContentInBestTarget(content, openOptions);
+        return;
+      }
 
       // If split view is enabled, switch to vertical split first (top/bottom)
       if (enableSplitView && layout.splitMode === 'none') {
@@ -366,8 +355,8 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
 
     // Drain any tab events that were enqueued before this listener was
     // registered (happens when the scene was just mounted for the first time).
-    if (mode !== 'bottom-terminal' && mode !== 'panel-view') {
-      const pendingMode = mode === 'project' ? 'project' : mode === 'git' ? 'git' : 'agent';
+    if (mode !== 'bottom-terminal') {
+      const pendingMode = mode === 'git' ? 'git' : 'agent';
       const pending = drainPendingTabs(pendingMode);
       pending.forEach(detail => handleCreateTab({ detail } as CustomEvent<CreateTabEventDetail>));
     }

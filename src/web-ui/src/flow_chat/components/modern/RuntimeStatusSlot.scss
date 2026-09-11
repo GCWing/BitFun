@@ -10,10 +10,10 @@
   &__content {
     display: flex;
     align-items: center;
-    gap: var(--openbitfun-control-flow-chat-control-gap);
+    gap: var(--openbitfun-control-flow-chat-row-icon-gap);
     height: 24px;
     min-width: 0;
-    color: var(--openbitfun-color-content-muted);
+    color: var(--openbitfun-color-content-secondary);
     font-size: var(--openbitfun-type-flow-body-font-size);
     line-height: var(--openbitfun-type-flow-support-line-height);
     opacity: 0;
@@ -24,7 +24,7 @@
   }
 
   &--visible &__content {
-    opacity: 0.86;
+    opacity: 1;
     transform: translateY(0);
   }
 
@@ -32,6 +32,16 @@
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
+  }
+
+  &__icon {
+    display: inline-flex;
+    flex: 0 0 var(--openbitfun-control-flow-chat-row-icon-size);
+    width: var(--openbitfun-control-flow-chat-row-icon-size);
+    height: var(--openbitfun-control-flow-chat-row-icon-size);
+    align-items: center;
+    justify-content: center;
+    color: var(--openbitfun-color-content-caption);
   }
 
   &--footer &__content {

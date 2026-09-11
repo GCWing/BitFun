@@ -1,5 +1,7 @@
 export interface VoiceInputRecorder {
   stop: () => Promise<void>;
+  /** Optional live FFT tap. Capture and its existing level meter remain independent. */
+  readFrequencyData?: () => Uint8Array<ArrayBuffer> | null;
 }
 
 export interface VoiceInputMicrophone {
@@ -20,6 +22,7 @@ export interface VoiceInputRecorderOptions {
   chunkDurationMs: number;
   audioContext?: AudioContext;
   microphoneDeviceId?: string;
+  analyzeFrequency?: boolean;
   onChunk: (pcm16Base64: string) => void;
   onLevel?: (level: number) => void;
   onDeviceEnded?: () => void;
@@ -101,6 +104,7 @@ export async function createVoiceInputRecorder({
   chunkDurationMs,
   audioContext: sharedAudioContext,
   microphoneDeviceId,
+  analyzeFrequency = false,
   onChunk,
   onLevel,
   onDeviceEnded,
@@ -137,6 +141,8 @@ export async function createVoiceInputRecorder({
   const ownsAudioContext = !sharedAudioContext;
   let source: MediaStreamAudioSourceNode | null = null;
   let processor: ScriptProcessorNode | null = null;
+  let analyser: AnalyserNode | null = null;
+  let frequencyData: Uint8Array<ArrayBuffer> | null = null;
   let pending = new Float32Array(0);
   let stopped = false;
 
@@ -148,6 +154,7 @@ export async function createVoiceInputRecorder({
       processor.onaudioprocess = null;
     }
     source?.disconnect();
+    analyser?.disconnect();
     if (pending.length > 0) {
       onChunk(encodePcm16Base64(pending));
       pending = new Float32Array(0);
@@ -174,6 +181,12 @@ export async function createVoiceInputRecorder({
       await audioContext.resume();
     }
     source = audioContext.createMediaStreamSource(mediaStream);
+    if (analyzeFrequency) {
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      frequencyData = new Uint8Array(analyser.frequencyBinCount);
+      source.connect(analyser);
+    }
     processor = audioContext.createScriptProcessor(4096, 1, 1);
     const chunkSize = Math.max(1, Math.floor(targetSampleRate * (chunkDurationMs / 1000)));
 
@@ -210,7 +223,14 @@ export async function createVoiceInputRecorder({
     throw error;
   }
 
-  return { stop };
+  return {
+    stop,
+    readFrequencyData: () => {
+      if (stopped || !analyser || !frequencyData) return null;
+      analyser.getByteFrequencyData(frequencyData);
+      return frequencyData;
+    },
+  };
 }
 
 declare global {

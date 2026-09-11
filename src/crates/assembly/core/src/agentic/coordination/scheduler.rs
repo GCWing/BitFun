@@ -494,7 +494,7 @@ impl DialogScheduler {
         turn_id: String,
         content: String,
         display_content: Option<String>,
-        attachments: Vec<AgentInputAttachment>,
+        mut attachments: Vec<AgentInputAttachment>,
         metadata: serde_json::Map<String, serde_json::Value>,
     ) -> Result<DialogSteerOutcome, String> {
         if content.trim().is_empty() && attachments.is_empty() {
@@ -503,7 +503,9 @@ impl DialogScheduler {
         // Reject a malformed attachment here rather than at the round boundary:
         // the caller is still holding the user's message and can surface the
         // failure, whereas the injection consumer would have to drop it.
-        agent_dialog_turn_image_contexts(&attachments).map_err(|error| error.to_string())?;
+        let mut images = agent_dialog_turn_image_contexts(&attachments)
+            .map_err(|error| error.to_string())?
+            .unwrap_or_default();
         let _operation_guard = self.lock_session_operation(&session_id).await;
         let active_turn_id = match self
             .session_manager
@@ -520,6 +522,23 @@ impl DialogScheduler {
             }
             _ => None,
         };
+
+        if active_turn_id.as_deref() == Some(turn_id.as_str()) && !images.is_empty() {
+            self.coordinator
+                .prepare_input_images(&session_id, &mut images)
+                .await
+                .map_err(|error| error.to_string())?;
+            for (attachment, image) in attachments.iter_mut().zip(&images) {
+                if let Some(path) = &image.image_path {
+                    attachment
+                        .metadata
+                        .insert("imagePath".into(), serde_json::json!(path));
+                }
+                attachment
+                    .metadata
+                    .insert("mimeType".into(), serde_json::json!(image.mime_type));
+            }
+        }
 
         let steering_id = Uuid::new_v4().to_string();
         match resolve_dialog_steering_action(
@@ -1231,6 +1250,13 @@ impl DialogScheduler {
             return Err(SchedulerSubmitError::Message(
                 "Session state does not allow starting new dialog: Processing".to_string(),
             ));
+        }
+
+        if let Some(images) = queued_turn.image_contexts.as_mut() {
+            self.coordinator
+                .prepare_input_images(&session_id, images)
+                .await
+                .map_err(SchedulerSubmitError::Core)?;
         }
 
         // OpenCode-compatible semantics: accepting a new prompt while history

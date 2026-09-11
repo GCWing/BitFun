@@ -774,7 +774,6 @@ mod tests {
     fn registry_marks_deferred_tools_for_get_tool_spec() {
         let registry = create_tool_registry();
 
-        assert!(registry.is_tool_deferred("WebFetch"));
         assert!(registry.is_tool_deferred("GetFileDiff"));
         assert!(registry.is_tool_deferred("ListModels"));
         assert!(!registry.is_tool_deferred("GetToolSpec"));
@@ -801,8 +800,6 @@ mod tests {
                 "SessionHistory",
                 "Cron",
                 "PortForward",
-                "WebSearch",
-                "WebFetch",
                 "ListMCPResources",
                 "ReadMCPResource",
                 "ListMCPPrompts",

@@ -92,4 +92,5 @@ jobs:
           gh workflow run desktop-package.yml \
             --ref "${GITHUB_REF_NAME}" \
             -f "tag_name=${TAG_NAME}" \
+            -f "release_channel=stable" \
             -f "upload_to_release=true"

@@ -4,7 +4,9 @@ import com.openbitfun.mobile.core.transport.accountDeviceLink
 
 public enum class AccountDeviceLinkStatus { INVALID, SIGN_IN_REQUIRED, UNAVAILABLE, READY }
 
-public data class AccountDeviceLinkResult(public val status: AccountDeviceLinkStatus, public val deviceId: String?, public val relayUrl: String? = null)
+public data class AccountDeviceLinkResult(public val status: AccountDeviceLinkStatus, public val deviceId: String?, public val relayUrl: String?) {
+    public constructor(status: AccountDeviceLinkStatus, deviceId: String?) : this(status, deviceId, null)
+}
 
 /** Membership must come from the account signed in at this exact Relay endpoint. */
 public fun resolveAccountDeviceLink(url: String, state: AccountUiState): AccountDeviceLinkResult {

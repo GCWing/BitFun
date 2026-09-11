@@ -1555,7 +1555,7 @@ impl ConversationCoordinator {
     /// bound": a remote binding whose provider cannot be built is an error,
     /// because a context without workspace services would otherwise fall back
     /// to the controller filesystem for a remote session.
-    async fn build_workspace_services(
+    pub(crate) async fn build_workspace_services(
         binding: &Option<WorkspaceBinding>,
     ) -> OpenBitFunResult<Option<crate::agentic::workspace::WorkspaceServices>> {
         let Some(binding) = binding.as_ref() else {
@@ -5862,13 +5862,34 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .map(|_task| ())
     }
 
+    pub(crate) async fn prepare_input_images(
+        &self,
+        session_id: &str,
+        images: &mut [ImageContextData],
+    ) -> OpenBitFunResult<()> {
+        if images.is_empty() {
+            return Ok(());
+        }
+        let session = self
+            .session_manager
+            .get_session(session_id)
+            .ok_or_else(|| OpenBitFunError::NotFound(format!("Session not found: {session_id}")))?;
+        let workspace = Self::build_workspace_binding(&session.config).await;
+        let context =
+            crate::agentic::tools::framework::ToolUseContext::for_tool_listing(workspace, None);
+        crate::agentic::image_analysis::attachments::prepare_inline_image_attachments(
+            images, &context,
+        )
+        .await
+    }
+
     #[allow(clippy::too_many_arguments)]
     async fn start_dialog_turn_internal(
         &self,
         session_id: String,
         user_input: String,
         original_user_input: Option<String>,
-        image_contexts: Option<Vec<ImageContextData>>,
+        mut image_contexts: Option<Vec<ImageContextData>>,
         turn_id: Option<String>,
         agent_type: String,
         workspace_path: Option<String>,
@@ -6196,6 +6217,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         let mut user_message_metadata = extra_user_message_metadata;
 
+        if let Some(images) = image_contexts.as_mut() {
+            self.prepare_input_images(&session_id, images).await?;
+        }
+
         // Build image metadata for workspace turn persistence (before image_contexts is consumed)
         // Also stores original_text so the UI can display the user's actual input
         // instead of the vision-enhanced text.
@@ -6346,6 +6371,19 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 None,
             )
             .await?;
+        if image_contexts
+            .as_ref()
+            .is_some_and(|images| !images.is_empty())
+        {
+            let config_service = crate::service::config::get_global_config_service().await?;
+            let ai_config: crate::service::config::types::AIConfig =
+                config_service.get_config(Some("ai")).await?;
+            crate::agentic::image_analysis::image_processing::validate_image_input_model(
+                &ai_config,
+                &resolved_model_id,
+                session.config.enable_tools,
+            )?;
+        }
         let reasoning_preset = self
             .session_manager
             .reconcile_session_reasoning_preset_for_turn(&session_id, "turn_admission")

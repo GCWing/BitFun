@@ -12,6 +12,7 @@ import { CloudAccountDevice } from '../../services/CloudAccountClient';
 export struct SettingsSheet {
   @Param sheetState: SettingsSheetState = new SettingsSheetState();
   @Param accountUsername: string = '';
+  @Param accountAvatarUrl: string = '';
   @Param authenticatedUserId: string = '';
   @Param fallbackUserId: string = '';
   @Param desktopName: string = '';
@@ -58,6 +59,7 @@ export struct SettingsSheet {
         Column({ space: 0 }) {
           AccountProfilePanel({
             accountUsername: this.accountUsername,
+            accountAvatarUrl: this.accountAvatarUrl,
             accountUserId: this.authenticatedUserId,
             fallbackUserId: this.fallbackUserId,
             deviceId: this.deviceId,

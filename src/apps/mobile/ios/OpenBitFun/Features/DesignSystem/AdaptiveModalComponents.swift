@@ -202,6 +202,10 @@ private struct OpenBitFunAdaptiveModalModifier<ModalContent: View>: ViewModifier
 
     private var isSide: Bool { placement.mode == .side }
 
+    private var compactDetent: PresentationDetent {
+        placement.height > 0 ? .height(CGFloat(placement.height)) : .large
+    }
+
     private var compactPresented: Binding<Bool> {
         Binding(
             get: { isPresented && !isSide },
@@ -229,7 +233,7 @@ private struct OpenBitFunAdaptiveModalModifier<ModalContent: View>: ViewModifier
     @ViewBuilder
     private var compactSheet: some View {
         let surface = modalContent()
-            .presentationDetents([.large])
+            .presentationDetents([compactDetent])
             .presentationDragIndicator(.hidden)
         if #available(iOS 16.4, *) {
             surface.presentationCornerRadius(MobileDesignGeometry.sheetTopRadius)

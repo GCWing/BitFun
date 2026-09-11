@@ -1,3 +1,5 @@
+import { ReadFileChunkResult } from '../main/ets/model/RemoteModels';
+import { GitHubAccountProfile, GitHubProfileLoader, normalizeGitHubProfile, readCachedGitHubProfile } from '../main/ets/services/GitHubAccountProfile';
 import { accountDeviceLink } from '../main/ets/services/AccountDeviceLink';
 import { describe, it, expect } from '@ohos/hypium';
 import { RemoteI18n } from '../main/ets/i18n/RemoteI18n';
@@ -327,6 +329,20 @@ class ScriptedAccountSessionManager extends RemoteSessionManager {
   }
 }
 
+class OutputFileSessionManager extends RemoteSessionManager {
+  readonly offsets: number[] = [];
+  invalid: boolean = false;
+  revisionChanges: boolean = false;
+
+  async readFileChunk(_path: string, offset: number, _limit: number, _sessionId?: string): Promise<ReadFileChunkResult> {
+    this.offsets.push(offset);
+    const bytes = offset === 0 ? 'a' : 'bcd';
+    return { name: 'preview.png', contentBase64: Encoding.bytesToBase64(Encoding.utf8ToBytes(bytes)),
+      offset: this.invalid && offset > 0 ? 0 : offset, chunkSize: bytes.length, totalSize: 4, mimeType: 'image/png',
+      revision: this.revisionChanges ? `4:${offset}` : undefined };
+  }
+}
+
 class RecordingAccountDeviceClient extends CloudAccountClient {
   async deviceRpc<T extends CommandStatusResponse>(
     _relayUrl: string,
@@ -398,6 +414,9 @@ class GatedAccountSessionManager extends ScriptedAccountSessionManager {
 /** HUKS and preferences are not reachable from a local unit run. */
 class InMemoryCloudAccountSessionStore extends CloudAccountSessionStore {
   readonly saved: PersistedCloudAccountSession[] = [];
+  profile?: GitHubAccountProfile;
+  async loadProfile(_userId: string): Promise<GitHubAccountProfile | undefined> { return this.profile; }
+  async saveProfile(profile: GitHubAccountProfile): Promise<void> { this.profile = profile; }
   clears: number = 0;
   failSaves: boolean = false;
   failLoads: boolean = false;
@@ -470,6 +489,18 @@ class ProvisioningFailureAccountClient extends CloudAccountClient {
   }
 }
 
+class TestGitHubProfileLoader implements GitHubProfileLoader {
+  calls: number = 0;
+  fail: boolean = false;
+  beforeResponse: () => Promise<void> = async (): Promise<void> => {};
+  async load(userId: string): Promise<GitHubAccountProfile> {
+    this.calls++;
+    await this.beforeResponse();
+    if (this.fail) throw new Error('offline');
+    return normalizeGitHubProfile(userId, { id: Number(userId), login: 'octocat', avatar_url: 'https://avatars.githubusercontent.com/u/1' });
+  }
+}
+
 class AccountDeviceSwitchHarness {
   readonly remoteState: RemotePageState = new RemotePageState();
   readonly sessionManager: ScriptedAccountSessionManager;
@@ -489,7 +520,8 @@ class AccountDeviceSwitchHarness {
   constructor(
     client: CloudAccountClient = new CloudAccountClient(),
     sessionManager: ScriptedAccountSessionManager = new ScriptedAccountSessionManager(),
-    applyExistingSession: boolean = true
+    applyExistingSession: boolean = true,
+    profileLoader?: GitHubProfileLoader
   ) {
     this.sessionManager = sessionManager;
     const hooks: CloudAccountSettingsHooks = {
@@ -528,6 +560,7 @@ class AccountDeviceSwitchHarness {
     const cloud: CloudAccountSettingsDependencies = {
       client,
       sessionStore: this.sessionStore,
+      profileLoader,
       sessionManager: this.sessionManager,
       remoteState: this.remoteState,
       hooks
@@ -564,6 +597,36 @@ export default function transportAndGeneralChatUnitTest() {
       }
       expect(accountDeviceLink('https://evil.test/v/1.0.0/#/pair?did=desktop-1')).assertUndefined();
       expect(accountDeviceLink('https://remote.openbitfun.com@evil.test/v/1.0.0/#/pair?did=desktop-1')).assertUndefined();
+    });
+  });
+
+  describe('Output file transfer', () => {
+    it('reassembles short padded chunks as bytes', 0, async () => {
+      const manager = new OutputFileSessionManager();
+      const file = await manager.readFile('preview.png', 'origin-session');
+      expect(Encoding.bytesToUtf8(Encoding.base64ToBytes(file.contentBase64))).assertEqual('abcd');
+      expect(manager.offsets.join(',')).assertEqual('0,1');
+    });
+    it('rejects a wrong offset instead of downloading a corrupt file', 0, async () => {
+      const manager = new OutputFileSessionManager();
+      manager.invalid = true;
+      let failed = false;
+      try { await manager.readFile('preview.png', 'origin-session'); } catch (_) { failed = true; }
+      expect(failed).assertTrue();
+    });
+    it('rejects a changed revision even when the file size is unchanged', 0, async () => {
+      const manager = new OutputFileSessionManager();
+      manager.revisionChanges = true;
+      let failed = false;
+      try { await manager.readFile('preview.png', 'origin-session'); } catch (_) { failed = true; }
+      expect(failed).assertTrue();
+    });
+    it('does not request the next chunk after the target is reset', 0, async () => {
+      const manager = new OutputFileSessionManager();
+      let failed = false;
+      try { await manager.readFile('preview.png', 'origin-session', () => manager.reset()); } catch (_) { failed = true; }
+      expect(failed).assertTrue();
+      expect(manager.offsets.length).assertEqual(1);
     });
   });
 
@@ -1096,6 +1159,58 @@ export default function transportAndGeneralChatUnitTest() {
       }, false);
       expect(urlError).assertEqual('API URL 必须以 http:// 或 https:// 开头。');
       expect(keyError).assertEqual('请输入 API Key。');
+    });
+  });
+
+  describe('GitHub account presentation', () => {
+    it('rejects unrelated profile identities and keeps legacy records readable', 0, () => {
+      const profile = normalizeGitHubProfile('1', { id: 1, login: 'octocat', avatar_url: 'https://avatars.githubusercontent.com/u/1' });
+      expect(readCachedGitHubProfile('1', JSON.stringify(profile))?.login).assertEqual('octocat');
+      expect(readCachedGitHubProfile('2', JSON.stringify(profile)) === undefined).assertTrue();
+      expect(readCachedGitHubProfile('1', '') === undefined).assertTrue();
+      expect(readCachedGitHubProfile('1', '{broken') === undefined).assertTrue();
+      expect(readCachedGitHubProfile('1', JSON.stringify({ userId: '1', token: 'legacy', username: '1' })) === undefined).assertTrue();
+      expect(normalizeGitHubProfile('1', { id: 1, login: 'octocat', avatar_url: 'https://avatars.githubusercontent.com.evil.test/u/1' }).avatarUrl).assertEqual('');
+    });
+
+    it('enriches an existing numeric account without changing its authorization or target', 0, async () => {
+      const loader = new TestGitHubProfileLoader();
+      const harness = new AccountDeviceSwitchHarness(new CloudAccountClient(), new ScriptedAccountSessionManager(), false, loader);
+      harness.controller.applyCloudAccountSession({ token: 't', userId: '1', masterKey: new Uint8Array(32) }, 'https://relay.example.com', '1');
+      harness.remoteState.setControlTarget('account_device', 'desk-a', 'Desktop A');
+      await harness.controller.refreshCloudAccountProfile();
+      expect(harness.remoteState.accountUserId).assertEqual('1');
+      expect(harness.remoteState.accountUsername).assertEqual('octocat');
+      expect(harness.remoteState.accountAvatarUrl).assertEqual('https://avatars.githubusercontent.com/u/1');
+      expect(harness.remoteState.controlTargetDeviceId).assertEqual('desk-a');
+      await harness.controller.refreshCloudAccountProfile();
+      expect(loader.calls).assertEqual(1);
+      expect(harness.sessionStore.clears).assertEqual(0);
+    });
+
+    it('keeps cached presentation and the session when public profile refresh fails', 0, async () => {
+      const loader = new TestGitHubProfileLoader();
+      loader.fail = true;
+      const harness = new AccountDeviceSwitchHarness(new CloudAccountClient(), new ScriptedAccountSessionManager(), false, loader);
+      harness.controller.applyCloudAccountSession({ token: 't', userId: '1', masterKey: new Uint8Array(32) }, 'https://relay.example.com', '1');
+      const cached = normalizeGitHubProfile('1', { id: 1, login: 'cached-name' });
+      cached.fetchedAt = 0;
+      harness.sessionStore.profile = cached;
+      await harness.controller.refreshCloudAccountProfile();
+      expect(harness.remoteState.accountUsername).assertEqual('cached-name');
+      expect(harness.controller.hasCloudAccountSession()).assertTrue();
+      expect(harness.sessionStore.clears).assertEqual(0);
+    });
+
+    it('discards a profile response after logout', 0, async () => {
+      const loader = new TestGitHubProfileLoader();
+      const harness = new AccountDeviceSwitchHarness(new CloudAccountClient(), new ScriptedAccountSessionManager(), false, loader);
+      harness.controller.applyCloudAccountSession({ token: 't', userId: '1', masterKey: new Uint8Array(32) }, 'https://relay.example.com', '1');
+      loader.beforeResponse = async (): Promise<void> => { await harness.controller.logoutCloudAccount(); };
+      await harness.controller.refreshCloudAccountProfile();
+      expect(harness.remoteState.accountUsername).assertEqual('');
+      expect(harness.remoteState.accountAvatarUrl).assertEqual('');
+      expect(harness.sessionStore.profile === undefined).assertTrue();
     });
   });
 

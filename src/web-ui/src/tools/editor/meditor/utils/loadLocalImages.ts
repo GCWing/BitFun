@@ -1,3 +1,5 @@
+import type { ResourceFileAccess } from '@/infrastructure/api/ResourceFileContext';
+import { getActiveSurfaceId, getActiveSurfaceScope } from '@/infrastructure/peer-device/deviceSurface';
 /**
  * Async local image loader.
  * After Markdown render, resolves images marked with `data-local-image`.
@@ -22,45 +24,53 @@ function markLocalImageLoaded(img: HTMLImageElement, dataUrl: string): void {
   img.removeAttribute('data-local-path');
 }
 
-async function getLocalImageDataUrl(localPath: string): Promise<string> {
-  const cachedDataUrl = localImageDataUrlCache.get(localPath);
+function imageKey(path: string, access?: ResourceFileAccess | null): string {
+  return JSON.stringify([access?.scope.surfaceId ?? getActiveSurfaceId(), access?.scope.remoteConnectionId ?? '', path]);
+}
+
+async function getLocalImageDataUrl(localPath: string, access?: ResourceFileAccess | null): Promise<string> {
+  const key = imageKey(localPath, access);
+  const surface = getActiveSurfaceScope();
+  const cachedDataUrl = localImageDataUrlCache.get(key);
   if (cachedDataUrl) {
     return cachedDataUrl;
   }
 
-  const pendingRequest = localImageRequestCache.get(localPath);
+  const pendingRequest = localImageRequestCache.get(key);
   if (pendingRequest) {
     return pendingRequest;
   }
 
   const request = (async () => {
     const { workspaceAPI } = await import('@/infrastructure/api');
-    const base64Content = await workspaceAPI.readFileContent(localPath);
+    surface.assertCurrent('read markdown image');
+    const base64Content = await (access?.files ?? workspaceAPI).readFileContent(localPath);
+    surface.assertCurrent('read markdown image');
     const mimeType = getMimeType(localPath);
     const dataUrl = `data:${mimeType};base64,${base64Content}`;
 
-    localImageDataUrlCache.set(localPath, dataUrl);
-    localImageRequestCache.delete(localPath);
+    localImageDataUrlCache.set(key, dataUrl);
+    localImageRequestCache.delete(key);
 
     return dataUrl;
   })().catch((error) => {
-    localImageRequestCache.delete(localPath);
+    localImageRequestCache.delete(key);
     throw error;
   });
 
-  localImageRequestCache.set(localPath, request);
+  localImageRequestCache.set(key, request);
   return request;
 }
 
-export function getCachedLocalImageDataUrl(localPath: string): string | undefined {
-  return localImageDataUrlCache.get(localPath);
+export function getCachedLocalImageDataUrl(localPath: string, access?: ResourceFileAccess | null): string | undefined {
+  return localImageDataUrlCache.get(imageKey(localPath, access));
 }
 
 /**
  * Load all images marked as local images inside the container.
  * @param container Container holding image elements.
  */
-export async function loadLocalImages(container: HTMLElement): Promise<void> {
+export async function loadLocalImages(container: HTMLElement, access?: ResourceFileAccess | null): Promise<void> {
   const localImages = container.querySelectorAll<HTMLImageElement>('img[data-local-image="true"]');
   
   if (localImages.length === 0) {
@@ -76,7 +86,7 @@ export async function loadLocalImages(container: HTMLElement): Promise<void> {
     }
     
     try {
-      const dataUrl = await getLocalImageDataUrl(localPath);
+      const dataUrl = await getLocalImageDataUrl(localPath, access);
       // The same image element may now point at another source.
       if (img.getAttribute('data-local-path') !== localPath) return;
       markLocalImageLoaded(img, dataUrl);

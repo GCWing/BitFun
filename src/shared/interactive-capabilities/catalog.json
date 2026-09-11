@@ -9330,8 +9330,7 @@
     "assistant": "feature.personal-assistants",
     "todos": "feature.tasks-automation",
     "insights": "feature.insights",
-    "shell": "feature.terminal",
-    "panel-view": "feature.canvas"
+    "shell": "feature.terminal"
   },
   "implementationOwners": {
     "commands": {

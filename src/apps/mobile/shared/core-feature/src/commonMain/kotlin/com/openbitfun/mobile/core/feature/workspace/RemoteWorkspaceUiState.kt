@@ -154,7 +154,25 @@ public sealed interface RemoteWorkspaceUiState {
         public val preview: RemoteFilePreviewUiState,
         public val busy: Boolean,
         public val download: RemoteFileDownloadUiState,
-    ) : RemoteWorkspaceUiState
+        /** True when cached content survived the latest catalog or selection request failing. */
+        public val loadFailure: Boolean,
+        /** Live target capabilities; never inferred from a cached catalog. */
+        public val hostCapabilities: List<String>,
+    ) : RemoteWorkspaceUiState {
+        public constructor(
+            workspaces: List<RecentWorkspace>, assistants: List<WorkspaceAssistant>, selected: SelectedWorkspace?,
+            preview: RemoteFilePreviewUiState, busy: Boolean, download: RemoteFileDownloadUiState, loadFailure: Boolean,
+        ) : this(workspaces, assistants, selected, preview, busy, download, loadFailure, emptyList())
+
+        public constructor(
+            workspaces: List<RecentWorkspace>,
+            assistants: List<WorkspaceAssistant>,
+            selected: SelectedWorkspace?,
+            preview: RemoteFilePreviewUiState,
+            busy: Boolean,
+            download: RemoteFileDownloadUiState,
+        ) : this(workspaces, assistants, selected, preview, busy, download, false)
+    }
     public data class Failed public constructor(public val retryable: Boolean) : RemoteWorkspaceUiState
 }
 

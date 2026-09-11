@@ -1,7 +1,7 @@
 import { useCallback, type ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Loader2, Phone } from 'lucide-react';
-import { Icon, OverflowText } from '@openbitfun/ui';
+import { Phone } from 'lucide-react';
+import { OverflowText } from '@openbitfun/ui';
+import { useI18n } from '@/infrastructure/i18n';
 
 import { RealtimeVoiceCallPanel } from './RealtimeVoiceCallPanel';
 import { useRealtimeVoiceCall } from './RealtimeVoiceCallContext';
@@ -16,6 +16,7 @@ interface ConversationModeSurfaceProps {
   /** Prevents a MiniApp call from falling back to the workspace route while its session binds. */
   voiceStartDisabled?: boolean;
   switchTestId?: string;
+  onCloseVoice?: () => void;
 }
 
 /**
@@ -29,26 +30,21 @@ export function ConversationModeSurface({
   voiceTarget,
   voiceStartDisabled = false,
   switchTestId,
+  onCloseVoice,
 }: ConversationModeSurfaceProps) {
-  const { t } = useTranslation('settings/voice-input');
+  const { t } = useI18n('settings/voice-input');
   const {
     enabled,
     phase,
     start: startVoiceCall,
-    end: endVoiceCall,
   } = useRealtimeVoiceCall();
   const isVoiceMode = phase !== 'idle';
-  const isTransitioning = phase === 'connecting' || phase === 'ending';
-  const showModeSwitch = enabled || isVoiceMode;
+  const showModeSwitch = enabled && !isVoiceMode;
 
   const handleModeSwitch = useCallback(() => {
-    if (isVoiceMode) {
-      endVoiceCall();
-      return;
-    }
     if (!enabled || voiceStartDisabled) return;
     startVoiceCall(voiceTarget);
-  }, [enabled, endVoiceCall, isVoiceMode, startVoiceCall, voiceStartDisabled, voiceTarget]);
+  }, [enabled, startVoiceCall, voiceStartDisabled, voiceTarget]);
 
   return (
     <div
@@ -65,7 +61,7 @@ export function ConversationModeSurface({
         data-openbitfun-component="conversation-mode-surface"
         data-openbitfun-part="body"
       >
-        {isVoiceMode ? <RealtimeVoiceCallPanel /> : children}
+        {isVoiceMode ? <RealtimeVoiceCallPanel onClose={onCloseVoice} /> : children}
       </div>
 
       {showModeSwitch ? (
@@ -76,47 +72,20 @@ export function ConversationModeSurface({
         >
           <button data-overflow-trigger
             type="button"
-            className={`openbitfun-conversation-mode-surface__switch-button${isVoiceMode ? ' is-voice' : ''}`}
+            className="openbitfun-conversation-mode-surface__switch-button"
             data-testid={switchTestId}
             data-openbitfun-component="conversation-mode-surface"
             data-openbitfun-part="modeSwitchButton"
-            aria-pressed={isVoiceMode}
-            disabled={phase === 'ending' || (!isVoiceMode && voiceStartDisabled)}
+            disabled={voiceStartDisabled}
             onClick={handleModeSwitch}
           >
-            {isTransitioning ? (
-              <Loader2
-                className="openbitfun-conversation-mode-surface__switch-spinner"
-                size={15}
-                aria-hidden="true"
-              />
-            ) : isVoiceMode ? (
-              <Icon name="side-chat" size="sm" aria-hidden="true" />
-            ) : (
-              <Phone size={15} aria-hidden="true" />
-            )}
+            <Phone size={15} aria-hidden="true" />
             <OverflowText>
-              {t(isVoiceMode
-                ? 'voiceCall.call.switchToChat'
-                : 'voiceCall.call.switchToVoice')}
+              {t('voiceCall.call.switchToVoice')}
             </OverflowText>
           </button>
         </footer>
       ) : null}
     </div>
-  );
-}
-
-/** Shared voice identity used by compact-host headers while Voice is active. */
-export function ConversationVoiceModeIcon() {
-  return (
-    <span
-      className="openbitfun-conversation-voice-mode-icon"
-      data-openbitfun-component="conversation-mode-surface"
-      data-openbitfun-part="voiceModeIcon"
-      aria-hidden="true"
-    >
-      <Phone size={14} />
-    </span>
   );
 }

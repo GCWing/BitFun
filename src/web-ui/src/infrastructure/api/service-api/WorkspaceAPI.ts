@@ -1,6 +1,9 @@
  
 
 import { api } from './ApiClient';
+import { globalEventBus } from '@/infrastructure/event-bus';
+import { getActiveSurfaceId } from '@/infrastructure/peer-device/deviceSurface';
+import type { FileResourceRenamedEvent } from '@/shared/types/contentResource';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type {
   ExplorerChildrenPageDto,
@@ -378,10 +381,10 @@ export class WorkspaceAPI {
     }
   }
 
-  async explorerGetChildren(path: string): Promise<ExplorerNodeDto[]> {
+  async explorerGetChildren(path: string, remoteConnectionId?: string): Promise<ExplorerNodeDto[]> {
     try {
       return await api.invoke('explorer_get_children', {
-        request: { path }
+        request: { path, remoteConnectionId }
       });
     } catch (error) {
       throw createTauriCommandError('explorer_get_children', error, { path });
@@ -407,10 +410,10 @@ export class WorkspaceAPI {
     }
   }
 
-  async getFileMetadata(path: string): Promise<FileMetadata> {
+  async getFileMetadata(path: string, remoteConnectionId?: string): Promise<FileMetadata> {
     try {
       const raw = await api.invoke<Record<string, unknown>>('get_file_metadata', {
-        request: { path }
+        request: { path, remoteConnectionId }
       });
       return {
         path: String(raw.path ?? path),
@@ -966,10 +969,12 @@ export class WorkspaceAPI {
 
    
   async renameFile(oldPath: string, newPath: string, remoteConnectionId?: string): Promise<void> {
+    const surfaceId = getActiveSurfaceId();
     try {
       await api.invoke('rename_file', {
         request: { oldPath, newPath, remoteConnectionId }
       });
+      globalEventBus.emit<FileResourceRenamedEvent>('workspace:file-renamed', { surfaceId, remoteConnectionId, oldPath, newPath });
     } catch (error) {
       throw createTauriCommandError('rename_file', error, { oldPath, newPath });
     }

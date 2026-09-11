@@ -1,9 +1,12 @@
+@use '../../item-rhythm' as itemRhythm;
+
 /* Model round item styles (BEM). */
 .model-round-item {
+  @include itemRhythm.apply;
   /*
-   * No bottom margin — the inter-round gap is covered by the same line-height rhythm
-   * as inter-item gaps inside a round, so flow text → tool / tool → thinking / cross-
-   * round transitions all read as one continuous, evenly-spaced text column.
+   * The composition assigns one 8px trailing gap to each item, including the
+   * last item across a model-round boundary. Consecutive collapsed ambient
+   * tools have no extra gap, within a round and across virtual rows.
    *
    * No mount / enter animation lives here on purpose. The list is virtualized:
    * any animation keyed off mount replays whenever an item scrolls back into
@@ -86,12 +89,13 @@
 .model-round-item__retry-history {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: var(--openbitfun-control-flow-chat-flow-item-gap);
+  margin-bottom: var(--openbitfun-control-flow-chat-flow-item-gap);
 }
 
 .model-round-item__retry-toggle {
   align-self: flex-start;
+  min-block-size: max(1lh, var(--openbitfun-control-tool-card-ambient-row-min-block-size));
   padding: 0;
   background: transparent;
   border: none;
@@ -113,7 +117,8 @@
 }
 
 .model-round-item__retry-attempt {
-  padding: 0.35rem 0 0.15rem;
+  @include itemRhythm.apply($enclosed: true);
+  padding: var(--openbitfun-space-2) 0 0;
   border-top: 1px solid color-mix(in srgb, var(--openbitfun-color-border-default) 62%, transparent);
 }
 
@@ -121,8 +126,8 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.25rem;
-  margin-bottom: 0.35rem;
+  gap: var(--openbitfun-space-1);
+  margin-bottom: var(--openbitfun-space-1);
   color: var(--openbitfun-color-content-muted);
   font-size: var(--openbitfun-type-flow-meta-font-size);
   line-height: var(--openbitfun-type-flow-meta-line-height);

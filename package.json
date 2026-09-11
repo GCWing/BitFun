@@ -1,7 +1,7 @@
 {
   "name": "OpenBitFun",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.0-beta",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"

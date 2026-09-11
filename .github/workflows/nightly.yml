@@ -256,7 +256,7 @@ jobs:
             --version "${NIGHTLY_VERSION%%+*}" \
             --tag "${{ env.NIGHTLY_TAG }}" \
             --repo "${{ github.repository }}" \
-            --out linux-release-assets/linux-binaries.json
+            --out linux-release-assets/linux-binaries-v1.json
 
       - name: Prepare versioned Windows installer
         env:
@@ -329,7 +329,7 @@ jobs:
             linux-release-assets/openbitfun-relay-server-*.tar.gz.sha256
             linux-release-assets/*.tar.gz.sig
             linux-release-assets/*.tar.gz.sha256.sig
-            linux-release-assets/linux-binaries.json
+            linux-release-assets/linux-binaries-v1.json
             relay-image.json
             relay-image.json.sig
 
@@ -340,7 +340,7 @@ jobs:
           while IFS= read -r cli_url; do
             curl -fsSL --retry 5 --retry-delay 3 "${cli_url}.sig" -o /dev/null
             curl -fsSL --retry 5 --retry-delay 3 "${cli_url}.sha256.sig" -o /dev/null
-          done < <(jq -r '.platforms[].cli.url' linux-release-assets/linux-binaries.json)
+          done < <(jq -r '.platforms[].cli.url' linux-release-assets/linux-binaries-v1.json)
 
       - name: Verify published Relay image descriptor
         shell: bash

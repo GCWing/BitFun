@@ -96,7 +96,7 @@
   }
 
   .label {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     color: var(--openbitfun-color-content-primary);
     font-weight: var(--openbitfun-type-label-sm-font-weight);
   }
@@ -128,7 +128,9 @@
     padding-block: var(--openbitfun-control-activity-item-surface-padding-block);
     padding-inline-start: var(--openbitfun-control-activity-item-surface-padding-inline-start);
     padding-inline-end: var(--openbitfun-control-activity-item-surface-padding-inline-end);
-    border: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    /* A centered stroke preserves the 9 + 22 + 9 row geometry. */
+    outline: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
+    outline-offset: calc(-0.5 * var(--openbitfun-border-width-default));
     border-radius: var(--openbitfun-control-activity-item-surface-radius);
     background: var(--openbitfun-color-surface-raised);
     font-family: var(--openbitfun-type-label-md-font-family);
@@ -138,7 +140,7 @@
     letter-spacing: var(--openbitfun-type-label-md-letter-spacing);
     transition:
       background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
-      border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+      outline-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
   }
 
   .root[data-appearance="surface"] .trigger,
@@ -152,7 +154,7 @@
   }
 
   .root[data-appearance="surface"]:not([data-disabled="true"]):is(:hover, [data-openbitfun-preview-state="hover"]) {
-    border-color: var(--openbitfun-color-border-default);
+    outline-color: var(--openbitfun-color-border-default);
     background: var(--openbitfun-color-action-neutral-surface-hover);
   }
 
@@ -228,7 +230,7 @@
 
   @media (forced-colors: active) {
     .root[data-appearance="surface"] {
-      border-color: ButtonText;
+      outline-color: ButtonText;
     }
 
     .root:has(.trigger:focus-visible) {

@@ -194,3 +194,43 @@ describe('mobile RemoteSessionManager target routing', () => {
     );
   });
 });
+
+
+describe('mobile output file transfer integrity', () => {
+  const chunk = (offset: number, bytes: string, total = 4) => ({
+    resp: 'file_chunk', name: 'preview.png', chunk_base64: btoa(bytes),
+    offset, chunk_size: bytes.length, total_size: total, mime_type: 'image/png',
+  });
+
+  it('reassembles short padded chunks using bytes and retains the owning session', async () => {
+    const client = clientForTest();
+    const send = vi.spyOn(client, 'sendDeviceRpc')
+      .mockResolvedValueOnce(chunk(0, 'a'))
+      .mockResolvedValueOnce(chunk(1, 'bc'))
+      .mockResolvedValueOnce(chunk(3, 'd'));
+    const file = await new RemoteSessionManager(client).readFile('preview.png', 'origin-session');
+    expect(atob(file.contentBase64)).toBe('abcd');
+    expect(file.size).toBe(4);
+    expect(send.mock.calls.map(call => call[1])).toEqual([0, 1, 3].map(offset => expect.objectContaining({
+      cmd: 'read_file_chunk', path: 'preview.png', session_id: 'origin-session', offset,
+    })));
+  });
+
+  it.each([
+    { offset: 3 }, { chunk_size: 2 }, { total_size: 5 },
+    { name: 'different.png' }, { chunk_base64: '', chunk_size: 0 }, { revision: 'changed' },
+  ])('rejects truncated, inconsistent or reordered chunks: %j', async invalid => {
+    const client = clientForTest();
+    vi.spyOn(client, 'sendDeviceRpc').mockResolvedValueOnce(chunk(0, 'ab'))
+      .mockResolvedValueOnce({ ...chunk(2, 'c'), ...invalid });
+    await expect(new RemoteSessionManager(client).readFile('preview.png', 'origin')).rejects.toThrow();
+  });
+
+  it('stops oversized inline previews after the first bounded response', async () => {
+    const client = clientForTest();
+    const send = vi.spyOn(client, 'sendDeviceRpc').mockResolvedValue(chunk(0, 'a', 100));
+    await expect(new RemoteSessionManager(client).readFile('preview.png', 'origin', undefined, 8)).rejects.toThrow('too large');
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][1]).toEqual(expect.objectContaining({ limit: 8 }));
+  });
+});

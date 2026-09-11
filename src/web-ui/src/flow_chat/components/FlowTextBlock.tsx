@@ -14,7 +14,7 @@ import { useReportTypewriterReveal } from '../hooks/typewriterRevealGateContext'
 import { isStartupRenderTraceEnabled } from '@/shared/utils/startupTrace';
 import { DeepResearchProtocolGroup } from '../deep-research/DeepResearchProtocolGroup';
 import { parseDeepResearchContent } from '../deep-research/deepResearchProtocol';
-import { hasSessionFileProvider } from '../session-drivers/sessionFileNavigation';
+import { hasSessionFileProvider, readImageThroughSession, downloadFileThroughSession } from '../session-drivers/sessionFileNavigation';
 import { resolveSessionDriverId } from '../session-drivers/resolve';
 import './FlowTextBlock.scss';
 
@@ -69,6 +69,9 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   const isDispatchSession = activeSessionOverride
     ? resolveSessionDriverId(activeSessionOverride.sessionId, activeSessionOverride) === 'dispatch'
     : hasSessionFileProvider(sessionId);
+  const fileSessionId = activeSessionOverride?.sessionId || sessionId;
+  const readImage = useCallback((path: string, refresh?: boolean) => readImageThroughSession(fileSessionId, path, refresh), [fileSessionId]);
+  const downloadFile = useCallback((path: string) => downloadFileThroughSession(fileSessionId, path), [fileSessionId]);
   // Stable callback so the memoized Markdown component is not re-rendered
   // (and re-parsed) just because this block re-rendered.
   const handleOpenVisualization = useCallback((visualization: any) => {
@@ -165,6 +168,8 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
       isStreaming={markdownStreaming}
       onFileViewRequest={onFileViewRequest}
       fileActionsViaCallbackOnly={isDispatchSession}
+      onImageRead={isDispatchSession ? readImage : undefined}
+      onFileDownload={isDispatchSession ? downloadFile : undefined}
       onTabOpen={onTabOpen}
       onHttpLinkClick={onHttpLinkClick}
       onOpenVisualization={handleOpenVisualization}

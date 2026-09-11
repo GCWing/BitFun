@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
+import { VoiceCallPreview, VoiceParticlePreview } from "../components/VoiceCallPreview";
 import { Clipboard, List } from "lucide-react";
 import {
   ActionCard,
@@ -497,6 +498,12 @@ export function ComponentDetailPage({
     if (component.name === "LauncherButton") {
       return 'import { Icon, LauncherButton } from "@openbitfun/ui";\n\n<LauncherButton leadingIcon={<Icon name="mic" />}>\n  Hello\n</LauncherButton>';
     }
+    if (component.name === "VoiceParticleLogo") {
+      return 'import { VoiceParticleLogo } from "@openbitfun/ui";\n\n// Return live FFT byte bins from fftSize=256 analysers.\n<VoiceParticleLogo readAudio={() => ({\n  user: microphoneFrequencyData,\n  assistant: playbackFrequencyData,\n  assistantSpeaking: isAudioPlaying,\n})} />';
+    }
+    if (component.name === "VoiceCallPanel") {
+      return 'import { VoiceCallPanel } from "@openbitfun/ui";\n\n<VoiceCallPanel\n  title="Live Call"\n  labels={{ back: "Back to chat", close: "Close", mute: "Mute",\n    unmute: "Unmute", settings: "Settings", end: "End call" }}\n  phase="live"\n  muted={muted}\n  userTranscript={userTranscript}\n  assistantTranscript={assistantTranscript}\n  readAudio={readAudio}\n  onBack={returnToChat}\n  onClose={closeWindow}\n  onToggleMute={toggleMute}\n  onOpenSettings={openVoiceSettings}\n  onEnd={endCall}\n/>';
+    }
     if (component.name === "ActionItem") {
       const metadataProp = actionItemShowMetadata ? `\n  metadata="12"` : "";
       return `import { Icon, ActionItem, KeyHint } from "@openbitfun/ui";\n\n<ActionItem\n  actions={[\n    { id: "add", icon: <Icon name="plus" />, label: "${t("components.preview.add")}" },\n    { id: "more", icon: <Icon name="more" />, label: "${t("components.preview.more")}" },\n  ]}\n  leading={<Icon name="session" />}${metadataProp}\n  shortcut={<KeyHint>K</KeyHint>}\n>\n  ${t("components.preview.assistant")}\n</ActionItem>`;
@@ -892,6 +899,8 @@ export function ComponentDetailPage({
     previewVariant = variant,
     applyInspectorControls = false,
   ) {
+    if (component.name === "VoiceCallPanel") return <VoiceCallPreview key={state} state={state} />;
+    if (component.name === "VoiceParticleLogo") return <VoiceParticlePreview active={state !== "paused" && state !== "reduced-motion"} />;
     if (isFlowChatComponent) {
       return (
         <FlowChatComponentPreview

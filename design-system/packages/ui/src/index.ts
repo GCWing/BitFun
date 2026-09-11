@@ -1,6 +1,9 @@
 import "./styles/layers.css";
 import "./styles/scrollbars.css";
 
+export { VoiceCallPanel, type VoiceCallPanelProps, type VoiceCallLabels, type VoiceCallPhase } from "./components/VoiceCallPanel";
+export { VoiceParticleLogo, type VoiceParticleLogoProps, type VoiceParticleAudio, type VoiceParticleAudioReader } from "./components/VoiceParticleLogo";
+
 export {
   DesignSystemProvider,
   type DesignSystemMessages,

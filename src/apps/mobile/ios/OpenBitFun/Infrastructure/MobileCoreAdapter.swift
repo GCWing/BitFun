@@ -16,6 +16,8 @@ final class MobileCoreAdapter {
     private var remoteTargetKey: String?
     private var remoteTargetEpoch: UInt64 = 0
     private var desiredRemoteTarget: DesiredRemoteTarget?
+    /** Fresh account login/restore stays directory-only until the user opens a target. */
+    private var hydrateAccountTargetOnBind = false
     private var initialRemoteTargetSelectionOpen = true
     private var directoryGeneration: UInt64 = 0
     private var accountGeneration: UInt64 = 0
@@ -39,6 +41,7 @@ final class MobileCoreAdapter {
     var onAccountState: ((AccountUiState, UInt64) -> Void)?
     var onRemoteTargetBound: ((String, UInt64, UInt64) -> Void)?
     var onRemoteState: ((RemoteSessionUiState, String, UInt64) -> Void)?
+    var onRemoteConnectionPhase: ((OpenBitFunMobileCore.ConnectionPhase, String, UInt64) -> Void)?
     var onWorkspaceState: ((RemoteWorkspaceUiState, String, UInt64) -> Void)?
     var onDirectoryState: ((DeviceDirectoryUiState, UInt64) -> Void)?
     var onCreateOperation: ((CreateSessionOperationState, String) -> Void)?
@@ -48,6 +51,7 @@ final class MobileCoreAdapter {
         onAccountState: ((AccountUiState, UInt64) -> Void)? = nil,
         onRemoteTargetBound: ((String, UInt64, UInt64) -> Void)? = nil,
         onRemoteState: ((RemoteSessionUiState, String, UInt64) -> Void)? = nil,
+        onRemoteConnectionPhase: ((OpenBitFunMobileCore.ConnectionPhase, String, UInt64) -> Void)? = nil,
         onWorkspaceState: ((RemoteWorkspaceUiState, String, UInt64) -> Void)? = nil,
         onDirectoryState: ((DeviceDirectoryUiState, UInt64) -> Void)? = nil,
         onCreateOperation: ((CreateSessionOperationState, String) -> Void)? = nil,
@@ -74,6 +78,7 @@ final class MobileCoreAdapter {
         self.onAccountState = onAccountState
         self.onRemoteTargetBound = onRemoteTargetBound
         self.onRemoteState = onRemoteState
+        self.onRemoteConnectionPhase = onRemoteConnectionPhase
         self.onWorkspaceState = onWorkspaceState
         self.onDirectoryState = onDirectoryState
         self.onCreateOperation = onCreateOperation
@@ -139,6 +144,7 @@ final class MobileCoreAdapter {
 
     func loginAccount() {
         desiredRemoteTarget = .accountRestore
+        hydrateAccountTargetOnBind = false
         initialRemoteTargetSelectionOpen = false
         account.dispatch(intent: AccountIntentLogin.shared)
     }
@@ -146,6 +152,7 @@ final class MobileCoreAdapter {
     func selectAccountDevice(id: String) {
         pendingDirectoryReconciles.removeAll()
         desiredRemoteTarget = .account(deviceID: id)
+        hydrateAccountTargetOnBind = true
         initialRemoteTargetSelectionOpen = false
         account.dispatch(intent: AccountIntentSelectDevice(deviceId: id))
         let state = SkieSwiftStateFlow<AccountUiState>(account.state).value
@@ -186,6 +193,21 @@ final class MobileCoreAdapter {
 
     func retryDeviceDirectory(_ deviceID: String) {
         deviceDirectory.dispatch(intent: DeviceDirectoryIntentRetry(deviceId: deviceID))
+    }
+
+    func setDirectoryWorkspaceExpanded(_ deviceID: String, path: String, expanded: Bool) {
+        deviceDirectory.dispatch(intent: DeviceDirectoryIntentSetWorkspaceExpanded(
+            deviceId: deviceID,
+            path: path,
+            expanded: expanded
+        ))
+    }
+
+    func retryDirectoryWorkspace(_ deviceID: String, path: String) {
+        deviceDirectory.dispatch(intent: DeviceDirectoryIntentRetryWorkspace(
+            deviceId: deviceID,
+            path: path
+        ))
     }
 
     func refreshAccountDevices() {
@@ -440,6 +462,7 @@ final class MobileCoreAdapter {
 
     private func startAccountRemoteSessionIfNeeded(ready: AccountUiStateReady, generation: UInt64) {
         guard generation == accountGeneration,
+              hydrateAccountTargetOnBind,
               let deviceID = ready.selectedDeviceId else { return }
         let desiredTarget = DesiredRemoteTarget.account(deviceID: deviceID)
         let targetKey = "account:\(deviceID)"
@@ -540,13 +563,23 @@ final class MobileCoreAdapter {
 
         let sessionFlow = SkieSwiftStateFlow<RemoteSessionUiState>(sessionStore.state)
         onRemoteState?(sessionFlow.value, targetKey, boundEpoch)
-        sessionStore.dispatch(intent: RemoteSessionIntentLoad.shared)
         remoteObservations.append(Task { [weak self] in
             for await state in sessionFlow {
                 guard !Task.isCancelled else { return }
                 self?.onRemoteState?(state, targetKey, boundEpoch)
             }
         })
+
+        let connectionFlow = SkieSwiftStateFlow<OpenBitFunMobileCore.ConnectionPhase>(sessionStore.connectionPhase)
+        onRemoteConnectionPhase?(connectionFlow.value, targetKey, boundEpoch)
+        remoteObservations.append(Task { [weak self] in
+            for await phase in connectionFlow {
+                guard !Task.isCancelled else { return }
+                self?.onRemoteConnectionPhase?(phase, targetKey, boundEpoch)
+            }
+        })
+
+        sessionStore.dispatch(intent: RemoteSessionIntentLoad.shared)
 
         let createFlow = SkieSwiftStateFlow<CreateSessionOperationState>(sessionStore.createOperation)
         handleCreateOperation(createFlow.value, targetKey: targetKey, epoch: boundEpoch)

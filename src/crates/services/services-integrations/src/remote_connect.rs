@@ -13,6 +13,7 @@ mod chat_projection;
 pub mod device;
 pub mod device_crypto;
 pub mod encryption;
+pub mod file_projection;
 mod lan;
 mod page_upload;
 pub mod pairing;
@@ -631,6 +632,9 @@ pub fn detect_remote_mime_type(path: &Path) -> &'static str {
         "gif" => "image/gif",
         "webp" => "image/webp",
         "svg" => "image/svg+xml",
+        "avif" => "image/avif",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
         "zip" => "application/zip",
         "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -730,6 +734,7 @@ pub async fn read_remote_workspace_file_chunk(
         .unwrap_or(total_size);
 
     Ok(RemoteWorkspaceFileChunk {
+        revision: String::new(),
         name: remote_file_display_name(abs_path.file_name().and_then(|n| n.to_str())),
         bytes: chunk,
         offset,
@@ -792,6 +797,7 @@ pub fn remote_file_chunk_response(
         Ok(chunk) => {
             use base64::Engine as _;
             RemoteResponse::FileChunk {
+                revision: chunk.revision,
                 name: chunk.name,
                 chunk_base64: base64::engine::general_purpose::STANDARD.encode(&chunk.bytes),
                 offset: chunk.offset,
@@ -826,6 +832,14 @@ where
 {
     match command {
         RemoteCommand::ReadFile { path, session_id } => {
+            match host
+                .read_remote_file(path, session_id.as_deref(), REMOTE_FILE_MAX_READ_BYTES)
+                .await
+            {
+                Ok(Some(file)) => return remote_file_content_response(Ok(file)),
+                Err(error) => return remote_file_content_response(Err(error)),
+                Ok(None) => {}
+            }
             let workspace_root = host
                 .resolve_remote_file_workspace_root(session_id.as_deref())
                 .await;
@@ -844,6 +858,14 @@ where
             offset,
             limit,
         } => {
+            match host
+                .read_remote_file_chunk(path, session_id.as_deref(), *offset, *limit)
+                .await
+            {
+                Ok(Some(file)) => return remote_file_chunk_response(Ok(file)),
+                Err(error) => return remote_file_chunk_response(Err(error)),
+                Ok(None) => {}
+            }
             let workspace_root = host
                 .resolve_remote_file_workspace_root(session_id.as_deref())
                 .await;
@@ -853,6 +875,11 @@ where
             )
         }
         RemoteCommand::GetFileInfo { path, session_id } => {
+            match host.remote_file_info(path, session_id.as_deref()).await {
+                Ok(Some(file)) => return remote_file_info_response(Ok(file)),
+                Err(error) => return remote_file_info_response(Err(error)),
+                Ok(None) => {}
+            }
             let workspace_root = host
                 .resolve_remote_file_workspace_root(session_id.as_deref())
                 .await;
@@ -961,18 +988,24 @@ pub fn remote_workspace_info_response(workspace: Option<RemoteWorkspaceFacts>) -
 pub fn remote_recent_workspaces_response(
     workspaces: Vec<RemoteRecentWorkspaceFacts>,
 ) -> RemoteResponse {
+    remote_workspace_catalog_response(workspaces, None)
+}
+
+fn remote_workspace_catalog_response(
+    workspaces: Vec<RemoteRecentWorkspaceFacts>,
+    opened_workspaces: Option<Vec<RemoteRecentWorkspaceFacts>>,
+) -> RemoteResponse {
+    let project = |workspace: RemoteRecentWorkspaceFacts| RecentWorkspaceEntry {
+        path: workspace.path,
+        name: workspace.name,
+        last_opened: workspace.last_opened,
+        workspace_kind: Some(workspace.kind.as_wire_str().to_string()),
+        remote_connection_id: workspace.remote_connection_id,
+        remote_ssh_host: workspace.remote_ssh_host,
+    };
     RemoteResponse::RecentWorkspaces {
-        workspaces: workspaces
-            .into_iter()
-            .map(|workspace| RecentWorkspaceEntry {
-                path: workspace.path,
-                name: workspace.name,
-                last_opened: workspace.last_opened,
-                workspace_kind: Some(workspace.kind.as_wire_str().to_string()),
-                remote_connection_id: workspace.remote_connection_id,
-                remote_ssh_host: workspace.remote_ssh_host,
-            })
-            .collect(),
+        workspaces: workspaces.into_iter().map(project).collect(),
+        opened_workspaces: opened_workspaces.map(|rows| rows.into_iter().map(project).collect()),
     }
 }
 
@@ -1129,9 +1162,10 @@ where
         RemoteCommand::GetWorkspaceInfo => {
             remote_workspace_info_response(host.current_workspace().await)
         }
-        RemoteCommand::ListRecentWorkspaces => {
-            remote_recent_workspaces_response(host.recent_workspaces().await)
-        }
+        RemoteCommand::ListRecentWorkspaces => match host.opened_workspaces().await {
+            Ok(opened) => remote_workspace_catalog_response(host.recent_workspaces().await, opened),
+            Err(message) => RemoteResponse::Error { message },
+        },
         RemoteCommand::SetWorkspace {
             path,
             remote_connection_id,
@@ -2492,6 +2526,10 @@ pub enum RemoteResponse {
     },
     RecentWorkspaces {
         workspaces: Vec<RecentWorkspaceEntry>,
+        /// Presence negotiates the authoritative opened-workspace catalog.
+        /// Keep `workspaces` as recent history for older clients and pickers.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        opened_workspaces: Option<Vec<RecentWorkspaceEntry>>,
     },
     WorkspaceUpdated {
         success: bool,
@@ -2607,6 +2645,8 @@ pub enum RemoteResponse {
         size: u64,
     },
     FileChunk {
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        revision: String,
         name: String,
         chunk_base64: String,
         offset: u64,
@@ -4016,6 +4056,19 @@ mod tests {
             }]
         }
 
+        async fn opened_workspaces(
+            &self,
+        ) -> Result<Option<Vec<RemoteRecentWorkspaceFacts>>, String> {
+            Ok(Some(vec![RemoteRecentWorkspaceFacts {
+                path: "/assistant/workspace".into(),
+                name: "Mina".into(),
+                last_opened: "2026-05-29T00:00:00Z".into(),
+                kind: RemoteWorkspaceKind::Assistant,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            }]))
+        }
+
         async fn open_workspace(
             &self,
             path: &str,
@@ -4049,6 +4102,44 @@ mod tests {
                 remote_ssh_host: None,
             })
         }
+    }
+
+    #[tokio::test]
+    async fn remote_workspace_catalog_advertises_opened_rows_without_repurposing_recent_history() {
+        let response = handle_remote_workspace_command(
+            &FakeWorkspaceHost,
+            &RemoteCommand::ListRecentWorkspaces,
+        )
+        .await;
+        let json = serde_json::to_value(&response).unwrap();
+        assert_eq!(json["workspaces"][0]["path"], "/workspace/project");
+        assert_eq!(json["opened_workspaces"][0]["name"], "Mina");
+        assert_eq!(json["opened_workspaces"][0]["workspace_kind"], "assistant");
+        assert_eq!(
+            serde_json::from_value::<RemoteResponse>(json).unwrap(),
+            response
+        );
+
+        let legacy = serde_json::json!({
+            "resp": "recent_workspaces",
+            "workspaces": [{ "path": "/legacy", "name": "Legacy", "last_opened": "" }]
+        });
+        assert_eq!(
+            serde_json::to_value(serde_json::from_value::<RemoteResponse>(legacy.clone()).unwrap())
+                .unwrap(),
+            legacy
+        );
+        let empty = remote_workspace_catalog_response(Vec::new(), Some(Vec::new()));
+        assert_eq!(
+            serde_json::to_value(empty).unwrap()["opened_workspaces"],
+            serde_json::json!([])
+        );
+        assert!(
+            serde_json::to_value(remote_recent_workspaces_response(Vec::new()))
+                .unwrap()
+                .get("opened_workspaces")
+                .is_none()
+        );
     }
 
     #[tokio::test]

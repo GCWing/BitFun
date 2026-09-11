@@ -1,15 +1,20 @@
+import { ResourceFileContext } from '@/infrastructure/api/ResourceFileContext';
 /**
  * EditorGroup component.
  * A single editor group with tab bar and content area.
  */
 
-import React, { useCallback, useMemo, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useCallback, useMemo, useRef, useEffect, useLayoutEffect, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TabBar } from '../tab-bar';
 import { DropZone } from './DropZone';
 import FlexiblePanel from '../../base/FlexiblePanel';
-import { usePanelViewCanvasStore } from '../stores';
-import { useSceneStore } from '../../../../stores/sceneStore';
+import { captureContentScope } from '@/shared/services/workbenchContentService';
+import { popOutCanvasTab } from '@/app/workbench/canvasTabTransfer';
+import { EditorDocumentContext, getEditorDocument, releaseEditorDocument } from '@/tools/editor/services/EditorDocument';
+import { useContentResourceStore } from '@/app/workbench/contentResourceStore';
+import { CanvasStoreModeContext } from '../stores';
+import { hasRetainedCanvasTab } from '../stores/canvasStore';
 import {
   getInteractionMotion,
   isReducedMotionPreferred,
@@ -24,6 +29,25 @@ import type {
   SplitMode,
 } from '../types';
 import './EditorGroup.scss';
+
+function CanvasContentView({ documentId, ...props }: React.ComponentProps<typeof FlexiblePanel> & { documentId: string }) {
+  const resourceScope = props.content?.metadata?.resourceScope;
+  const resourceWorkspacePath = props.content?.data?.workspacePath ?? props.workspacePath;
+  const remoteConnectionId = props.content?.data?.remoteConnectionId;
+  const filePath = props.content?.data?.filePath;
+  const documentSession = useMemo(() => getEditorDocument(
+    documentId,
+    resourceScope ?? captureContentScope({ workspacePath: resourceWorkspacePath, remoteConnectionId }),
+    filePath,
+  ), [documentId, filePath, remoteConnectionId, resourceScope, resourceWorkspacePath]);
+  useEffect(() => () => {
+    if (!hasRetainedCanvasTab(documentId.slice('canvas:'.length))
+      && !Object.values(useContentResourceStore.getState().resources).some(resource => resource.documentId === documentId)) {
+      releaseEditorDocument(documentId);
+    }
+  }, [documentId]);
+  return <EditorDocumentContext.Provider value={documentSession}><ResourceFileContext.Provider value={documentSession}><FlexiblePanel {...props} /></ResourceFileContext.Provider></EditorDocumentContext.Provider>;
+}
 
 export interface EditorGroupProps {
   groupId: EditorGroupId;
@@ -81,6 +105,7 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
   terminalResizeSuspended = false,
 }) => {
   const { t } = useTranslation('components');
+  const mode = useContext(CanvasStoreModeContext);
   const visibleTabs = useMemo(() => group.tabs.filter(t => !t.isHidden), [group.tabs]);
   const activeTabContentRef = useRef<HTMLDivElement | null>(null);
   const activeTabAnimationRef = useRef<Animation | null>(null);
@@ -127,9 +152,11 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
   
   // Tabs to render (active + cached). Hidden terminal tabs stay mounted so
   // reopening a terminal reuses the xterm buffer instead of replaying history.
+  // Child-session tabs retain only their lightweight wrapper; that wrapper
+  // unmounts its transcript while inactive and owns reading state until close.
   const tabsToRender = useMemo(() => {
     const result = group.tabs.filter(t => 
-      (!t.isHidden && (t.id === group.activeTabId || cachedTabsRef.current.has(t.id))) ||
+      (!t.isHidden && (t.content.type === 'btw-session' || t.id === group.activeTabId || cachedTabsRef.current.has(t.id))) ||
       (t.isHidden && isKeepAliveTerminalTab(t))
     );
     return result;
@@ -148,11 +175,8 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
   }, [group.activeTabId, onDirtyStateChange]);
 
   const handleTabPopOut = useCallback((tabId: string) => {
-    const tab = group.tabs.find(t => t.id === tabId);
-    if (!tab || !tab.content) return;
-    usePanelViewCanvasStore.getState().addTab(tab.content as PanelContent, 'active');
-    useSceneStore.getState().openScene('panel-view');
-  }, [group.tabs]);
+    popOutCanvasTab(mode, tabId, groupId, { workspacePath });
+  }, [mode, groupId, workspacePath]);
 
   const handleVisibleTabClick = useCallback((tabId: string) => {
     tabTransitionIntentRef.current = {
@@ -242,7 +266,8 @@ export const EditorGroup: React.FC<EditorGroupProps> = ({
                 className="canvas-editor-group__tab-content"
                 style={{ display: group.activeTabId === tab.id ? 'flex' : 'none' }}
               >
-                <FlexiblePanel
+                <CanvasContentView
+                  documentId={`canvas:${tab.id}`}
                   content={tab.content as any}
                   isActive={isSceneActive && group.activeTabId === tab.id}
                   onContentChange={group.activeTabId === tab.id ? handleContentChange : undefined}

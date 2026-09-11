@@ -22,6 +22,7 @@ public data class WorkspaceInfoResponse(
     @SerialName("git_branch") val gitBranch: String? = null,
     @SerialName("workspace_kind") val workspaceKind: String? = null,
     @SerialName("assistant_id") val assistantId: String? = null,
+    @SerialName("capabilities") val capabilities: List<String> = emptyList(),
 ) : CommandStatus {
     /** `path` wins over `workspace_path`, matching `RemoteResponseMapper.workspaceFromResponse`. */
     public val resolvedPath: String? get() = path ?: workspacePath

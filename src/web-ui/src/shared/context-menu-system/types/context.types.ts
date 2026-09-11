@@ -5,6 +5,8 @@
  * A `MenuContext` describes what the user interacted with when opening the menu
  * (selection, file tree node, editor, etc.).
  */
+import type { ContentResourceScope } from '@/shared/types/contentResource';
+
 export enum ContextType {
    
   SELECTION = 'selection',
@@ -51,6 +53,7 @@ export interface BaseContext {
   timestamp: number;
    
   metadata?: Record<string, any>;
+  resourceScope?: ContentResourceScope;
 }
 
  

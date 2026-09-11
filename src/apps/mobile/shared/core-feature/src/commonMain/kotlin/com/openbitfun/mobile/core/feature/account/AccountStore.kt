@@ -47,6 +47,8 @@ internal interface AccountBackend {
     /** [selfDeviceId] lets the transport drop this device's own row. */
     suspend fun listDevices(session: AccountSessionData, selfDeviceId: String): List<AccountDeviceUi>
 
+    suspend fun profile(userId: String): com.openbitfun.mobile.core.transport.GitHubProfile? = null
+
     fun transport(session: AccountSessionData, targetDeviceId: String): RemoteCommandTransport
 }
 
@@ -63,6 +65,10 @@ public class AccountStore internal constructor(
     private var session: AccountSessionData? = null
     private var selectedRelayUrl: String = com.openbitfun.mobile.core.transport.DEFAULT_CLOUD_RELAY_URL
     private var work: Job? = null
+    private var profileWork: Job? = null
+    private var displayedProfile: AccountProfileRecord? = null
+    private var profileAttemptAt: Long = 0
+    private var profileAttempt: Pair<String, String>? = null
     /** Latest account membership snapshot, used to authorize explicit device stores. */
     private var controllableDevices: List<AccountDeviceUi> = emptyList()
 
@@ -108,6 +114,7 @@ public class AccountStore internal constructor(
             backend.transport(current, target),
             kotlinx.coroutines.Dispatchers.Default,
             target,
+            persistence?.remoteWorkspaces,
         )
     }
 
@@ -137,6 +144,7 @@ public class AccountStore internal constructor(
             backend.transport(current, target),
             kotlinx.coroutines.Dispatchers.Default,
             target,
+            persistence?.remoteWorkspaces,
         )
     }
 
@@ -152,6 +160,7 @@ public class AccountStore internal constructor(
     }
 
     public fun stop() {
+        profileWork?.cancel()
         work?.cancel()
         work = null
     }
@@ -382,6 +391,9 @@ public class AccountStore internal constructor(
     }
 
     private fun logout() {
+        profileWork?.cancel()
+        displayedProfile = null
+        profileAttempt = null
         work?.cancel()
         work = null
         // Logout is immediately observable even when Keychain cannot remove the
@@ -417,11 +429,48 @@ public class AccountStore internal constructor(
         _state.value = AccountUiState.Ready(
             userId = current.userId,
             relayUrl = current.relayUrl,
-            username = current.username,
+            username = displayedProfile?.takeIf { it.userId == current.userId }?.username ?: current.username,
             devices = controllableDevices,
             selectedDeviceId = current.targetDeviceId,
             selectedDeviceName = current.targetDeviceName,
-        )
+        ).copy(avatarUrl = displayedProfile?.takeIf { it.userId == current.userId }?.avatarUrl)
+        enrichProfile(current)
+    }
+
+
+    private fun enrichProfile(current: AccountSessionData) {
+        val identity = current.userId to current.token
+        val attemptedAt = kotlin.time.Clock.System.now().epochSeconds
+        if (profileAttempt == identity && attemptedAt - profileAttemptAt in 0 until 86400) return
+        profileAttemptAt = attemptedAt
+        profileAttempt = identity
+        profileWork?.cancel()
+        profileWork = scope.launch {
+            fun isCurrent(): Boolean = session?.userId == current.userId && session?.token == current.token
+            fun project(profile: AccountProfileRecord) {
+                if (!isCurrent() || profile.userId != current.userId) return
+                displayedProfile = profile
+                val ready = _state.value as? AccountUiState.Ready ?: return
+                if (ready.userId == profile.userId) _state.value = ready.copy(username = profile.username, avatarUrl = profile.avatarUrl)
+            }
+            try {
+                val cached = secureStore.read("github_display_profile_v1")?.decodeToString()?.let {
+                    runCatching { JSON.decodeFromString<AccountProfileRecord>(it) }.getOrNull()
+                }?.takeIf { it.userId == current.userId }
+                if (cached != null) project(cached)
+                val now = kotlin.time.Clock.System.now().epochSeconds
+                if (cached != null && now - cached.fetchedAt in 0 until 86400) return@launch
+                val profile = backend.profile(current.userId) ?: return@launch
+                if (!isCurrent() || profile.userId != current.userId) return@launch
+                val record = AccountProfileRecord(profile.userId, profile.username, profile.avatarUrl, now)
+                project(record)
+                secureStore.write("github_display_profile_v1", JSON.encodeToString(record).encodeToByteArray())
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                // Public metadata failures retain the session and cached display.
+            }
+        }
     }
 
     public companion object {
@@ -508,6 +557,8 @@ private class CloudBackend(
         )
     }
 
+    override suspend fun profile(userId: String): com.openbitfun.mobile.core.transport.GitHubProfile? = client.githubProfile(userId)
+
     override suspend fun listDevices(session: AccountSessionData, selfDeviceId: String): List<AccountDeviceUi> =
         client.listDevices(session.relayUrl, session.toTransportSession(), selfDeviceId).map { it.toUi() }
 
@@ -540,3 +591,11 @@ private fun CloudAccountFailure.toUiReason(): AccountFailureReason = when (this)
     CloudAccountFailure.TIMEOUT -> AccountFailureReason.TIMEOUT
     CloudAccountFailure.MALFORMED_RESPONSE -> AccountFailureReason.MALFORMED_RESPONSE
 }
+
+@Serializable
+private data class AccountProfileRecord(
+    val userId: String,
+    val username: String,
+    val avatarUrl: String?,
+    val fetchedAt: Long,
+)

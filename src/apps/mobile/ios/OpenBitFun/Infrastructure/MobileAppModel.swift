@@ -20,8 +20,11 @@ final class MobileAppModel: ObservableObject {
     @Published var remoteViewSettingsOpen = false
     @Published var remoteHasMore = false
     @Published var remoteHasMoreMessages = false
+    @Published var remoteConversationLoading = false
     @Published var remotePermissionMode = "ASK"
     @Published var remotePermissionFailure: String?
+    @Published var remoteHostCapabilities: [String] = []
+    @Published var accountAvatarURL: String?
     @Published var remoteAssistants: [MobileAssistantOption] = []
     @Published var remoteCreateOpen = false
     @Published var remoteCreateSubmitting = false
@@ -31,6 +34,7 @@ final class MobileAppModel: ObservableObject {
     @Published var messages: [ChatMessage]
     @Published var timelineRows: [MobileConversationRow] = []
     @Published var draft = ""
+    var lastAppliedRemoteSendID: String?
     @Published var drawerOpen = false
     @Published var settingsOpen = false
     @Published var remoteControlSettingsOpen = false
@@ -44,6 +48,7 @@ final class MobileAppModel: ObservableObject {
     @Published var toastMessage: String?
     @Published var remoteConnected = false
     @Published var remoteSessionSelected = false
+    @Published var remoteOpenedSessionID: String? = nil
     @Published var localSessionSelected = false
     @Published var pairingSheetOpen = false
     @Published var pairingScanRequested = false
@@ -102,19 +107,26 @@ final class MobileAppModel: ObservableObject {
     var remoteLastAppliedAuthority: RemoteAuthorityScope?
     var workspaceCatalog: [(path: String, name: String, selected: Bool)] = []
     var pendingRemoteWorkspaceCreate: (path: String, agentType: String)?
+    var pendingRemoteSessionRefreshWorkspacePath: String?
     var pendingDirectoryWorkspace: (deviceKey: String, path: String, epoch: UInt64)?
     var pendingDirectoryRemoteDraft: PendingDirectoryRemoteDraft?
     var pendingRemoteAssistantCreate = false
     var selectedRemoteWorkspaceKind = ""
+    var remoteConversationLoadTask: Task<Void, Never>?
+    var remoteConversationLoadGeneration: UInt64 = 0
+    var remoteConversationOpeningSessionID: String?
+    var remoteConversationOpenStartedAt: TimeInterval?
 
+    let completionNotifier = TaskCompletionNotifier()
     var coreAdapter: MobileCoreAdapter?
 
-    init(sessions: [ChatSession], selectedSessionID: String, messages: [ChatMessage]) {
+    init(sessions: [ChatSession], selectedSessionID: String, messages: [ChatMessage], connectCore: Bool = true) {
         self.sessions = sessions
         self.selectedSessionID = selectedSessionID
         self.messages = messages
         self.timelineRows = messages.map(Self.simpleTimelineRow)
         self.coreAdapter = nil
+        guard connectCore else { return }
         let adapter = MobileCoreAdapter(
             onAccountState: { [weak self] state, generation in
                 self?.apply(accountState: state, generation: generation)
@@ -124,6 +136,9 @@ final class MobileAppModel: ObservableObject {
             },
             onRemoteState: { [weak self] state, targetKey, epoch in
                 self?.apply(remoteState: state, targetKey: targetKey, epoch: epoch)
+            },
+            onRemoteConnectionPhase: { [weak self] phase, targetKey, epoch in
+                self?.apply(remoteConnectionPhase: phase, targetKey: targetKey, epoch: epoch)
             },
             onWorkspaceState: { [weak self] state, targetKey, epoch in
                 self?.apply(workspaceState: state, targetKey: targetKey, epoch: epoch)
@@ -220,6 +235,7 @@ final class MobileAppModel: ObservableObject {
     }
 
     func handleScenePhase(_ phase: ScenePhase) {
+        if phase != .inactive { completionNotifier.setBackground(phase == .background) }
         if phase == .active, accountUser != nil { refreshRemoteDevices() }
     }
 
@@ -228,6 +244,8 @@ final class MobileAppModel: ObservableObject {
     }
 
     func disconnectRemote() {
+        completionNotifier.reset()
+        resetRemoteConversationOpen()
         invalidateTargetScopedFileTransfers()
         committedRemoteCreate = nil
         remoteLastAppliedAuthority = nil
@@ -244,6 +262,7 @@ final class MobileAppModel: ObservableObject {
         workspaceSelectionBusy = false
         remoteCreateWorkspacePhase = .unavailable
         pendingRemoteWorkspaceCreate = nil
+        pendingRemoteSessionRefreshWorkspacePath = nil
         pendingDirectoryRemoteDraft = nil
         pendingRemoteAssistantCreate = false
         selectedRemoteWorkspaceKind = ""
@@ -338,6 +357,7 @@ final class MobileAppModel: ObservableObject {
         pendingDirectoryWorkspace = nil
         pendingDirectoryRemoteDraft = nil
         pendingRemoteWorkspaceCreate = nil
+        pendingRemoteSessionRefreshWorkspacePath = nil
         pendingRemoteAssistantCreate = false
         selectedRemoteWorkspaceKind = ""
         selectedSessionID = ""
@@ -362,18 +382,24 @@ final class MobileAppModel: ObservableObject {
         coreAdapter?.cancelRemoteTurn(sessionID: selectedSessionID, turnID: activeTurnID)
     }
 
-    func retryMessage(_ text: String) {
+    func retryMessage(_ text: String, images: [MobileTimelineImage] = []) {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty, !busy, !isSending else { return }
-        if surface == .remote {
-            guard remoteSessionSelected, connectionPhase != .disconnected else { return }
-            isSending = true
-            busy = true
-            coreAdapter?.sendRemote(sessionID: selectedSessionID, content: normalized, images: [])
-        } else {
-            draft = normalized
-            send()
+        guard !normalized.isEmpty || !images.isEmpty, !busy, !isSending else { return }
+        let attachments = images.compactMap { image -> ComposerAttachment? in
+            if let retained = composerImages.first(where: { $0.dataURL == image.dataURL }) { return retained }
+            guard let comma = image.dataURL.firstIndex(of: ","),
+                  let data = Data(base64Encoded: String(image.dataURL[image.dataURL.index(after: comma)...])) else { return nil }
+            let mime = image.dataURL.prefix(upTo: comma).dropFirst(5).split(separator: ";").first.map(String.init) ?? "image/jpeg"
+            return ComposerAttachment(id: UUID().uuidString, data: data, mimeType: mime)
         }
+        guard attachments.count == images.count else {
+            showToast(localized("无法读取所选图片"))
+            return
+        }
+        guard remoteSessionSelected, connectionPhase != .disconnected, let coreAdapter else { return }
+        isSending = true
+        busy = true
+        coreAdapter.sendRemote(sessionID: selectedSessionID, content: normalized, images: attachments)
     }
 
     func renameSelectedSession(_ title: String) {

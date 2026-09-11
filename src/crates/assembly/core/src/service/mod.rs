@@ -151,3 +151,7 @@ pub use workspace_runtime::{
 };
 #[cfg(all(feature = "agent-runtime", feature = "git"))]
 pub use worktree::WorktreeService;
+
+/// Session-scoped output projection shared by remote delivery surfaces.
+#[cfg(feature = "remote-connect")]
+pub mod output_files;

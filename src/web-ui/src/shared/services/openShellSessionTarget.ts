@@ -1,38 +1,13 @@
-import { isSessionSceneId } from '@/app/components/SceneBar/types';
-import type { SceneTabId } from '@/app/components/SceneBar/types';
-import { useSceneStore } from '@/app/stores/sceneStore';
-import { useTerminalSceneStore } from '@/app/stores/terminalSceneStore';
 import { createTerminalTab } from '@/shared/utils/tabUtils';
-import { getCachedTerminalPanelPosition } from '@/tools/terminal/services/terminalPanelPreferenceService';
+import type { ContentResourceScope } from '@/shared/types/contentResource';
 
 interface OpenShellSessionTargetOptions {
   sessionId: string;
   sessionName: string;
+  scope?: ContentResourceScope;
 }
 
-function openStandaloneShellSession(sessionId: string): void {
-  const { openScene } = useSceneStore.getState();
-  const terminalState = useTerminalSceneStore.getState();
-
-  openScene('terminal' as SceneTabId);
-
-  terminalState.setActiveSession(sessionId);
-}
-
-/**
- * Unified shell open strategy:
- * - stay inside Agent right tabs when the active scene is session
- * - otherwise open the standalone shell scene
- */
-export function openShellSessionTarget(options: OpenShellSessionTargetOptions): void {
-  const { sessionId, sessionName } = options;
-  const { activeTabId } = useSceneStore.getState();
-
-  if (isSessionSceneId(activeTabId)) {
-    const targetMode = getCachedTerminalPanelPosition() === 'bottom' ? 'bottom-terminal' : 'agent';
-    createTerminalTab(sessionId, sessionName, targetMode);
-    return;
-  }
-
-  openStandaloneShellSession(sessionId);
+/** Selected terminals follow the same session-first placement as files. */
+export function openShellSessionTarget({ sessionId, sessionName, scope }: OpenShellSessionTargetOptions): void {
+  createTerminalTab(sessionId, sessionName, 'project', { scope });
 }

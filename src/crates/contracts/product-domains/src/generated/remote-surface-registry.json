@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "digest": "fnv1a64:20ebe7c5858d2278",
+  "digest": "fnv1a64:a5fa88f335d6037e",
   "retiredCommandPrefixes": [
     {
       "prefix": "lsp_",
@@ -10,6 +10,7 @@
   "capabilities": {
     "ids": [
       "idempotent_dialog_submit",
+      "inline_image_attachments_v1",
       "targeted_session_rollback",
       "token_usage_statistics",
       "miniapp_agent_context_files_v1",
@@ -23,6 +24,7 @@
     ],
     "desktop": [
       "idempotent_dialog_submit",
+      "inline_image_attachments_v1",
       "targeted_session_rollback",
       "token_usage_statistics",
       "miniapp_agent_context_files_v1",
@@ -36,6 +38,7 @@
     ],
     "cli": [
       "idempotent_dialog_submit",
+      "inline_image_attachments_v1",
       "targeted_session_rollback",
       "token_usage_statistics",
       "product_control_v1",

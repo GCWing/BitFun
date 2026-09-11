@@ -11,6 +11,7 @@ name = "openbitfun_services_integrations"
 crate-type = ["rlib"]
 
 [dependencies]
+pulldown-cmark = { workspace = true, optional = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -294,6 +295,7 @@ hook-import = [
     "uuid",
 ]
 remote-connect = [
+    "dep:pulldown-cmark",
     "fs2",
     "dep:openbitfun-product-domains",
     "thiserror",
@@ -312,6 +314,7 @@ remote-connect = [
     "openbitfun-services-core/tls-provider",
     "openbitfun-runtime-ports/agent-api",
     "openbitfun-runtime-ports/remote-workspace-ports",
+    "openbitfun-runtime-ports/workspace-ports",
     "chrono",
     "dirs",
     "futures",

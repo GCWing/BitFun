@@ -77,6 +77,34 @@ pub const DISPATCH_SETUP_AUDIT_MODEL_SYNC_CAPABILITY: &str = "setup_audit_model_
 /// Older targets can still execute, resume, and sync jobs without this query.
 pub const DISPATCH_READ_FILE_CAPABILITY: &str = "query_file_content";
 
+/// Optional binary output transfer. Kept separate from text queries so older
+/// targets keep executing jobs and serving their existing text previews.
+pub const DISPATCH_FILE_CHUNKS_CAPABILITY: &str = "query_file_chunks_v1";
+/// Fits the bounded encrypted device envelope, including base64 and JSON overhead.
+pub const DISPATCH_FILE_CHUNK_MAX_BYTES: u64 = 256 * 1024;
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DispatchFileChunkRequest {
+    pub offset: u64,
+    pub limit: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_revision: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DispatchFileChunk {
+    pub file_path: String,
+    pub name: String,
+    pub mime_type: String,
+    pub total_size: u64,
+    pub offset: u64,
+    pub chunk_size: u64,
+    pub content_base64: String,
+    pub revision: String,
+}
+
 /// Whether a target advertising `capabilities` accepts this audit action.
 pub fn dispatch_target_accepts_setup_audit_action(action: &str, capabilities: &[&str]) -> bool {
     DISPATCH_BASE_SETUP_AUDIT_ACTIONS.contains(&action)
@@ -198,6 +226,12 @@ mod tests {
         assert!(!required.contains(&DISPATCH_ACCOUNT_DAEMON_PROVISIONING_CAPABILITY));
         assert!(!required.contains(&DISPATCH_SETUP_AUDIT_MODEL_SYNC_CAPABILITY));
         assert!(!required.contains(&DISPATCH_READ_FILE_CAPABILITY));
+    }
+
+    #[test]
+    fn binary_file_queries_are_optional_for_existing_targets() {
+        assert!(!dispatch_required_target_capabilities()
+            .any(|capability| capability == DISPATCH_FILE_CHUNKS_CAPABILITY));
     }
 
     #[test]

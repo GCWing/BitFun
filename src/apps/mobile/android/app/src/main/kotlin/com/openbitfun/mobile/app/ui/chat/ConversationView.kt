@@ -3,7 +3,6 @@ package com.openbitfun.mobile.app.ui.chat
 import android.app.Activity
 import android.content.Intent
 import android.speech.RecognizerIntent
-import android.util.Base64
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -17,9 +16,14 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import kotlinx.coroutines.launch
+import com.openbitfun.mobile.app.platform.prepareComposerImage
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -43,7 +47,6 @@ import com.openbitfun.mobile.core.feature.session.conversationRows
 import com.openbitfun.mobile.core.feature.session.modelOptions
 import com.openbitfun.mobile.core.feature.session.selectedModelOption
 import com.openbitfun.mobile.core.feature.workspace.RemoteFileDownloadUiState
-import java.util.UUID
 
 internal const val CONVERSATION_TEST_TAG: String = "conversation"
 internal const val CONVERSATION_BACK_TEST_TAG: String = "conversation-back"
@@ -57,18 +60,14 @@ internal const val CONVERSATION_LOADING_TEST_TAG: String = "conversation-loading
  */
 internal const val CONVERSATION_LIST_TEST_TAG: String = "conversation-list"
 
-/** The relay refuses anything larger, and refusing here is a better error. */
-private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
-
 /**
  * Joins a dictated fragment onto whatever the composer already holds.
  *
- * Extracted so the voice path and its merge policy are unit-testable. It keeps
- * the single-space join the previous in-composition draft used: a blank side is
- * dropped rather than leaving a doubled or leading space.
+ * Uses the shared policy to preserve existing whitespace and avoid inserting
+ * spaces between CJK fragments.
  */
 internal fun mergeComposerDraft(existing: String, spoken: String): String =
-    listOf(existing.trim(), spoken.trim()).filter(String::isNotEmpty).joinToString(" ")
+    com.openbitfun.mobile.core.feature.session.VoiceDraftPolicy.merge(existing, spoken)
 
 /**
  * One open session: the transcript and the composer, ported from
@@ -128,22 +127,38 @@ internal fun ConversationView(
     // message survives session switches and process restarts via DraftStore.
     val draft = state.draft
     var images by remember(sessionId) { mutableStateOf<List<ComposerImage>>(emptyList()) }
+    LaunchedEffect(sessionId, state.lastSentMessage) {
+        state.lastSentMessage?.takeIf { it.sessionId == sessionId }?.let { sent ->
+            images = images.filterNot { it.id in sent.imageIds }
+        }
+    }
     var showSettings by rememberSaveable(sessionId) { mutableStateOf(false) }
     val context = LocalContext.current
 
+    val pickerScope = rememberCoroutineScope()
+    val currentSessionId by rememberUpdatedState(sessionId)
+    var preparingImage by remember(sessionId) { mutableStateOf(false) }
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) {
-            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
-            if (bytes != null && bytes.size <= MAX_IMAGE_BYTES && images.size < MAX_COMPOSER_IMAGES) {
-                images = images + ComposerImage(
-                    id = "android-" + UUID.randomUUID(),
-                    dataUrl = "data:" + mime + ";base64," + Base64.encodeToString(bytes, Base64.NO_WRAP),
-                    mimeType = mime,
-                )
+        if (uri != null && images.size < MAX_COMPOSER_IMAGES) {
+            val targetSession = sessionId
+            preparingImage = true
+            pickerScope.launch {
+                try {
+                    val prepared = prepareComposerImage(context.contentResolver, uri)
+                    if (currentSessionId == targetSession && images.size < MAX_COMPOSER_IMAGES) {
+                        images = images + prepared
+                    }
+                } catch (_: Exception) {
+                    if (currentSessionId == targetSession) {
+                        Toast.makeText(context, R.string.chat_image_prepare_failed, Toast.LENGTH_LONG).show()
+                    }
+                } finally {
+                    if (currentSessionId == targetSession) preparingImage = false
+                }
             }
         }
     }
+
     val voiceInput = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val text = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
@@ -208,8 +223,15 @@ internal fun ConversationView(
                 onAnswerToolStructured = { toolId, answers ->
                     onIntent(AnswerStructuredQuestion(sessionId, toolId, answers))
                 },
-                onRetry = { text ->
-                    onIntent(RemoteSessionIntent.SendMessage(sessionId, text, null))
+                onRetry = { row ->
+                    val retryImages = row.images.map { image ->
+                        images.firstOrNull { it.dataUrl == image.dataUrl } ?: ComposerImage(
+                            id = image.name,
+                            dataUrl = image.dataUrl,
+                            mimeType = image.dataUrl.substringAfter("data:").substringBefore(';'),
+                        )
+                    }
+                    onIntent(RemoteSessionIntent.SendMessage(sessionId, row.text, retryImages))
                 },
                 onOpenFile = onOpenFile,
                 previewingRemotePath = previewingRemotePath,
@@ -225,7 +247,7 @@ internal fun ConversationView(
             draft = draft,
             images = images,
             // An empty session id would send nowhere, so it reads as busy.
-            busy = state.busy || sessionId.isEmpty(),
+            busy = state.busy || preparingImage || sessionId.isEmpty(),
             streaming = activeTurn != null,
             phase = phase,
             model = timeline?.selectedModelOption(stringResource(R.string.models_unnamed)),
@@ -263,7 +285,6 @@ internal fun ConversationView(
                         images.takeIf { it.isNotEmpty() },
                     ),
                 )
-                images = emptyList()
             },
             onStop = {
                 onIntent(RemoteSessionIntent.CancelTurn(sessionId, activeTurn?.turnId))

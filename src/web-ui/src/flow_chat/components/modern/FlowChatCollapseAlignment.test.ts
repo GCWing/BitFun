@@ -42,9 +42,9 @@ describe('FlowChat collapse spacing', () => {
     const exploreContent = extractBlock(exploreStyles, '.explore-region__content');
     const thinkingContent = extractBlock(thinkingStyles, '.thinking-content');
 
-    expect(exploreContent).toContain('padding: 0;');
+    expect(exploreContent).toContain('padding: var(--openbitfun-space-2) 0 0;');
     expect(thinkingContent).toMatch(
-      /padding:\s*var\(--openbitfun-control-flow-chat-card-expanded-padding-block\)\s*var\(--openbitfun-control-flow-chat-card-expanded-padding-inline\)\s*var\(--openbitfun-control-flow-chat-card-expanded-padding-block\)\s*0;/,
+      /padding:\s*var\(--openbitfun-control-flow-chat-card-expanded-padding-block\)\s*var\(--openbitfun-control-flow-chat-card-expanded-padding-inline\)\s*0\s*0;/,
     );
   });
 

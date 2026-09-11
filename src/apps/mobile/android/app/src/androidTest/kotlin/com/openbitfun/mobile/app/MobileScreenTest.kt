@@ -26,7 +26,6 @@ import com.openbitfun.mobile.app.ui.chat.COMPOSER_INPUT_TEST_TAG
 import com.openbitfun.mobile.app.ui.chat.COMPOSER_SEND_TEST_TAG
 import com.openbitfun.mobile.app.ui.chat.CONVERSATION_BACK_TEST_TAG
 import com.openbitfun.mobile.app.ui.chat.CONVERSATION_LIST_TEST_TAG
-import com.openbitfun.mobile.app.ui.remote.CONNECTION_RETRY_TEST_TAG
 import com.openbitfun.mobile.app.ui.remote.CONNECT_MANUAL_TEST_TAG
 import com.openbitfun.mobile.app.ui.remote.CONNECT_PAIRING_CODE_TEST_TAG
 import com.openbitfun.mobile.app.ui.remote.CONNECT_SUBMIT_TEST_TAG
@@ -446,7 +445,7 @@ class MobileScreenTest {
             waitForText("Connection error", timeoutMillis = 60_000)
 
             setRelayReachable(pairingUrl, reachable = true)
-            composeRule.onNodeWithTag(CONNECTION_RETRY_TEST_TAG).performScrollTo().performClick()
+            composeRule.onNodeWithText(InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.sidebar_device_retry)).performScrollTo().performClick()
             waitForText("Connected", timeoutMillis = 40_000)
         } finally {
             setRelayReachable(pairingUrl, reachable = true)

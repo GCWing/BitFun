@@ -39,6 +39,8 @@ import { textareaMeta } from "./components/Textarea/Textarea.meta";
 import { tabGroupMeta } from "./components/TabGroup/TabGroup.meta";
 import { toolbarMeta } from "./components/Toolbar/Toolbar.meta";
 import { tooltipMeta } from "./components/Tooltip/Tooltip.meta";
+import { voiceCallPanelMeta } from "./components/VoiceCallPanel/VoiceCallPanel.meta";
+import { voiceParticleLogoMeta } from "./components/VoiceParticleLogo/VoiceParticleLogo.meta";
 import { mobileIconButtonMeta } from "./mobile/MobileIconButton/MobileIconButton.meta";
 import { mobileActionSheetMeta } from "./mobile/MobileActionSheet/MobileActionSheet.meta";
 import { mobileBadgeMeta } from "./mobile/MobileBadge/MobileBadge.meta";
@@ -196,6 +198,8 @@ export const componentRegistry = [
   todoToolCardMeta,
   toolbarMeta,
   tooltipMeta,
+  voiceCallPanelMeta,
+  voiceParticleLogoMeta,
   viewImageToolCardMeta,
   webFetchToolCardMeta,
   webSearchToolCardMeta,

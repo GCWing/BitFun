@@ -8,10 +8,8 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallba
 import { createPortal } from 'react-dom';
 import { Keyboard, Square } from 'lucide-react';
 import { OverflowText, Icon, IconButton, Menu, MenuItem, SearchField, Tooltip } from '@openbitfun/ui';
-import {
-  SceneChromeContribution,
-  useSceneChromeContext,
-} from '@/app/components/SceneTopBar/SceneChrome';
+import { SceneChromeContribution } from '@/app/components/SceneTopBar/SceneChrome';
+import { useSceneChromeContext } from '@/app/components/SceneTopBar/sceneChromeContext';
 import { useTranslation } from 'react-i18next';
 import { SessionFilesBadge } from './SessionFilesBadge';
 import { SessionTreePopover, type SessionTreeSelection } from './SessionTreePopover';

@@ -58,7 +58,7 @@ export interface RemoteHomePresentationActions {
 
 export interface SidebarPresentationActions {
   readonly close: () => void;
-  readonly newChat: () => void;
+  readonly newChat: (agentType?: string) => void;
   readonly enterCode: () => void;
   /** Opens the QR scanner directly from sidebar device actions. */
   readonly scanDesktop: () => void;

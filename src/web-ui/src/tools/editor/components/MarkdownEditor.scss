@@ -13,26 +13,8 @@
 }
 
 .openbitfun-markdown-editor__mode-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--openbitfun-space-3);
-  min-height: 34px;
-  padding: 4px var(--openbitfun-space-3);
-  border-bottom: 1px solid var(--openbitfun-color-border-subtle);
-  background: color-mix(in srgb, var(--openbitfun-color-surface-scene) 92%, var(--openbitfun-color-surface-raised));
+  background: var(--openbitfun-color-surface-scene);
   flex-shrink: 0;
-}
-
-.openbitfun-markdown-editor__mode-toggle {
-  flex-shrink: 0;
-}
-
-.openbitfun-markdown-editor__toolbar-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
 }
 
 .openbitfun-markdown-editor__body,

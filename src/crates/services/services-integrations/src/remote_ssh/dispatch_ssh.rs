@@ -37,8 +37,8 @@ use super::types::SSHCommandOptions;
 const GITHUB_RELEASE_BASE: &str = "https://github.com/GCWing/OpenBitFun/releases";
 const OPENBITFUN_RELEASE_BASE: &str = "https://openbitfun.com/release";
 const GITHUB_LATEST_MANIFEST: &str =
-    "https://github.com/GCWing/OpenBitFun/releases/latest/download/latest.json";
-const OPENBITFUN_LATEST_MANIFEST: &str = "https://openbitfun.com/release/latest.json";
+    "https://github.com/GCWing/OpenBitFun/releases/latest/download/latest-v1.json";
+const OPENBITFUN_LATEST_MANIFEST: &str = "https://openbitfun.com/release/latest-v1.json";
 const INSTALL_STEM: &str = "install-cli";
 const INSTALL_DONE_MARKER: &str = "OPENBITFUN_DISPATCH_CLI_INSTALL_DONE";
 const INSTALL_PREPARE_GRACE_SECONDS: u64 = 30;

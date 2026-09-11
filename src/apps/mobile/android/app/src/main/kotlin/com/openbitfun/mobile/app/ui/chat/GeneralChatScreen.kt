@@ -345,8 +345,8 @@ internal fun GeneralChatScreen(
                         onCancelTool = { _, _ -> },
                         onAnswerTool = { _, _ -> },
                         onAnswerToolStructured = { _, _ -> },
-                        onRetry = { text ->
-                            viewModel.dispatch(GeneralChatIntent.UpdateDraft(text))
+                        onRetry = { row ->
+                            viewModel.dispatch(GeneralChatIntent.UpdateDraft(row.text))
                             viewModel.dispatch(GeneralChatIntent.Send)
                         },
                         // No desktop behind this surface, so a link to a file has

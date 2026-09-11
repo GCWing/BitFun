@@ -11,7 +11,6 @@
 import React from 'react';
 import { Icon, type IconName } from '@openbitfun/ui';
 import {
-  FileCode2,
   CircleUserRound,
   Users,
   Boxes,
@@ -61,14 +60,6 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     label: 'Settings',
     labelKey: 'shared:features.settings',
     Icon: catalogSceneIcon('gear'),
-    pinned: false,
-    singleton: true,
-    defaultOpen: false,
-  },
-  {
-    id: 'file-viewer' as SceneTabId,
-    label: 'File Viewer',
-    Icon: FileCode2,
     pinned: false,
     singleton: true,
     defaultOpen: false,
@@ -170,16 +161,6 @@ export const SCENE_TAB_REGISTRY: SceneTabDef[] = [
     singleton: true,
     defaultOpen: false,
   },
-  {
-    id: 'panel-view' as SceneTabId,
-    label: 'Panel View',
-    labelKey: 'scenes.panelView',
-    Icon: catalogSceneIcon('arrow-up-right'),
-    pinned: false,
-    closable: true,
-    singleton: true,
-    defaultOpen: false,
-  },
 ];
 
 export function getSceneDef(id: SceneTabId): SceneTabDef | undefined {
@@ -190,9 +171,6 @@ export function getSceneDef(id: SceneTabId): SceneTabDef | undefined {
 export function isSceneTabClosable(def: SceneTabDef | undefined): boolean {
   return def !== undefined && def.closable !== false;
 }
-
-/** Static singleton scene def for the panel-view scene. */
-export const PANEL_VIEW_SCENE_DEF: SceneTabDef = SCENE_TAB_REGISTRY.find(d => d.id === 'panel-view')!;
 
 /** Dynamic scene def for a MiniApp tab (used by SceneBar and useSceneManager). */
 export function getMiniAppSceneDef(appId: string, appName?: string): SceneTabDef {

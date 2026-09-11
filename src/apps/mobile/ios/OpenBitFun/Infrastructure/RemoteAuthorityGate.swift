@@ -100,6 +100,21 @@ enum RemoteCreateInteractionPolicy {
 }
 
 enum RemoteAuthorityGate {
+    /// A directory page can omit the open conversation (another workspace,
+    /// filter, or pagination). Its membership is not mutation authority.
+    static func sendSessionID(
+        selectedSessionID: String?,
+        openedSessionID: String?,
+        connected: Bool,
+        busy: Bool,
+        sending: Bool
+    ) -> String? {
+        guard connected, !busy, !sending,
+              let selectedSessionID, !selectedSessionID.isEmpty,
+              selectedSessionID == openedSessionID else { return nil }
+        return selectedSessionID
+    }
+
     static func targetBoundTransition(
         currentTargetKey: String?,
         currentEpoch: UInt64?,

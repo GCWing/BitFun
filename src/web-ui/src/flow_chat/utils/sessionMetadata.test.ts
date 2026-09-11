@@ -227,21 +227,21 @@ describe('sessionMetadata', () => {
 
   it('persists locale-aware default title metadata before the first message', () => {
     const session = createSession({
-      title: 'flow-chat:session.newCodeWithIndex',
+      title: 'flow-chat:session.new',
       titleSource: 'i18n',
-      titleI18nKey: 'flow-chat:session.newCodeWithIndex',
-      titleI18nParams: { count: 2 },
+      titleI18nKey: 'flow-chat:session.new',
+      workspaceSessionNumber: 2,
       titleStatus: undefined,
     });
 
     const metadata = buildSessionMetadata(session);
 
-    expect(metadata.sessionName).toBe('flow-chat:session.newCodeWithIndex');
+    expect(metadata.sessionName).toBe('flow-chat:session.new');
     expect(metadata.lastFinishedAt).toBeNull();
     expect(metadata.customMetadata).toEqual({
       titleSource: 'i18n',
-      titleKey: 'flow-chat:session.newCodeWithIndex',
-      titleParams: { count: 2 },
+      titleKey: 'flow-chat:session.new',
+      titleParams: { defaultTitleText: 'flow-chat:session.new' },
     });
   });
 

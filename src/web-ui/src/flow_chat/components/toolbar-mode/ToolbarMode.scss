@@ -62,6 +62,15 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 
+.openbitfun-toolbar-mode[data-openbitfun-communication-mode='voice'] {
+  border: 0;
+  border-radius: calc(var(--openbitfun-space-8) + var(--openbitfun-space-1));
+  background: transparent;
+  box-shadow: none;
+
+  &::before { content: none; }
+}
+
 .openbitfun-toolbar-mode__header {
   flex: 0 0 auto;
   height: 32px;

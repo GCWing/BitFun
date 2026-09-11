@@ -1,6 +1,7 @@
 //! Shared image processing utilities used by both API-side image analysis and tool-driven image analysis.
 
 use super::types::{ImageContextData, ImageLimits};
+use crate::agentic::tools::framework::ToolUseContext;
 use crate::service::config::get_global_config_service;
 use crate::service::config::types::{AIConfig as ServiceAIConfig, AIModelConfig};
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
@@ -109,6 +110,73 @@ pub async fn resolve_vision_model_from_global_config() -> OpenBitFunResult<AIMod
     resolve_vision_model_from_ai_config(&ai_config)
 }
 
+pub(crate) fn validate_image_input_model(
+    ai_config: &ServiceAIConfig,
+    primary_model_id: &str,
+    tools_enabled: bool,
+) -> OpenBitFunResult<()> {
+    let model = ai_config
+        .models
+        .iter()
+        .find(|model| model.id == primary_model_id)
+        .ok_or_else(|| {
+            OpenBitFunError::validation(format!("Model not found: {primary_model_id}"))
+        })?;
+    if model.supports_image_understanding() {
+        return Ok(());
+    }
+    if !tools_enabled {
+        return Err(OpenBitFunError::validation(
+            "This model cannot read images while tools are disabled. Select a multimodal model or enable tools and configure an image understanding model.",
+        ));
+    }
+    resolve_vision_model_from_ai_config(ai_config).map(|_| ())
+}
+
+#[cfg(test)]
+mod input_model_tests {
+    use super::*;
+    use crate::service::config::types::{ModelCapability, ModelCategory};
+
+    #[test]
+    fn native_images_do_not_require_a_fallback_model_but_text_models_do() {
+        let native = AIModelConfig {
+            id: "native".into(),
+            category: ModelCategory::Multimodal,
+            capabilities: vec![ModelCapability::ImageUnderstanding],
+            enabled: true,
+            ..Default::default()
+        };
+        let text = AIModelConfig {
+            id: "text".into(),
+            category: ModelCategory::GeneralChat,
+            capabilities: vec![ModelCapability::TextChat],
+            enabled: true,
+            ..Default::default()
+        };
+        let mut config = ServiceAIConfig::default();
+        config.models = vec![native, text];
+        assert!(validate_image_input_model(&config, "native", false).is_ok());
+        assert!(validate_image_input_model(&config, "text", true)
+            .unwrap_err()
+            .to_string()
+            .contains("not configured"));
+        config.default_models.image_understanding = Some("native".into());
+        assert!(validate_image_input_model(&config, "text", true).is_ok());
+        assert!(validate_image_input_model(&config, "text", false).is_err());
+        config.models[0].enabled = false;
+        assert!(validate_image_input_model(&config, "text", true)
+            .unwrap_err()
+            .to_string()
+            .contains("disabled"));
+        config.default_models.image_understanding = Some("text".into());
+        assert!(validate_image_input_model(&config, "text", true)
+            .unwrap_err()
+            .to_string()
+            .contains("does not support"));
+    }
+}
+
 pub fn resolve_image_path(path: &str, workspace_path: Option<&Path>) -> OpenBitFunResult<PathBuf> {
     let path_buf = PathBuf::from(path);
 
@@ -141,6 +209,11 @@ pub fn decode_data_url(data_url: &str) -> OpenBitFunResult<(Vec<u8>, Option<Stri
     }
 
     let header = parts[0];
+    if !header.split(';').any(|part| part == "base64") {
+        return Err(OpenBitFunError::validation(
+            "Only base64 image data URLs are supported",
+        ));
+    }
     let mime_type = header
         .strip_prefix("data:")
         .and_then(|s| s.split(';').next())
@@ -207,7 +280,11 @@ pub fn optimize_image_with_size_limit(
     let (orig_width, orig_height) = (dynamic.width(), dynamic.height());
     let needs_resize = orig_width > limits.max_width || orig_height > limits.max_height;
 
-    if !needs_resize && image_data.len() <= effective_max {
+    let provider_accepts_format = matches!(
+        guessed_format,
+        Some(ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::Gif | ImageFormat::WebP)
+    );
+    if !needs_resize && image_data.len() <= effective_max && provider_accepts_format {
         let mime_type = detect_mime_type_from_bytes(&image_data, fallback_mime)?;
         return Ok(ProcessedImage {
             data: image_data,
@@ -264,6 +341,11 @@ pub fn optimize_image_with_size_limit(
         }
     }
 
+    if encoded.0.len() > effective_max {
+        return Err(OpenBitFunError::validation(
+            "Image cannot fit the provider upload limit",
+        ));
+    }
     Ok(ProcessedImage {
         data: encoded.0,
         mime_type: encoded.1,
@@ -367,6 +449,29 @@ pub async fn process_image_contexts_for_provider(
     provider: &str,
     workspace_path: Option<&Path>,
 ) -> OpenBitFunResult<Vec<ProcessedImage>> {
+    process_image_contexts(image_contexts, provider, workspace_path, None).await
+}
+
+pub(crate) async fn process_image_contexts_in_workspace(
+    image_contexts: &[ImageContextData],
+    provider: &str,
+    context: &ToolUseContext,
+) -> OpenBitFunResult<Vec<ProcessedImage>> {
+    process_image_contexts(
+        image_contexts,
+        provider,
+        context.workspace_root(),
+        Some(context),
+    )
+    .await
+}
+
+async fn process_image_contexts(
+    image_contexts: &[ImageContextData],
+    provider: &str,
+    workspace_path: Option<&Path>,
+    context: Option<&ToolUseContext>,
+) -> OpenBitFunResult<Vec<ProcessedImage>> {
     let limits = ImageLimits::for_provider(provider);
 
     if image_contexts.len() > limits.max_images_per_request {
@@ -384,8 +489,19 @@ pub async fn process_image_contexts_for_provider(
             let (data, data_url_mime) = decode_data_url(data_url)?;
             (data, data_url_mime.or_else(|| Some(ctx.mime_type.clone())))
         } else if let Some(path_str) = &ctx.image_path {
-            let path = resolve_image_path(path_str, workspace_path)?;
-            let data = load_image_from_path(&path, workspace_path).await?;
+            let data = if let Some(context) = context {
+                let resolved = context.resolve_tool_path(path_str)?;
+                context
+                    .file_system_for_path(&resolved)?
+                    .read_file(&resolved.resolved_path)
+                    .await
+                    .map_err(|error| {
+                        OpenBitFunError::io(format!("Failed to read image: {error}"))
+                    })?
+            } else {
+                let path = resolve_image_path(path_str, workspace_path)?;
+                load_image_from_path(&path, workspace_path).await?
+            };
             let detected_mime = detect_mime_type_from_bytes(&data, Some(&ctx.mime_type)).ok();
             (data, detected_mime.or_else(|| Some(ctx.mime_type.clone())))
         } else {
@@ -601,5 +717,96 @@ mod resize_reporting_tests {
         );
         assert!(!processed.was_resized());
         assert!((processed.scale() - 1.0).abs() < f64::EPSILON);
+    }
+}
+
+#[cfg(test)]
+mod workspace_image_tests {
+    use super::*;
+    use crate::agentic::workspace::{
+        WorkspaceBinding, WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry,
+        WorkspaceFileSystem, WorkspaceServices, WorkspaceShell,
+    };
+    use async_trait::async_trait;
+    use std::sync::Arc;
+
+    struct RemoteFiles(Vec<u8>);
+    #[async_trait]
+    impl WorkspaceFileSystem for RemoteFiles {
+        async fn read_file(&self, _path: &str) -> anyhow::Result<Vec<u8>> {
+            Ok(self.0.clone())
+        }
+        async fn read_file_text(&self, _path: &str) -> anyhow::Result<String> {
+            anyhow::bail!("not text")
+        }
+        async fn write_file(&self, _path: &str, _contents: &[u8]) -> anyhow::Result<()> {
+            anyhow::bail!("read only")
+        }
+        async fn exists(&self, _path: &str) -> anyhow::Result<bool> {
+            Ok(true)
+        }
+        async fn is_file(&self, _path: &str) -> anyhow::Result<bool> {
+            Ok(true)
+        }
+        async fn is_dir(&self, _path: &str) -> anyhow::Result<bool> {
+            Ok(false)
+        }
+        async fn read_dir(&self, _path: &str) -> anyhow::Result<Vec<WorkspaceDirEntry>> {
+            Ok(vec![])
+        }
+    }
+    struct NoShell;
+    #[async_trait]
+    impl WorkspaceShell for NoShell {
+        async fn exec_with_options(
+            &self,
+            _command: &str,
+            _options: WorkspaceCommandOptions,
+        ) -> anyhow::Result<WorkspaceCommandResult> {
+            anyhow::bail!("must not execute")
+        }
+    }
+
+    #[tokio::test]
+    async fn image_path_reads_the_remote_host_even_when_the_same_path_exists_locally() {
+        let local = tempfile::tempdir().unwrap();
+        let path = local.path().join("photo.png");
+        std::fs::write(&path, b"local private content must never be read").unwrap();
+        let identity = crate::service::remote_ssh::workspace_state::workspace_session_identity(
+            local.path().to_str().unwrap(),
+            Some("remote-1"),
+            Some("host"),
+        )
+        .unwrap();
+        let workspace = WorkspaceBinding::new_remote(
+            Some("remote-workspace".into()),
+            local.path().to_path_buf(),
+            "remote-1".into(),
+            "remote-session".into(),
+            identity,
+        );
+        let mut image = crate::agentic::image_analysis::attachments::test_image();
+        let bytes = decode_data_url(image.data_url.as_deref().unwrap())
+            .unwrap()
+            .0;
+        image.data_url = None;
+        image.image_path = Some(path.to_str().unwrap().to_string());
+        let context = ToolUseContext::for_tool_listing(
+            Some(workspace.clone()),
+            Some(WorkspaceServices {
+                fs: Arc::new(RemoteFiles(bytes)),
+                shell: Arc::new(NoShell),
+            }),
+        );
+        let processed = process_image_contexts_in_workspace(&[image.clone()], "openai", &context)
+            .await
+            .unwrap();
+        assert_eq!((processed[0].width, processed[0].height), (8, 6));
+        let disconnected = ToolUseContext::for_tool_listing(Some(workspace), None);
+        assert!(
+            process_image_contexts_in_workspace(&[image], "openai", &disconnected)
+                .await
+                .is_err()
+        );
     }
 }

@@ -11,6 +11,8 @@ import com.openbitfun.mobile.core.domain.FileTargetResolver
 import com.openbitfun.mobile.core.domain.RecentWorkspace
 import com.openbitfun.mobile.core.domain.SelectedWorkspace
 import com.openbitfun.mobile.core.domain.WorkspaceAssistant
+import com.openbitfun.mobile.core.persistence.PersistedRemoteWorkspace
+import com.openbitfun.mobile.core.persistence.RemoteWorkspaceListStore
 import com.openbitfun.mobile.core.protocol.AssistantListResponse
 import com.openbitfun.mobile.core.protocol.FileInfoResponse
 import com.openbitfun.mobile.core.protocol.ReadFileChunkResponse
@@ -28,6 +30,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.supervisorScope
@@ -42,7 +45,9 @@ public class RemoteWorkspaceStore internal constructor(
     private val transport: RemoteCommandTransport,
     private val backgroundDispatcher: CoroutineDispatcher,
     public val deviceKey: String? = null,
+    private val persistence: RemoteWorkspaceListStore? = null,
 ) {
+    private val persistenceEnabled: Boolean get() = persistence != null && !deviceKey.isNullOrBlank()
     private val _state = MutableStateFlow<RemoteWorkspaceUiState>(RemoteWorkspaceUiState.Idle)
     public val state: StateFlow<RemoteWorkspaceUiState> = _state.asStateFlow()
     private val _stopVersion = MutableStateFlow(0L)
@@ -91,11 +96,66 @@ public class RemoteWorkspaceStore internal constructor(
         work = null
     }
 
+    /** Last device-scoped catalog stored on disk, merged the same way the directory renders it. */
+    internal fun cachedCatalog(): List<RecentWorkspace> {
+        if (!persistenceEnabled) return emptyList()
+        val rows = try {
+            persistence!!.load(deviceKey!!)
+        } catch (_: Throwable) {
+            emptyList()
+        }
+        val cached = cachedReady(rows)
+        return mergedCatalog(cached.workspaces, cached.assistants)
+    }
+
+    /** Device-directory catalog request; it must not depend on the desktop's active workspace. */
+    internal suspend fun directoryCatalog(): List<RecentWorkspace> = coroutineScope {
+        val recentDeferred = async {
+            transport.send<RecentWorkspaceListResponse>(RemoteCommand(cmd = "list_recent_workspaces"))
+        }
+        val assistantsDeferred = async {
+            transport.send<AssistantListResponse>(RemoteCommand(cmd = "list_assistants"))
+        }
+        val recent = recentDeferred.await()
+        val assistants = assistantsDeferred.await()
+        val loadedWorkspaces = recent.workspaces.map { item ->
+            RecentWorkspace(
+                path = item.path.orEmpty(),
+                name = item.name?.takeIf(String::isNotBlank) ?: basename(item.path.orEmpty()),
+                lastOpened = item.lastOpened,
+                kind = item.workspaceKind.orEmpty(),
+            )
+        }.filter { it.path.isNotEmpty() }
+        val loadedAssistants = assistants.assistants.map { item ->
+            WorkspaceAssistant(item.path, item.name, item.assistantId)
+        }
+        if (persistenceEnabled) {
+            try {
+                persistence!!.save(deviceKey!!, persistedCatalog(loadedWorkspaces, loadedAssistants))
+            } catch (_: Throwable) {
+                // The remote catalog remains authoritative when its optional cache is unavailable.
+            }
+        }
+        mergedCatalog(loadedWorkspaces, loadedAssistants)
+    }
+
     private fun load() {
         val generation = ++loadGeneration
         invalidatePreview()
         work?.cancel()
-        _state.value = RemoteWorkspaceUiState.Loading
+        if (_state.value !is RemoteWorkspaceUiState.Ready && persistenceEnabled) {
+            val cached = try {
+                persistence!!.load(deviceKey!!)
+            } catch (_: Throwable) {
+                emptyList()
+            }
+            if (cached.isNotEmpty()) {
+                _state.value = cachedReady(cached)
+            }
+        }
+        _state.value = (_state.value as? RemoteWorkspaceUiState.Ready)
+            ?.copy(busy = true, loadFailure = false)
+            ?: RemoteWorkspaceUiState.Loading
         work = scope.launch {
             try {
                 supervisorScope {
@@ -114,22 +174,36 @@ public class RemoteWorkspaceStore internal constructor(
                         val assistants = results[1] as AssistantListResponse
                         val info = results[2] as WorkspaceInfoResponse
                         if (generation == loadGeneration) {
-                            _state.value = RemoteWorkspaceUiState.Ready(
-                                workspaces = recent.workspaces.map { item ->
-                                    RecentWorkspace(
-                                        path = item.path.orEmpty(),
-                                        name = item.name?.takeIf(String::isNotBlank) ?: basename(item.path.orEmpty()),
-                                        lastOpened = item.lastOpened,
-                                        kind = item.workspaceKind.orEmpty(),
+                            val loadedWorkspaces = recent.workspaces.map { item ->
+                                RecentWorkspace(
+                                    path = item.path.orEmpty(),
+                                    name = item.name?.takeIf(String::isNotBlank) ?: basename(item.path.orEmpty()),
+                                    lastOpened = item.lastOpened,
+                                    kind = item.workspaceKind.orEmpty(),
+                                )
+                            }.filter { it.path.isNotEmpty() }
+                            val loadedAssistants = assistants.assistants.map { item ->
+                                WorkspaceAssistant(item.path, item.name, item.assistantId)
+                            }
+                            if (persistenceEnabled) {
+                                try {
+                                    persistence!!.save(
+                                        deviceKey!!,
+                                        persistedCatalog(loadedWorkspaces, loadedAssistants),
                                     )
-                                }.filter { it.path.isNotEmpty() },
-                                assistants = assistants.assistants.map { item ->
-                                    WorkspaceAssistant(item.path, item.name, item.assistantId)
-                                },
+                                } catch (_: Throwable) {
+                                    // Cache writes must not turn a successful remote load into a failure.
+                                }
+                            }
+                            _state.value = RemoteWorkspaceUiState.Ready(
+                                workspaces = loadedWorkspaces,
+                                assistants = loadedAssistants,
                                 selected = info.asSelectedWorkspace(),
+                                hostCapabilities = info.capabilities,
                                 preview = RemoteFilePreviewUiState.None,
                                 busy = false,
                                 download = RemoteFileDownloadUiState.None,
+                                loadFailure = false,
                             )
                         }
                     } catch (cancelled: CancellationException) {
@@ -141,13 +215,13 @@ public class RemoteWorkspaceStore internal constructor(
                         recentDeferred.join()
                         assistantsDeferred.join()
                         infoDeferred.join()
-                        if (generation == loadGeneration) _state.value = RemoteWorkspaceUiState.Failed(true)
+                        if (generation == loadGeneration) failRetainingCache()
                     }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Throwable) {
-                if (generation == loadGeneration) _state.value = RemoteWorkspaceUiState.Failed(true)
+                if (generation == loadGeneration) failRetainingCache()
             }
         }
     }
@@ -179,11 +253,11 @@ public class RemoteWorkspaceStore internal constructor(
                 }
                 val info = transport.send<WorkspaceInfoResponse>(RemoteCommand(cmd = "get_workspace_info"))
                 if (generation != loadGeneration) return@launch
-                updateReady { it.copy(selected = info.asSelectedWorkspace(), busy = false) }
+                updateReady { it.copy(selected = info.asSelectedWorkspace(), hostCapabilities = info.capabilities, busy = false, loadFailure = false) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Throwable) {
-                if (generation == loadGeneration) _state.value = RemoteWorkspaceUiState.Failed(true)
+                if (generation == loadGeneration) failRetainingCache()
             }
         }
     }
@@ -312,6 +386,10 @@ public class RemoteWorkspaceStore internal constructor(
         ) return
         work?.cancel()
         _state.value = current.copy(download = RemoteFileDownloadUiState.Loading(target, 0, 0))
+        val downloadEpoch = targetEpoch
+        val downloadGeneration = loadGeneration
+        val downloadStopVersion = _stopVersion.value
+        fun downloadIsCurrent(): Boolean = targetEpoch == downloadEpoch && loadGeneration == downloadGeneration && _stopVersion.value == downloadStopVersion
         work = scope.launch {
             try {
                 val info = transport.send<FileInfoResponse>(
@@ -321,10 +399,13 @@ public class RemoteWorkspaceStore internal constructor(
                         sessionId = target.sessionId.ifEmpty { null },
                     ),
                 )
-                val total = (info.size ?: 0).coerceAtLeast(0)
+                if (!downloadIsCurrent()) throw CancellationException("File target changed")
+                val total = info.size ?: error("remote file size is unavailable")
+                if (total < 0 || total > Int.MAX_VALUE) error("remote file is too large for this client")
                 val chunks = mutableListOf<ByteArray>()
                 var offset = 0
-                var expectedTotal = total
+                var revision: String? = null
+                val expectedTotal = total
                 var name = info.name ?: basename(target.remotePath)
                 var mime = info.mimeType ?: "application/octet-stream"
                 updateReady { it.copy(download = RemoteFileDownloadUiState.Loading(target, 0, total)) }
@@ -338,11 +419,14 @@ public class RemoteWorkspaceStore internal constructor(
                             limit = DOWNLOAD_CHUNK_BYTES,
                         ),
                     )
+                    if (!downloadIsCurrent()) throw CancellationException("File target changed")
                     val bytes = withContext(backgroundDispatcher) { decode(response.chunkBase64.orEmpty()) }
-                    expectedTotal = (response.totalSize ?: expectedTotal).coerceAtLeast(offset.toLong())
-                    if (bytes.isEmpty() && offset.toLong() < expectedTotal) {
-                        error("remote file transfer stopped before completion")
+                    validateFileChunk(response, bytes, offset, expectedTotal, DOWNLOAD_CHUNK_BYTES)
+                    if (response.name != null && response.name != name || response.mimeType != null && response.mimeType != mime) {
+                        error("remote file changed during transfer")
                     }
+                    if (offset > 0 && response.revision != revision) error("remote file changed during transfer")
+                    revision = response.revision
                     chunks += bytes
                     offset += bytes.size
                     name = response.name?.takeIf(String::isNotBlank) ?: name
@@ -356,12 +440,14 @@ public class RemoteWorkspaceStore internal constructor(
                     }
                 } while (offset.toLong() < expectedTotal)
                 val bytes = withContext(backgroundDispatcher) { chunks.joinBytes() }
+                if (!downloadIsCurrent()) throw CancellationException("File target changed")
                 updateReady {
                     it.copy(download = RemoteFileDownloadUiState.AwaitingSave(target, name, mime, bytes))
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
+                if (!downloadIsCurrent()) return@launch
                 failDownload(target, error.message.orEmpty())
             }
         }
@@ -439,19 +525,49 @@ public class RemoteWorkspaceStore internal constructor(
     }
 
     private suspend fun loadImage(target: FilePreviewTarget, identity: PreviewRequestIdentity, generation: Long, name: String, mime: String, size: Long) {
-        val response = readChunk(target, size.coerceAtLeast(1).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
-        val bytes = withContext(backgroundDispatcher) { decode(response.chunkBase64.orEmpty()) }
+        val chunks = mutableListOf<ByteArray>()
+        var revision: String? = null
+        var offset = 0
+        do {
+            if (previewGeneration != generation) throw CancellationException("File target changed")
+            val response = transport.send<ReadFileChunkResponse>(RemoteCommand(
+                cmd = "read_file_chunk", path = target.remotePath,
+                sessionId = target.sessionId.ifEmpty { null }, offset = offset,
+                limit = minOf(DOWNLOAD_CHUNK_BYTES, (size - offset).coerceAtLeast(1).toInt()),
+            ))
+            if (previewGeneration != generation) throw CancellationException("File target changed")
+            val chunk = withContext(backgroundDispatcher) { decode(response.chunkBase64.orEmpty()) }
+            validateFileChunk(response, chunk, offset, size, DOWNLOAD_CHUNK_BYTES)
+            if (response.name != null && response.name != name || response.mimeType != null && response.mimeType != mime) {
+                error("remote image changed during transfer")
+            }
+            if (offset > 0 && response.revision != revision) error("remote image changed during transfer")
+            revision = response.revision
+            chunks += chunk
+            offset += chunk.size
+        } while (offset.toLong() < size)
+        val bytes = withContext(backgroundDispatcher) { chunks.joinBytes() }
         updatePreview(identity, generation) {
             it.copy(
                 preview = RemoteFilePreviewUiState.Image(
                     target = target,
-                    name = response.name ?: name,
-                    mimeType = response.mimeType ?: mime,
+                    name = name,
+                    mimeType = mime,
                     bytes = bytes,
-                    sizeBytes = response.totalSize ?: size,
+                    sizeBytes = size,
                     identity = identity,
                 ),
             )
+        }
+    }
+
+    private fun validateFileChunk(response: ReadFileChunkResponse, bytes: ByteArray, offset: Int, total: Long, limit: Int) {
+        if (response.offset != null && response.offset != offset.toLong() ||
+            response.chunkSize != null && response.chunkSize != bytes.size.toLong() ||
+            response.totalSize != null && response.totalSize != total ||
+            bytes.size > limit || bytes.size.toLong() > total - offset ||
+            bytes.isEmpty() && offset.toLong() < total) {
+            error("remote file transfer is incomplete or inconsistent")
         }
     }
 
@@ -519,6 +635,58 @@ public class RemoteWorkspaceStore internal constructor(
 
     private fun basename(path: String): String = path.replace('\\', '/').substringAfterLast('/').ifEmpty { "file" }
 
+    private fun failRetainingCache() {
+        _state.value = (_state.value as? RemoteWorkspaceUiState.Ready)
+            ?.copy(busy = false, loadFailure = true)
+            ?: RemoteWorkspaceUiState.Failed(true)
+    }
+
+    private fun cachedReady(rows: List<PersistedRemoteWorkspace>): RemoteWorkspaceUiState.Ready {
+        val assistants = rows.filter { it.workspaceKind == ASSISTANT_KIND }.map { row ->
+            WorkspaceAssistant(row.path, row.name.ifEmpty { basename(row.path) }, null)
+        }
+        val workspaces = rows.filterNot { it.workspaceKind == ASSISTANT_KIND }.map { row ->
+            RecentWorkspace(row.path, row.name.ifEmpty { basename(row.path) }, row.lastOpened, row.workspaceKind)
+        }
+        return RemoteWorkspaceUiState.Ready(
+            workspaces = workspaces,
+            assistants = assistants,
+            selected = null,
+            preview = RemoteFilePreviewUiState.None,
+            busy = true,
+            download = RemoteFileDownloadUiState.None,
+            loadFailure = false,
+        )
+    }
+
+    private fun persistedCatalog(
+        workspaces: List<RecentWorkspace>,
+        assistants: List<WorkspaceAssistant>,
+    ): List<PersistedRemoteWorkspace> {
+        val rows = workspaces.map { workspace ->
+            PersistedRemoteWorkspace(workspace.path, workspace.name, workspace.lastOpened, workspace.kind)
+        }.toMutableList()
+        assistants.forEach { assistant ->
+            if (rows.none { it.path == assistant.path }) {
+                rows += PersistedRemoteWorkspace(assistant.path, assistant.name, "", ASSISTANT_KIND)
+            }
+        }
+        return rows
+    }
+
+    internal fun mergedCatalog(
+        workspaces: List<RecentWorkspace>,
+        assistants: List<WorkspaceAssistant>,
+    ): List<RecentWorkspace> {
+        val merged = workspaces.toMutableList()
+        assistants.forEach { assistant ->
+            if (merged.none { it.path == assistant.path }) {
+                merged += RecentWorkspace(assistant.path, assistant.name, "", ASSISTANT_KIND)
+            }
+        }
+        return merged
+    }
+
     public companion object {
         internal fun create(scope: CoroutineScope, transport: RemoteCommandTransport): RemoteWorkspaceStore =
             RemoteWorkspaceStore(scope, transport, Dispatchers.Default)
@@ -534,8 +702,10 @@ public class RemoteWorkspaceStore internal constructor(
             transport: RemoteCommandTransport,
             backgroundDispatcher: CoroutineDispatcher,
             deviceKey: String,
-        ): RemoteWorkspaceStore = RemoteWorkspaceStore(scope, transport, backgroundDispatcher, deviceKey)
+            persistence: RemoteWorkspaceListStore? = null,
+        ): RemoteWorkspaceStore = RemoteWorkspaceStore(scope, transport, backgroundDispatcher, deviceKey, persistence)
 
         private const val DOWNLOAD_CHUNK_BYTES = 3 * 1024 * 1024
+        private const val ASSISTANT_KIND = "assistant"
     }
 }

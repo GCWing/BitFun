@@ -69,14 +69,25 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
     const s = isCoworkSession ? 'Cowork' : isClawSession ? 'Claw' : '';
-    if (hour >= 5 && hour < 12) return { title: t('welcome.greetingMorning'), subtitle: t(`welcome.subtitleMorning${s}`) };
-    if (hour >= 12 && hour < 18) return { title: t('welcome.greetingAfternoon'), subtitle: t(`welcome.subtitleAfternoon${s}`) };
-    if (hour >= 18 && hour < 23) return { title: t('welcome.greetingEvening'), subtitle: t(`welcome.subtitleEvening${s}`) };
-    return { title: t('welcome.greetingNight'), subtitle: t(`welcome.subtitleNight${s}`) };
+    if (hour >= 5 && hour < 12) return {
+      title: s ? t('welcome.greetingMorning') : t('welcome.openingMorning'),
+      subtitle: s ? t(`welcome.subtitleMorning${s}`) : undefined,
+    };
+    if (hour >= 12 && hour < 18) return {
+      title: s ? t('welcome.greetingAfternoon') : t('welcome.openingAfternoon'),
+      subtitle: s ? t(`welcome.subtitleAfternoon${s}`) : undefined,
+    };
+    if (hour >= 18 && hour < 23) return {
+      title: s ? t('welcome.greetingEvening') : t('welcome.openingEvening'),
+      subtitle: s ? t(`welcome.subtitleEvening${s}`) : undefined,
+    };
+    return {
+      title: s ? t('welcome.greetingNight') : t('welcome.openingNight'),
+      subtitle: s ? t(`welcome.subtitleNight${s}`) : undefined,
+    };
   }, [t, isCoworkSession, isClawSession]);
 
-  const tagline = greeting.subtitle;
-  const aiPartnerKey = isCoworkSession ? 'welcome.aiPartnerCowork' : isClawSession ? 'welcome.aiPartnerClaw' : 'welcome.aiPartner';
+  const aiPartnerKey = isCoworkSession ? 'welcome.aiPartnerCowork' : isClawSession ? 'welcome.aiPartnerClaw' : null;
 
   const otherWorkspaces = useMemo(
     () => openedWorkspacesList.filter(ws => ws.id !== currentWorkspace?.id),
@@ -231,9 +242,12 @@ export const WelcomePanel: React.FC<WelcomePanelProps> = ({
           <PageHeader
             size="display"
             title={<span data-openbitfun-component="welcome-panel" data-openbitfun-part="heading">
-              {greeting.title}，{t(aiPartnerKey)}{isClawSession && assistantName ? `，${assistantName}` : ''}
+              {greeting.title}
+              {aiPartnerKey && <>，{t(aiPartnerKey)}{isClawSession && assistantName ? `，${assistantName}` : ''}</>}
             </span>}
-            description={<span data-openbitfun-component="welcome-panel" data-openbitfun-part="tagline">{tagline}</span>}
+            description={greeting.subtitle ? (
+              <span data-openbitfun-component="welcome-panel" data-openbitfun-part="tagline">{greeting.subtitle}</span>
+            ) : undefined}
           />
         </div>
 

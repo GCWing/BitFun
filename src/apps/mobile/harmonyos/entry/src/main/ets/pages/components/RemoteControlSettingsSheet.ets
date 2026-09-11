@@ -20,6 +20,7 @@ export struct RemoteControlSettingsSheet {
   @Param desktopId: string = '';
   @Param userId: string = '';
   @Param accountUsername: string = '';
+  @Param accountAvatarUrl: string = '';
   @Param accountUserId: string = '';
   @Param deviceId: string = '';
   @Param controlTargetType: string = 'none';
@@ -110,7 +111,7 @@ export struct RemoteControlSettingsSheet {
   @Builder
   private ProfileEntry() {
     Row({ space: 12 }) {
-      DefaultAccountAvatar({ avatarSize: 34 })
+      DefaultAccountAvatar({ avatarSize: 34, avatarUrl: this.accountAvatarUrl })
       Text(this.isAccountAuthenticated() ? RemoteI18n.t('remote.settings.profile') :
         RemoteI18n.t('sidebar.signInOpenBitFunAccount'))
         .fontSize(MobileDesignTypography.headlineSmall.size)
@@ -449,6 +450,7 @@ export struct RemoteControlSettingsSheet {
     Scroll() {
       AccountProfilePanel({
         accountUsername: this.accountUsername,
+        accountAvatarUrl: this.accountAvatarUrl,
         accountUserId: this.accountUserId,
         fallbackUserId: this.userId,
         deviceId: this.deviceId,

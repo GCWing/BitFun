@@ -544,18 +544,21 @@ impl WeixinProviderClient {
         }
     }
 
-    pub async fn send_workspace_file_to_peer(
+    pub async fn send_file_content_to_peer(
         &self,
         peer_id: &str,
         context_token: &str,
-        raw_path: &str,
-        workspace_root: Option<&Path>,
+        content: super::WorkspaceFileContent,
     ) -> Result<()> {
-        let content =
-            super::read_workspace_file(raw_path, MAX_WEIXIN_FILE_BYTES, workspace_root).await?;
-        let mime = super::detect_mime_type(Path::new(&content.name));
+        if content.bytes.len() as u64 > MAX_WEIXIN_FILE_BYTES {
+            return Err(anyhow!("Weixin file exceeds the upload limit"));
+        }
+        let mime = content.mime_type;
 
-        let item = if mime.starts_with("image/") {
+        let item = if matches!(
+            mime,
+            "image/png" | "image/jpeg" | "image/gif" | "image/webp" | "image/bmp"
+        ) {
             let uploaded = self
                 .upload_bytes_to_weixin_cdn(peer_id, &content.bytes, 1)
                 .await?;

@@ -3,8 +3,8 @@
  * Encapsulates session creation, image uploads, and message assembly.
  *
  * Image handling is fully delegated to the backend coordinator which
- * decides whether to pre-analyse via a vision model or attach images
- * directly.  The frontend only uploads clipboard images and passes
+ * exposes a path to the image analysis tool or attaches pixels
+ * directly for a multimodal model. The frontend prepares compatible attachment payloads and passes
  * ImageContextData[] through to the backend.
  */
 
@@ -222,7 +222,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
           : aiTrimmedMessage;
       }
       // Always pass imageContexts to the backend; the coordinator decides
-      // whether to pre-analyse via a vision model or attach directly.
+      // whether to expose a path to analyze_image or attach pixels directly.
       await flowChatManager.sendMessage(
         fullMessage,
         sessionId || undefined,

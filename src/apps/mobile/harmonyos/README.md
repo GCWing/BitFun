@@ -9,6 +9,13 @@ Device QR codes identify a target; the authenticated account directory authorize
 access. Old room records and local conversation data remain on disk during an
 upgrade, but do not automatically reconnect or start a local runtime.
 
+GitHub usernames and avatars are presentation metadata loaded from GitHub's public
+user-by-ID API without forwarding account credentials. The phone caches them for
+24 hours in its encrypted account store, scoped to the authenticated GitHub ID.
+Existing signed-in installs are enriched on startup. Offline or rate-limited
+profile requests retain the session and cached display; device authorization
+continues to use the immutable ID issued by Relay.
+
 ## Project Layout
 
 - `AppScope/`: application metadata and shared resources.

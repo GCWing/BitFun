@@ -2,8 +2,26 @@
 
 The workspace's folder entry opens one persistent navigation panel containing files
 and terminals. Opening this panel leaves the active conversation or editor intact.
-The existing `file-viewer` scene id and `file-viewer-nav` appearance identity remain
-compatible with navigation, links and installed skins.
+The existing `file-viewer` navigation id and `file-viewer-nav` appearance identity
+remain compatible with navigation links and installed skins. Files and selected
+terminal sessions follow the [workbench opening policy](../../workbench/README.md):
+prefer the matching workspace's already open session tab and its right panel, or
+open a main resource tab when no matching session tab is open. A cached or selected
+session alone never opens a session tab. Existing main views are reused; a right-panel tab can be
+popped out from its menu or dragged onto the top tab bar. There is no File View
+content scene or intermediate container in the main tab bar.
+
+Resource navigation owns an explicit `(device surface, workspace id)` browse target
+in `navSceneStore`. The folder action and the panel's workspace switcher update only
+that target; they never activate the global workspace, initialize/select a chat, or
+create an empty session. Back/forward navigation retains the target. A closed target
+or another device cannot fall back to the active workspace. Legacy untargeted entry
+points still use the current workspace.
+
+`WorkspaceResourcePanel` passes the resolved workspace to `FilesPanel` and the shared
+Shell hooks. File reads, downloads, mutations, menus and terminal opens carry that
+origin, including its SSH connection. Main conversations and their canvas snapshots
+continue to follow explicit session activation.
 
 ## Ownership
 
@@ -34,7 +52,7 @@ explicit resource key, while results are refreshed from the target.
 - Opening a saved configuration does not run its startup command. Start, stop and
   remove are explicit actions. Removing a saved configuration does not stop its PTY.
 - Regular terminal tabs carry `terminalCloseBehavior: detach`. Closing those tabs
-  or the standalone terminal view does not stop the process. Specialized and legacy
+  does not stop the process. Specialized and legacy
   terminal tabs retain their existing lifetime policy.
 - Exiting a shell leaves its output visible; only closing the view clears its selection.
 - A running status means an active terminal session, not that its foreground program
@@ -79,6 +97,7 @@ mobile Remote Control, or Detached Dispatch end-to-end behavior.
 
 ```bash
 pnpm --dir src/web-ui run test:run src/tools/terminal/services/terminalWorkspaceScope.test.ts src/tools/terminal/services/manualTerminalProfileService.test.ts src/tools/file-system/utils/fileTreeReveal.test.ts src/app/scenes/workspace-resources/workspaceResources.test.ts src/app/scenes/workspace-resources/terminalViewLifecycle.test.tsx
+pnpm --dir src/web-ui run test:run src/app/scenes/terminal/TerminalActionBridge.test.tsx src/tools/file-explorer/controller/ExplorerController.test.ts src/infrastructure/api/service-api/WorkspaceAPI.test.ts src/shared/context-menu-system/core/ContextResolver.resourceScope.test.ts src/shared/context-menu-system/commands/builtin/file/RevealInExplorerCommand.test.ts
 cargo test -p terminal-core --lib workspace_origin_contract_tests
 pnpm run check:web
 pnpm run i18n:audit

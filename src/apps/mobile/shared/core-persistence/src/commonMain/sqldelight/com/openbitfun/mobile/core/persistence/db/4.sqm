@@ -1,0 +1,10 @@
+-- v4 -> v5: cache each remote device's workspace catalog for offline directory restore.
+CREATE TABLE IF NOT EXISTS remote_workspace_list (
+    device_key TEXT NOT NULL,
+    path TEXT NOT NULL,
+    name TEXT NOT NULL,
+    last_opened TEXT NOT NULL,
+    workspace_kind TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    PRIMARY KEY (device_key, path)
+);

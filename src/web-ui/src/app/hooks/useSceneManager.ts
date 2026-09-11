@@ -11,6 +11,7 @@ import { useSceneStore } from '../stores/sceneStore';
 import { useMiniAppStore } from '../scenes/miniapps/miniAppStore';
 import { pickLocalizedString } from '../scenes/miniapps/utils/pickLocalizedString';
 import { useI18n } from '@/infrastructure/i18n';
+import { useContentResourceStore } from '../workbench/contentResourceStore';
 
 export interface UseSceneManagerReturn {
   openTabs: ReturnType<typeof useSceneStore.getState>['openTabs'];
@@ -37,6 +38,12 @@ export function useSceneManager(): UseSceneManagerReturn {
   } = useSceneStore();
   const apps = useMiniAppStore((s) => s.apps);
   const { currentLanguage } = useI18n();
+  const resources = useContentResourceStore(state => state.resources);
+  const contentDefs: SceneTabDef[] = openTabs.flatMap(tab => {
+    const resource = tab.contentId ? resources[tab.contentId] : undefined;
+    return resource ? [{ id: tab.id, label: resource.content.title, pinned: false,
+      closable: true, singleton: false, defaultOpen: false }] : [];
+  });
 
   const miniAppDefs: SceneTabDef[] = openTabs
     .filter((t) => typeof t.id === 'string' && t.id.startsWith('miniapp:'))
@@ -57,7 +64,7 @@ export function useSceneManager(): UseSceneManagerReturn {
     pendingTabId,
     navigationMotion,
     navigationSequence,
-    tabDefs: [...SCENE_TAB_REGISTRY, ...sessionDefs, ...miniAppDefs],
+    tabDefs: [...SCENE_TAB_REGISTRY, ...sessionDefs, ...miniAppDefs, ...contentDefs],
     activateScene,
     openScene,
     closeScene,

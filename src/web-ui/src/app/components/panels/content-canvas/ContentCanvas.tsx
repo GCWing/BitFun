@@ -27,7 +27,7 @@ export interface ContentCanvasProps {
   onInteraction?: (itemId: string, userInput: string) => Promise<void>;
   /** Before-close callback */
   onBeforeClose?: (content: any) => Promise<boolean>;
-  /** Disable pop-out and panel-close controls (used in panel-view scene) */
+  /** Disable transfer and host-close controls for embedded hosts. */
   disablePopOut?: boolean;
   /** Override the event this canvas listens to for creating tabs. */
   createTabEventName?: string;
@@ -79,7 +79,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     onReveal,
   });
   useKeyboardShortcuts({
-    enabled: true,
+    enabled: isSceneActive,
     missionControlEnabled,
     handleCloseWithDirtyCheck,
     onReveal,

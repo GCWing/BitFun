@@ -454,6 +454,9 @@ pub(crate) struct DispatchQueryRequest {
     pub(crate) kind: DispatchQueryKind,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) file_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) file_chunk:
+        Option<openbitfun_services_core::dispatch_contract::DispatchFileChunkRequest>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -461,6 +464,7 @@ pub(crate) struct DispatchQueryRequest {
 pub(crate) enum DispatchQueryKind {
     UsageReport,
     ReadFile,
+    ReadFileChunk,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]

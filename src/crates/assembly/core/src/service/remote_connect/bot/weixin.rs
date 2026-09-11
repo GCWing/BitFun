@@ -256,63 +256,56 @@ impl WeixinBot {
         (attachments, skipped)
     }
 
-    async fn notify_files_ready(&self, peer_id: &str, text: &str) {
+    async fn notify_files_ready(
+        &self,
+        peer_id: &str,
+        session_id: &str,
+        remote_target: Option<&super::command_router::RemoteBotTarget>,
+        text: &str,
+        identity_epoch: u64,
+    ) {
         let language = current_bot_language().await;
-        let workspace_root = {
-            let states = self.chat_states.read().await;
-            states
-                .get(peer_id)
-                .and_then(|state| state.active_workspace_path())
-        };
-        let files = super::collect_auto_push_files(
-            text,
-            workspace_root.as_deref().map(std::path::Path::new),
-        );
-        if files.is_empty() {
-            return;
-        }
-
-        let root_path = workspace_root.as_deref().map(std::path::Path::new);
-        for file in files {
-            if file.size > MAX_WEIXIN_FILE_BYTES {
-                let notice = super::auto_push_skip_too_large_message(
-                    language,
-                    &file.name,
-                    file.size,
-                    MAX_WEIXIN_FILE_BYTES,
-                );
-                if let Err(err) = self.send_text(peer_id, &notice).await {
-                    warn!("Weixin auto-push skip notice failed for peer {peer_id}: {err}");
-                }
-                continue;
+        for reference in super::extract_output_file_references(text) {
+            if !self.runtime_fence.is_lifecycle_current()
+                || self.runtime_fence.identity_epoch() != identity_epoch
+            {
+                return;
             }
-
-            let send_result = match self.context_token_for_peer(peer_id).await {
-                Ok(token) => {
-                    self.api
-                        .send_workspace_file_to_peer(peer_id, &token, &file.abs_path, root_path)
-                        .await
-                }
-                Err(err) => Err(err),
-            };
-
-            match send_result {
-                Ok(()) => info!(
-                    "Weixin auto-pushed file to peer {peer_id}: {}",
-                    file.abs_path
-                ),
-                Err(err) => {
-                    warn!(
-                        "Weixin auto-push failed for {} to peer {peer_id}: {err}",
-                        file.name
-                    );
-                    let notice =
-                        super::auto_push_failed_message(language, &file.name, &err.to_string());
-                    if let Err(send_err) = self.send_text(peer_id, &notice).await {
-                        warn!(
-                            "Weixin auto-push failure notice failed for peer {peer_id}: {send_err}"
-                        );
+            let content = super::read_output_file(
+                session_id,
+                remote_target,
+                &reference,
+                MAX_WEIXIN_FILE_BYTES,
+                &|| {
+                    self.runtime_fence.is_lifecycle_current()
+                        && self.runtime_fence.identity_epoch() == identity_epoch
+                },
+            )
+            .await;
+            if !self.runtime_fence.is_lifecycle_current()
+                || self.runtime_fence.identity_epoch() != identity_epoch
+            {
+                return;
+            }
+            let result = match content {
+                Ok(content) => match self.context_token_for_peer(peer_id).await {
+                    Ok(token) => {
+                        self.api
+                            .send_file_content_to_peer(peer_id, &token, content)
+                            .await
                     }
+                    Err(error) => Err(error),
+                }
+                .map_err(|error| error.to_string()),
+                Err(error) => Err(error),
+            };
+            if let Err(error) = result {
+                warn!("Weixin output file delivery failed: {error}");
+                let notice = super::auto_push_failed_message(language, &reference, &error);
+                if self.runtime_fence.is_lifecycle_current()
+                    && self.runtime_fence.identity_epoch() == identity_epoch
+                {
+                    let _ = self.send_text(peer_id, &notice).await;
                 }
             }
         }
@@ -573,6 +566,7 @@ impl WeixinBot {
             return;
         }
         let mut states = self.chat_states.write().await;
+        let command_identity_epoch = self.runtime_fence.identity_epoch();
         self.runtime_fence.reconcile_states(&mut states);
         let state = states.entry(peer_id.clone()).or_insert_with(|| {
             let mut state = BotChatState::new(peer_id.clone());
@@ -597,7 +591,9 @@ impl WeixinBot {
                         .sanitize_after_epoch(identity_epoch, state);
                     self.persist_chat_state(&peer_id, state).await;
                     drop(states);
-                    if !self.runtime_fence.is_lifecycle_current() {
+                    if !self.runtime_fence.is_lifecycle_current()
+                        || self.runtime_fence.identity_epoch() != command_identity_epoch
+                    {
                         return;
                     }
                     self.send_handle_result(&peer_id, &result).await;
@@ -622,6 +618,9 @@ impl WeixinBot {
             return;
         }
 
+        if self.runtime_fence.identity_epoch() != command_identity_epoch {
+            return;
+        }
         let command = parse_command(text);
         let result = handle_command(state, command, images).await;
         self.runtime_fence.reconcile_states(&mut states);
@@ -630,13 +629,18 @@ impl WeixinBot {
         }
         drop(states);
 
-        if !self.runtime_fence.is_lifecycle_current() {
+        if !self.runtime_fence.is_lifecycle_current()
+            || self.runtime_fence.identity_epoch() != command_identity_epoch
+        {
             return;
         }
 
         self.send_handle_result(&peer_id, &result).await;
 
         if let Some(forward) = result.forward_to_session {
+            let output_session_id = forward.session_id.clone();
+            let output_remote_target = forward.remote_target.clone();
+            let output_identity_epoch = command_identity_epoch;
             let bot = self.clone();
             let peer = peer_id.clone();
             let typing_token = self.context_tokens.read().await.get(&peer_id).cloned();
@@ -650,7 +654,7 @@ impl WeixinBot {
                         let peer_i = peer_c.clone();
                         Box::pin(async move {
                             interaction_bot
-                                .deliver_interaction(peer_i, interaction)
+                                .deliver_interaction(peer_i, interaction, output_identity_epoch)
                                 .await;
                         })
                     });
@@ -660,6 +664,11 @@ impl WeixinBot {
                     let msg_bot = msg_bot.clone();
                     let peer_s = peer_m.clone();
                     Box::pin(async move {
+                        if !msg_bot.runtime_fence.is_lifecycle_current()
+                            || msg_bot.runtime_fence.identity_epoch() != output_identity_epoch
+                        {
+                            return;
+                        }
                         if let Err(err) = msg_bot.send_text(&peer_s, &text).await {
                             warn!(
                                 "weixin: send intermediate message to peer {peer_s} failed: {err}"
@@ -668,21 +677,57 @@ impl WeixinBot {
                     })
                 });
                 let verbose_mode = load_bot_persistence().verbose_mode;
-                let turn_result =
-                    execute_forwarded_turn(forward, Some(handler), Some(sender), verbose_mode)
+                let turn_result = execute_forwarded_turn(
+                    forward,
+                    Some(handler),
+                    Some(sender),
+                    verbose_mode,
+                    &bot.runtime_fence,
+                    output_identity_epoch,
+                )
+                .await;
+                if !bot.runtime_fence.is_lifecycle_current()
+                    || bot.runtime_fence.identity_epoch() != output_identity_epoch
+                {
+                    return;
+                }
+                if let Some(next) = super::retire_remote_interactions(
+                    &bot.chat_states,
+                    &peer,
+                    output_remote_target.as_ref(),
+                    &turn_result.completed_remote_tools,
+                    &bot.runtime_fence,
+                    output_identity_epoch,
+                )
+                .await
+                {
+                    bot.deliver_interaction(peer.clone(), next, output_identity_epoch)
                         .await;
+                }
                 if !turn_result.display_text.is_empty() {
                     if let Err(err) = bot.send_text(&peer, &turn_result.display_text).await {
                         warn!("weixin: send final reply to peer {peer} failed: {err}");
                     }
                 }
-                bot.notify_files_ready(&peer, &turn_result.full_text).await;
+                bot.notify_files_ready(
+                    &peer,
+                    &output_session_id,
+                    output_remote_target.as_ref(),
+                    &turn_result.full_text,
+                    output_identity_epoch,
+                )
+                .await;
                 typing_for_turn.stop().await;
             });
         }
     }
 
-    async fn deliver_interaction(&self, peer_id: String, interaction: BotInteractiveRequest) {
+    async fn deliver_interaction(
+        &self,
+        peer_id: String,
+        interaction: BotInteractiveRequest,
+        identity_epoch: u64,
+    ) {
         if !self.runtime_fence.is_lifecycle_current() {
             return;
         }
@@ -693,7 +738,12 @@ impl WeixinBot {
             state.paired = true;
             state
         });
-        super::command_router::apply_interactive_request(state, &interaction);
+        if self.runtime_fence.identity_epoch() != identity_epoch {
+            return;
+        }
+        if !super::command_router::apply_interactive_request(state, &interaction) {
+            return;
+        }
         self.persist_chat_state(&peer_id, state).await;
         drop(states);
 

@@ -454,8 +454,8 @@
     display: flex;
     min-block-size: max(1lh, var(--openbitfun-control-tool-card-ambient-row-min-block-size));
     align-items: center;
-    gap: var(--openbitfun-space-1);
-    padding-inline: var(--openbitfun-space-1) var(--openbitfun-space-2);
+    gap: var(--openbitfun-control-flow-chat-row-icon-gap);
+    padding-inline: 0 var(--openbitfun-space-2);
     border: 0;
     background: transparent;
     box-shadow: none;
@@ -476,9 +476,8 @@
   }
 
   .ambientSurface .iconSlot {
-    --_tool-card-action-size: var(--openbitfun-space-5);
-
-    margin-inline-end: 1px;
+    --_tool-card-action-size: var(--openbitfun-control-flow-chat-row-icon-size);
+    --_flow-chat-tool-card-icon-size: var(--openbitfun-control-flow-chat-row-icon-size);
   }
 
   .ambientAction {

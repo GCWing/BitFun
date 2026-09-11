@@ -1,3 +1,4 @@
+import { SidebarConnectionActionPolicy } from '../policy/SidebarConnectionActionPolicy';
 import { accountDeviceLink } from '../../services/AccountDeviceLink';
 import {
   ChatMessage,
@@ -18,6 +19,7 @@ import { ConnectionStatusPresenter } from '../../services/ConnectionStatusPresen
 import { ImagePickerService } from '../../services/ImagePickerService';
 import { MobileIdentityStore } from '../../services/MobileIdentityStore';
 import { CloudAccountClient, CloudAccountDevice } from '../../services/CloudAccountClient';
+import { GitHubAccountProfileClient } from '../../services/GitHubAccountProfile';
 import { CloudAccountSessionStore } from '../../services/CloudAccountSessionStore';
 import { RemoteActivityLifecycleController } from '../../services/RemoteActivityLifecycleController';
 import { RemoteChatCache } from '../../services/RemoteChatCache';
@@ -136,9 +138,11 @@ export abstract class AppRootRuntimeComposition {
   abstract toggleVoiceInput(): Promise<void>;
 
   readonly sessionManager: RemoteSessionManager = new RemoteSessionManager();
+  readonly taskCompletionNotificationPort: HarmonyTaskCompletionNotificationPort =
+    new HarmonyTaskCompletionNotificationPort((): Context => this.host.context());
   readonly taskCompletionNotificationController: TaskCompletionNotificationController =
     new TaskCompletionNotificationController(
-      new HarmonyTaskCompletionNotificationPort((): Context => this.host.context()),
+      this.taskCompletionNotificationPort,
       (observation: TaskCompletionObservation): void => {
         if (observation.source === 'remote') {
           this.remoteChatPollingLifecycleController.stop();
@@ -373,6 +377,17 @@ export abstract class AppRootRuntimeComposition {
         onTimelineReady: () => {
           this.remotePageState.setConversationLoading(false);
         },
+        onComposerSubmitted: (sessionId: string, text: string, images: SelectedImageAttachment[]) => {
+          if (this.remotePageState.activeSession.sessionId !== sessionId) {
+            return;
+          }
+          if (this.remotePageState.chatInput.trim() === text.trim()) {
+            this.remotePageState.setChatInput('');
+          }
+          this.remotePageState.setSelectedImages(this.remotePageState.selectedImages.filter(
+            (image: SelectedImageAttachment) => !images.some((sent: SelectedImageAttachment) => sent.id === image.id)
+          ));
+        },
         onSendSucceeded: (turnId: string, pendingActiveId: string, localMessageId: string) => {
           this.chatTimelineStore.acknowledgeOptimisticTurn(localMessageId, turnId);
           if (turnId.length > 0) {
@@ -405,8 +420,6 @@ export abstract class AppRootRuntimeComposition {
           localMessageId: string,
           pendingActiveId: string
         ) => {
-          this.remotePageState.setChatInput(rawText);
-          this.remotePageState.setSelectedImages(images);
           this.chatTimelineStore.markOptimisticMessageFailed(localMessageId);
           if (pendingActiveId.length > 0) {
             this.chatTimelineStore.clearPendingActiveTurn(pendingActiveId);
@@ -610,6 +623,7 @@ export abstract class AppRootRuntimeComposition {
       {
         client: new CloudAccountClient(),
         sessionStore: new CloudAccountSessionStore(),
+        profileLoader: new GitHubAccountProfileClient(),
         sessionManager: this.sessionManager,
         remoteState: this.remotePageState,
         hooks: {
@@ -785,7 +799,11 @@ export abstract class AppRootRuntimeComposition {
     },
     onSidebar: {
       close: (): void => this.closeAppSidebar(),
-      newChat: (): void => { this.closeAppSidebar(); this.enterRemoteSurface(); },
+      newChat: async (agentType: string = 'code'): Promise<void> => {
+        if (!SidebarConnectionActionPolicy.canCreateSession(this.remotePageState.connectionState, this.remotePageState.isBusy)) return;
+        this.closeAppSidebar();
+        await this.conversationController.createRemoteSession(agentType);
+      },
       enterCode: (): void => { this.closeAppSidebar(); this.enterCodeEntry(); },
       scanDesktop: (): void => { this.closeAppSidebar(); this.openConnectSheet(CONNECT_INTENT_SCAN); },
       addDesktop: (): void => {

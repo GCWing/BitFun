@@ -2,19 +2,9 @@ import type { AppearanceSurfaceDescriptor } from '@/infrastructure/appearance';
 
 export const realtimeVoiceCallAppearanceDescriptor: AppearanceSurfaceDescriptor = {
   id: 'realtime-voice-call',
+  componentAttribute: 'data-openbitfun-product-component',
   parts: [
     { id: 'root' },
-    { id: 'header' },
-    { id: 'avatar' },
-    { id: 'heading' },
-    { id: 'liveIndicator' },
-    { id: 'conversation' },
-    { id: 'utterance' },
-    { id: 'empty' },
-    { id: 'task' },
-    { id: 'meter' },
-    { id: 'controls' },
-    { id: 'control' },
   ],
   facets: [
     {

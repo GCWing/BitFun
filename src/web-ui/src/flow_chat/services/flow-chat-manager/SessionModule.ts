@@ -32,7 +32,6 @@ import {
   createTextSessionTitleDescriptor,
   createDefaultSessionTitleDescriptor,
   deriveSessionTitleStateFromMetadata,
-  getNextDefaultSessionTitleCount,
   resolveSessionTitle,
 } from '../../utils/sessionTitle';
 import { buildCreateSessionRelationship } from '../../utils/sessionMetadata';
@@ -450,22 +449,8 @@ export function preloadHistoricalSessionForOpen(
   });
 }
 
-type SessionDisplayMode = 'code' | 'cowork' | 'claw';
-
 const isAssistantWorkspace = (workspace?: WorkspaceInfo | null): boolean => {
   return workspace?.workspaceKind === WorkspaceKind.Assistant;
-};
-
-const normalizeSessionDisplayMode = (
-  mode?: string,
-  workspace?: WorkspaceInfo | null
-): SessionDisplayMode => {
-  if (isAssistantWorkspace(workspace)) return 'claw';
-  if (!mode) return 'code';
-  const normalizedMode = mode.toLowerCase();
-  if (normalizedMode === 'cowork') return 'cowork';
-  if (normalizedMode === 'claw') return 'claw';
-  return 'code';
 };
 
 const resolveSessionWorkspacePath = (
@@ -637,7 +622,6 @@ export async function createChatSession(
         : undefined;
     const agentType = await resolveAgentTypeForSessionCreation(mode, workspace);
     surfaceScope.assertCurrent('resolve session creation mode');
-    const sessionMode = normalizeSessionDisplayMode(agentType, workspace);
     const workspaceCreationKey =
       workspace?.id?.trim()
         ? workspace.id
@@ -662,19 +646,7 @@ export async function createChatSession(
     // activation can rerun initialization while model config is still loading.
     const createPromise = Promise.resolve().then(async () => {
       surfaceScope.assertCurrent('start session creation');
-      const sameModeCount = getNextDefaultSessionTitleCount(
-        context.flowChatStore.getState().sessions.values(),
-        {
-          mode: sessionMode,
-          workspaceId: workspace?.id,
-          workspacePath,
-          remoteConnectionId,
-          remoteSshHost,
-        },
-      );
       const titleDescriptor = createDefaultSessionTitleDescriptor(
-        sessionMode,
-        sameModeCount,
         (key, options) => i18nService.t(key, options),
       );
       const sessionName = titleDescriptor.text;

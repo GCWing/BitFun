@@ -60,7 +60,7 @@ export function startSessionSceneLifecycle(): () => void {
         previousSurface = surfaceId;
         previousSelection = current();
         previousWorkspaces = new Map(workspaceManager.getState().openedWorkspaces);
-        useSceneStore.getState().resetForPeerSwitch();
+        useSceneStore.getState().resetForPeerSwitch(true);
       }
       const closedWorkspace = event?.type === 'workspace:closed' || event?.type === 'workspace:removed'
         ? previousWorkspaces.get(event.workspaceId) : undefined;

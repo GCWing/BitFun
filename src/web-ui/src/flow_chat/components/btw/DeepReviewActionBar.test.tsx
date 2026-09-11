@@ -128,6 +128,7 @@ vi.mock('@/infrastructure/runtime', () => ({
 vi.mock('@/infrastructure/event-bus', () => ({
   globalEventBus: {
     emit: eventBusEmitMock,
+    on: vi.fn(() => () => {}),
   },
 }));
 

@@ -32,7 +32,8 @@ describe('global search ownership', () => {
     expect(canvasShortcuts).toContain('enabled: enabled && missionControlEnabled');
     expect(globalSearch).toContain('className="global-search__query global-search__query--system"');
     expect(globalSearch).toContain('shortcut={query ? undefined : (');
-    expect(globalSearch).toContain('className={`global-search__scope global-search__scope--system');
+    expect(globalSearch).toContain('<TabGroup');
+    expect(globalSearch).toContain('className="global-search__scopes"');
     expect(globalSearch).not.toContain('global-search__scope--native');
     expect(globalSearch).toContain("if (itemVariant === 'action')");
     expect(globalSearch).toContain('if (entity)');

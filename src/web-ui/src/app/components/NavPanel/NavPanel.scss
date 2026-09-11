@@ -981,7 +981,7 @@ $_section-header-height: 22px;
     width: fit-content;
     max-width: min(440px, calc(100vw - 32px));
     max-height: min(560px, calc(100vh - 16px));
-    z-index: 9999;
+    z-index: var(--openbitfun-layer-popover);
     transform-origin: top left;
     animation: openbitfun-footer-menu-in var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-decelerate) forwards;
 
@@ -1028,6 +1028,8 @@ $_section-header-height: 22px;
   }
 
   &__workspace-menu-workspaces {
+    display: flex;
+    flex-direction: column;
     max-height: 240px;
     overscroll-behavior: contain;
   }
@@ -1604,7 +1606,7 @@ $_section-header-height: 22px;
 .openbitfun-nav-panel__footer-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 9998;
+  z-index: calc(var(--openbitfun-layer-popover) - 1);
 }
 
 /* Positioning-only overrides; the design-system Menu owns the surface look. */
@@ -1613,7 +1615,7 @@ $_section-header-height: 22px;
   min-width: 148px;
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
-  z-index: 9999;
+  z-index: var(--openbitfun-layer-popover);
   transform-origin: bottom right;
   animation: openbitfun-footer-menu-in var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-decelerate) forwards;
 
@@ -1640,7 +1642,7 @@ $_section-header-height: 22px;
   position: fixed;
   max-width: calc(100vw - 16px);
   max-height: calc(100vh - 16px);
-  z-index: 10000;
+  z-index: calc(var(--openbitfun-layer-popover) + 1);
   animation: openbitfun-nav-popover-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
 
   &[data-placement='right'] {
@@ -1658,7 +1660,7 @@ $_section-header-height: 22px;
 
 .openbitfun-device-overview {
   position: fixed;
-  z-index: 9999;
+  z-index: var(--openbitfun-layer-popover);
   width: min(280px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
   display: flex;

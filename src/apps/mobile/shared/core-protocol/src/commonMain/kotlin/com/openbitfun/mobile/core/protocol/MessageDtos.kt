@@ -103,6 +103,8 @@ public data class PollSessionResponse(
     @SerialName("title") val title: String? = null,
     @SerialName("new_messages") val newMessages: List<ChatMessageResponse> = emptyList(),
     @SerialName("total_msg_count") val totalMessageCount: Int? = null,
+    /** Authoritative replacement used when the desktop invalidates its history tracker. */
+    @SerialName("message_snapshot") val messageSnapshot: List<ChatMessageResponse>? = null,
     @SerialName("active_turn") val activeTurn: ActiveTurnSnapshotResponse? = null,
     @SerialName("model_catalog") val modelCatalog: RemoteModelCatalog? = null,
 ) : CommandStatus

@@ -4,7 +4,7 @@
  */
 
 import { OverflowText, Button, Icon, IconButton, SearchField, StatusPill, Tooltip, ScrollArea } from '@openbitfun/ui';
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CaseSensitive, Regex, WholeWord, List, Loader2 } from 'lucide-react';
 import {
@@ -37,9 +37,8 @@ import {
   pathsEquivalentFs,
   replaceBasename,
 } from '@/shared/utils/pathUtils';
-import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { isRemoteWorkspace } from '@/shared/types';
+import { isRemoteWorkspace, type WorkspaceInfo } from '@/shared/types';
 import type {
   SearchMetadata,
   WorkspaceSearchRepoPhase,
@@ -104,6 +103,7 @@ function getSearchBackendBadgeVariant(
 }
 
 interface FilesPanelProps {
+  workspace?: WorkspaceInfo | null;
   workspacePath?: string;
   searchStateKey?: string;
   onFileSelect?: (filePath: string, fileName: string) => void;
@@ -117,6 +117,7 @@ interface FilesPanelProps {
 }
 
 const FilesPanel: React.FC<FilesPanelProps> = ({
+  workspace: targetWorkspace,
   workspacePath,
   searchStateKey,
   onFileSelect,
@@ -129,7 +130,13 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
 }) => {
   const { t } = useTranslation('panels/files');
   const { t: tComponents } = useI18n('components');
-  const { workspace: currentWorkspace } = useCurrentWorkspace();
+  const { workspace: activeWorkspace } = useCurrentWorkspace();
+  const currentWorkspace = targetWorkspace === undefined ? activeWorkspace : targetWorkspace;
+  const surface = getActiveSurfaceScope();
+  const resourceScope = useMemo(() => ({
+    surfaceId: surface.surfaceId, workspaceId: currentWorkspace?.id,
+    workspacePath, remoteConnectionId: currentWorkspace?.connectionId,
+  }), [surface.surfaceId, currentWorkspace?.id, currentWorkspace?.connectionId, workspacePath]);
   
   const panelRef = useRef<HTMLDivElement>(null);
   const navigationRequestRef = useRef(0);
@@ -166,6 +173,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     clearSearch,
   } = useExplorerSearch({
     workspacePath,
+    remoteConnectionId: currentWorkspace?.connectionId,
     stateKey: searchStateKey,
     initialMode: 'content',
     filenameSearchDebounce: 300,
@@ -281,6 +289,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     removePath,
   } = useFileSystem({
     rootPath: workspacePath,
+    remoteConnectionId: currentWorkspace?.connectionId,
     autoLoad: true,
     enablePathCompression: true,
     showHiddenFiles: true,
@@ -330,7 +339,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
 
     if (fileSize === undefined || fileSize === null) {
       try {
-        const metadata = await workspaceAPI.getFileMetadata(filePath);
+        const metadata = await workspaceAPI.getFileMetadata(filePath, currentWorkspace?.connectionId);
         fileSize = metadata.size;
       } catch (error) {
         log.warn('Failed to get file metadata for size check, opening anyway', { filePath, error: String(error) });
@@ -350,21 +359,23 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         cancelText: t('dialog.largeFile.cancel'),
       },
     );
-  }, [t]);
+  }, [t, currentWorkspace?.connectionId]);
 
   const handleOpenFile = useCallback((data: { path: string; line?: number; column?: number }) => {
     log.info('Opening file', { path: data.path, line: data.line, column: data.column });
 
+    const request = navigationRequestRef.current;
     void shouldOpenLargeFile(data.path).then((ok) => {
-      if (!ok) return;
+      if (!ok || !surface.isCurrent() || request !== navigationRequestRef.current) return;
       openFileInBestTarget({
         filePath: data.path,
+        scope: resourceScope,
         workspacePath,
         ...(data.line ? { jumpToLine: data.line } : {}),
         ...(data.column ? { jumpToColumn: data.column } : {}),
       }, { source: 'project-nav' });
     });
-  }, [workspacePath, shouldOpenLargeFile]);
+  }, [workspacePath, shouldOpenLargeFile, surface, resourceScope]);
 
   const handleNewFile = useCallback((data: { parentPath: string }) => {
     setInputDialog({
@@ -484,26 +495,13 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     }
   }, [workspacePath, loadFileTree, removePath, notification, t, normalizePathForCurrentWorkspace, currentWorkspace]);
 
-  const handleReveal = useCallback(async (data: { path: string }) => {
-    if (isRemoteWorkspace(workspaceManager.getState().currentWorkspace)) {
-      return;
-    }
-    try {
-      await workspaceAPI.revealInExplorer(data.path);
-    } catch (error) {
-      log.error('Failed to reveal in explorer', error);
-      notification.error(t('notifications.openExplorerFailed', { error: String(error) }));
-    }
-  }, [notification, t]);
-
   const handleFileDownload = useCallback(
     async (data: { path: string; isDirectory?: boolean }) => {
-      const ws = workspaceManager.getState().currentWorkspace;
       const { id, onProgress } = createTransferProgress();
       try {
         await downloadWorkspaceFileToDisk(
           data.path,
-          ws,
+          currentWorkspace,
           onProgress,
           id,
           data.isDirectory,
@@ -518,13 +516,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         }
       }
     },
-    [notification, t, createTransferProgress]
+    [notification, t, createTransferProgress, currentWorkspace]
   );
 
   const handleCompress = useCallback(
     async (data: { path: string; isDirectory?: boolean }) => {
-      const ws = workspaceManager.getState().currentWorkspace;
-      const remoteCid = ws?.connectionId;
+      const remoteCid = currentWorkspace?.connectionId;
       try {
         await workspaceAPI.compressPath(data.path, remoteCid);
         notification.success(
@@ -537,13 +534,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         notification.error(t('archive.compressFailed', { error: reason }));
       }
     },
-    [notification, t, loadFileTree],
+    [notification, t, loadFileTree, currentWorkspace?.connectionId],
   );
 
   const handleDecompress = useCallback(
     async (data: { path: string }) => {
-      const ws = workspaceManager.getState().currentWorkspace;
-      const remoteCid = ws?.connectionId;
+      const remoteCid = currentWorkspace?.connectionId;
       try {
         await workspaceAPI.decompressPath(data.path, remoteCid);
         notification.success(
@@ -556,7 +552,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         notification.error(t('archive.decompressFailed', { error: reason }));
       }
     },
-    [notification, t, loadFileTree],
+    [notification, t, loadFileTree, currentWorkspace?.connectionId],
   );
 
   const handleFileTreeRefresh = useCallback(() => {
@@ -803,7 +799,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     globalEventBus.on('file:new-folder', handleNewFolder);
     globalEventBus.on('file:rename', handleStartRename);
     globalEventBus.on('file:delete', handleDelete);
-    globalEventBus.on('file:reveal', handleReveal);
     globalEventBus.on('file:download', handleFileDownload);
     globalEventBus.on('file:compress', handleCompress);
     globalEventBus.on('file:decompress', handleDecompress);
@@ -817,7 +812,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       globalEventBus.off('file:new-folder', handleNewFolder);
       globalEventBus.off('file:rename', handleStartRename);
       globalEventBus.off('file:delete', handleDelete);
-      globalEventBus.off('file:reveal', handleReveal);
       globalEventBus.off('file:download', handleFileDownload);
       globalEventBus.off('file:compress', handleCompress);
       globalEventBus.off('file:decompress', handleDecompress);
@@ -825,7 +819,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       globalEventBus.off('file-tree:refresh', handleFileTreeRefresh);
       globalEventBus.off('file-explorer:navigate', handleNavigateToPath);
     };
-  }, [handleOpenFile, handleNewFile, handleNewFolder, handleStartRename, handleDelete, handleReveal, handleFileDownload, handleCompress, handleDecompress, handlePasteFromContextMenu, handleFileTreeRefresh, handleNavigateToPath]);
+  }, [handleOpenFile, handleNewFile, handleNewFolder, handleStartRename, handleDelete, handleFileDownload, handleCompress, handleDecompress, handlePasteFromContextMenu, handleFileTreeRefresh, handleNavigateToPath]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -898,6 +892,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   }, [notification, t, handleDropProgress]);
 
   useWorkspaceFileDrop({
+    workspace: currentWorkspace,
     workspacePath,
     panelRef,
     enabled: Boolean(workspacePath) && viewMode === 'tree',
@@ -913,16 +908,18 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     
     const selectedNode = findNode(fileTree, filePath);
     if (selectedNode && !selectedNode.isDirectory) {
+      const request = navigationRequestRef.current;
       void shouldOpenLargeFile(filePath, selectedNode.size).then((ok) => {
-        if (!ok) return;
+        if (!ok || !surface.isCurrent() || request !== navigationRequestRef.current) return;
         openFileInBestTarget({
           filePath,
           fileName,
           workspacePath,
+          scope: resourceScope,
         }, { source: 'project-nav' });
       });
     }
-  }, [selectFile, onFileSelect, workspacePath, fileTree, findNode, shouldOpenLargeFile]);
+  }, [selectFile, onFileSelect, workspacePath, fileTree, findNode, shouldOpenLargeFile, surface, resourceScope]);
 
   const handleFileDoubleClick = useCallback((filePath: string) => {
     onFileDoubleClick?.(filePath);
@@ -1013,6 +1010,10 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       data-openbitfun-component="files-panel"
       data-openbitfun-part="root"
       ref={panelRef}
+      data-resource-surface={resourceScope.surfaceId}
+      data-resource-workspace-id={resourceScope.workspaceId}
+      data-resource-workspace-path={resourceScope.workspacePath}
+      data-resource-connection-id={resourceScope.remoteConnectionId}
       className="openbitfun-files-panel"
       tabIndex={-1}
       onFocus={() => {}}
@@ -1179,6 +1180,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               
               {searchResults.length > 0 ? (
                 <FileSearchResults
+                  resourceScope={resourceScope}
                   results={searchResults}
                   searchQuery={searchQuery}
                   onFileSelect={handleSearchResultSelect}

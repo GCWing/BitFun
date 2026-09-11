@@ -1,6 +1,8 @@
 import type { ImageContext } from '@/shared/types/context';
 import type { ImageContextData as ImageInputContextData } from '@/infrastructure/api/service-api/ImageContextTypes';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
+import { getActiveSurfaceScope, isLocalSurface } from '@/infrastructure/peer-device/deviceSurface';
+import { peerConnectionManager } from '@/infrastructure/peer-device/PeerConnectionManager';
 
 export interface ImageDisplayData {
   id: string;
@@ -20,10 +22,13 @@ export async function buildImagePayload(imageContexts: ImageContext[]): Promise<
     return undefined;
   }
 
+  const scope = getActiveSurfaceScope();
+  const acceptsInline = isLocalSurface(scope.surfaceId)
+    || peerConnectionManager.get(scope.surfaceId)?.getState().capabilities.inlineImageAttachmentsV1 === true;
   const clipboardImages = imageContexts.filter(ctx => !ctx.isLocal && ctx.dataUrl);
   const uploadedImagePaths = new Map<string, string>();
 
-  if (clipboardImages.length > 0) {
+  if (!acceptsInline && clipboardImages.length > 0) {
     const uploadResults = await api.invoke<Array<{ id: string; image_path?: string | null }>>(
       'upload_image_contexts',
       {
@@ -43,6 +48,7 @@ export async function buildImagePayload(imageContexts: ImageContext[]): Promise<
       }
     );
 
+    scope.assertCurrent('prepare image attachments');
     for (const result of uploadResults) {
       if (result.image_path) {
         uploadedImagePaths.set(result.id, result.image_path);
@@ -54,7 +60,9 @@ export async function buildImagePayload(imageContexts: ImageContext[]): Promise<
     imageContexts: imageContexts.map(ctx => ({
       id: ctx.id,
       image_path: ctx.isLocal ? ctx.imagePath : uploadedImagePaths.get(ctx.id),
-      data_url: undefined,
+      // Retain pixels for durable host storage and Detached Dispatch. Older
+      // peer hosts still receive their upload path through the legacy branch.
+      data_url: ctx.dataUrl || undefined,
       mime_type: ctx.mimeType,
       metadata: {
         name: ctx.imageName,

@@ -79,7 +79,8 @@
       "unsaved": "You have unsaved realtime voice changes."
     },
     "call": {
-      "title": "OpenBitFun realtime call",
+      "title": "Live Call",
+      "close": "Close call window",
       "button": "Start a realtime voice call",
       "launcherCompactLabel": "Hi",
       "launcherLabel": "Hello",

@@ -23,6 +23,8 @@ import {
   NavigationPanelSection,
   PageHeader,
   SearchField,
+  ScrollArea,
+  TabGroup,
   SegmentedControl,
   Select,
   StatusPill,
@@ -35,7 +37,7 @@ import {
   type TokenOverrides,
 } from "@openbitfun/ui";
 import { useI18n, type MessageKey } from "../i18n";
-import { IndicatorsPattern, FormTypographyPattern, NestedMenuPattern, ProviderConfigurationPattern, SceneToolbarPattern, WorkspaceConfigurationPattern } from "./ReferencePatterns";
+import { FileActivityPattern, IndicatorsPattern, FormTypographyPattern, NestedMenuPattern, ProviderConfigurationPattern, SceneToolbarPattern, WorkspaceConfigurationPattern } from "./ReferencePatterns";
 
 interface PatternsPageProps {
   colorScheme: ColorScheme;
@@ -81,6 +83,7 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
         </header>
 
         <IndicatorsPattern />
+        <FileActivityPattern />
 
         <PatternSection description={t("patterns.settings.description")} index="01" title={t("patterns.settings.title")}>
           <Card appearance="raised" className="pattern-settings" data-openbitfun-pattern="settings-form" padding="md" radius="md">
@@ -156,19 +159,21 @@ export function PatternsPage({ colorScheme, contrast, density, tokenOverrides }:
         </PatternSection>
 
         <PatternSection description={t("patterns.search.description")} index="03" title={t("patterns.search.title")}>
-          <Card appearance="raised" className="pattern-command" data-openbitfun-pattern="search-command-surface" gap="md" padding="md" radius="md">
-            <CardHeader actions={<SegmentedControl size="md" onValueChange={setScope} options={[{ label: t("patterns.search.all"), value: "all" }, { label: t("patterns.search.files"), value: "files" }, { label: t("patterns.search.commands"), value: "commands" }]} value={scope} />} description={t("patterns.search.description")} title={t("patterns.search.title")} />
-            <SearchField aria-label={t("patterns.search.searchPlaceholder")} clearLabel={t("components.preview.close")} leadingIcon={<Icon name="search" />} onClear={() => setQuery("")} onValueChange={setQuery} placeholder={t("patterns.search.searchPlaceholder")} shortcut={<KeyHint>Ctrl K</KeyHint>} value={query} />
-            <CardBody>
+          <Card appearance="raised" className="pattern-command" data-openbitfun-pattern="search-command-surface" gap="lg" padding="md" radius="lg">
+            <div className="pattern-command-header">
+              <div className="pattern-command-query"><SearchField size="sm" aria-label={t("patterns.search.searchPlaceholder")} clearLabel={t("components.preview.close")} leadingIcon={<Icon name="search" />} onClear={() => setQuery("")} onValueChange={setQuery} placeholder={t("patterns.search.searchPlaceholder")} shortcut={<KeyHint>Ctrl K</KeyHint>} value={query} /></div>
+              <TabGroup size="sm" onValueChange={setScope} items={[{ label: t("patterns.search.all"), value: "all" }, { label: t("patterns.search.files"), value: "files" }, { label: t("patterns.search.commands"), value: "commands" }]} value={scope} />
+            </div>
+            <ScrollArea className="pattern-command-results">
               <div className="pattern-action-grid">
-                {visibleActions.map((action) => <ActionCard description={t(action.description)} key={action.title} leading={<Icon name={action.icon} />} size="md">{t(action.title)}</ActionCard>)}
+                {scope !== "files" && visibleActions.map((action) => <ActionCard description={t(action.description)} key={action.title} leading={<Icon name={action.icon} />} size="md">{t(action.title)}</ActionCard>)}
               </div>
-              <div className="pattern-recent-list">
+              {scope !== "commands" && <div className="pattern-recent-list">
                 <strong>{t("patterns.search.recent")}</strong>
                 <ActivityItem actions={[{ icon: <Icon name="arrow-up-right" />, id: "open-readme", label: t("patterns.actions.openFiles") }]} appearance="surface" label="README.md" leading={<Icon name="files" />}>design-system/README.md</ActivityItem>
                 <ActivityItem actions={[{ icon: <Icon name="arrow-up-right" />, id: "open-package", label: t("patterns.actions.openFiles") }]} appearance="surface" label="package.json" leading={<Icon name="files" />}>design-system/packages/ui/package.json</ActivityItem>
-              </div>
-            </CardBody>
+              </div>}
+            </ScrollArea>
           </Card>
         </PatternSection>
 

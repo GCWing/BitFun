@@ -4,6 +4,21 @@
 
 Use this guide to pair OpenBitFun through a Feishu bot.
 
+## Receiving generated images and files
+
+When a reply links to a generated file, the bot sends the attachment from that
+reply's session workspace. Supported images appear as image messages; HTML,
+documents, and other files arrive as file attachments. A preview image and a
+link to the same file produce one attachment. If a file cannot be read or
+uploaded, the bot reports the failure in the chat. Changing the selected
+workspace while the agent runs does not change the source of its output files.
+
+This also works with SSH workspaces and account-linked remote devices. After
+a remote submission, the bot follows that turn and delivers its final reply and
+attachments here. Questions and tool approvals can be answered in the bot chat.
+A temporary disconnect resumes polling the same turn without submitting it again.
+Attachment size limits imposed by the target and chat provider still apply.
+
 ## Setup Steps
 
 ### Step 1

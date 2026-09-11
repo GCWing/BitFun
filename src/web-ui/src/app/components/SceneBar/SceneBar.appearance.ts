@@ -7,5 +7,6 @@ export const sceneBarAppearanceDescriptor: AppearanceSurfaceDescriptor = {
     { id: 'scrollPrevious' },
     { id: 'scrollNext' },
     { id: 'controls' },
+    { id: 'dropHint' },
   ],
 };

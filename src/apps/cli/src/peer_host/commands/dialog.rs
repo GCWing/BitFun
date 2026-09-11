@@ -9,8 +9,8 @@ use tokio::sync::Mutex as AsyncMutex;
 
 use openbitfun_agent_runtime::sdk::AgentUserAnswersRequest;
 use openbitfun_runtime_ports::{
-    AgentDialogTurnRequest, AgentSubmissionSource, AgentTurnCancellationRequest,
-    DialogSubmissionPolicy, DialogTriggerSource,
+    AgentDialogTurnRequest, AgentInputAttachment, AgentSubmissionSource,
+    AgentTurnCancellationRequest, DialogSubmissionPolicy, DialogTriggerSource,
 };
 
 use crate::peer_host::args::{get_string, optional_string, request_value};
@@ -92,6 +92,42 @@ fn peer_dialog_metadata(request: &Value) -> Result<serde_json::Map<String, Value
     Ok(metadata)
 }
 
+fn peer_image_attachments(request: &Value) -> Result<Vec<AgentInputAttachment>, String> {
+    let images = match request.get("imageContexts") {
+        None | Some(Value::Null) => return Ok(Vec::new()),
+        Some(value) => serde_json::from_value::<
+            Vec<openbitfun_core::agentic::image_analysis::ImageContextData>,
+        >(value.clone())
+        .map_err(|error| format!("Invalid imageContexts: {error}"))?,
+    };
+    images
+        .into_iter()
+        .map(|image| {
+            if image.data_url.as_deref().is_none_or(str::is_empty)
+                && image.image_path.as_deref().is_none_or(str::is_empty)
+            {
+                return Err("An image attachment requires data_url or image_path".to_string());
+            }
+            let mut metadata = serde_json::Map::new();
+            if let Some(path) = image.image_path {
+                metadata.insert("imagePath".into(), json!(path));
+            }
+            if let Some(data) = image.data_url {
+                metadata.insert("dataUrl".into(), json!(data));
+            }
+            metadata.insert("mimeType".into(), json!(image.mime_type));
+            if let Some(details) = image.metadata {
+                metadata.insert("metadata".into(), details);
+            }
+            Ok(AgentInputAttachment {
+                kind: "remote_image".into(),
+                id: image.id,
+                metadata,
+            })
+        })
+        .collect()
+}
+
 pub(crate) async fn start_dialog_turn(
     state: &PeerHostState,
     args: &Value,
@@ -127,6 +163,7 @@ async fn submit_dialog_turn(state: &PeerHostState, args: &Value) -> Result<Value
     let turn_id =
         optional_string(request, "turnId").unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let metadata = peer_dialog_metadata(request)?;
+    let attachments = peer_image_attachments(request)?;
     let turn = PeerTurnKey::new(session_id.clone(), turn_id.clone());
     let stream_generation = state.turns.register_root(turn.clone())?;
     // Controller presence is not an admission requirement. This host owns and
@@ -160,7 +197,7 @@ async fn submit_dialog_turn(state: &PeerHostState, args: &Value) -> Result<Value
             policy,
             reply_route: None,
             prepended_reminders: Vec::new(),
-            attachments: Vec::new(),
+            attachments,
             metadata,
         })
         .await;
@@ -410,5 +447,38 @@ mod tests {
         let other_session =
             dialog_submission_slot("session-2", "turn-1").expect("other session slot");
         assert!(other_session.lock().await.is_none());
+    }
+}
+
+#[cfg(test)]
+mod image_attachment_tests {
+    use super::*;
+
+    #[test]
+    fn peer_image_attachments_preserve_inline_pixels_paths_and_legacy_text_requests() {
+        for request in [
+            json!({}),
+            json!({"imageContexts": null}),
+            json!({"imageContexts": []}),
+        ] {
+            assert!(peer_image_attachments(&request).unwrap().is_empty());
+        }
+        let request = json!({"imageContexts": [{
+            "id": "phone-image", "data_url": "data:image/png;base64,cGl4ZWxz",
+            "image_path": "/controller/image.png", "mime_type": "image/png",
+            "metadata": {"name": "screenshot.png"}
+        }]});
+        let attachments = peer_image_attachments(&request).unwrap();
+        let restored: Vec<AgentInputAttachment> =
+            serde_json::from_value(serde_json::to_value(&attachments).unwrap()).unwrap();
+        assert_eq!(restored[0].kind, "remote_image");
+        assert_eq!(
+            restored[0].metadata["dataUrl"],
+            request["imageContexts"][0]["data_url"]
+        );
+        assert_eq!(restored[0].metadata["imagePath"], "/controller/image.png");
+        assert_eq!(restored[0].metadata["metadata"]["name"], "screenshot.png");
+        assert!(peer_image_attachments(&json!({"imageContexts": [{}]})).is_err());
+        assert!(peer_image_attachments(&json!({"imageContexts": "bad"})).is_err());
     }
 }

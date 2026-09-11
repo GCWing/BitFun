@@ -58,10 +58,6 @@ Example usage:
         "Fetch content from a URL in raw, markdown, or JSON format.".to_string()
     }
 
-    fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Deferred
-    }
-
     fn input_schema(&self) -> Value {
         json!({
             "type": "object",

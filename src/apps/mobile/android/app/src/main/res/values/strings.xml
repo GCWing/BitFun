@@ -449,4 +449,14 @@
     <string name="account_open_github">Open GitHub authorization</string>
     <string name="account_device_link_invalid">Use a current OpenBitFun device QR code.</string>
     <string name="account_device_link_unavailable">This device is offline or does not belong to your GitHub account.</string>
+    <string name="chat_image_prepare_failed">This image could not be prepared. Choose another image.</string>
+    <string name="harness_minimal">Minimal</string>
+    <string name="harness_standard">Standard</string>
+    <string name="harness_ultimate">Ultimate</string>
+    <string name="task_completed_title">Task completed</string>
+    <string name="task_completed_body">Open OpenBitFun to view the result.</string>
+    <string name="notification_onboarding_title">Task completion notifications</string>
+    <string name="notification_onboarding_later">Later</string>
+    <string name="notification_onboarding_enable">Enable notifications</string>
+    <string name="notification_onboarding_body">Allow OpenBitFun to notify you when tasks finish. You can change this later in system settings.</string>
 </resources>

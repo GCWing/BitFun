@@ -72,6 +72,7 @@ class MonacoModelManager {
   private modelLoadStates = new Map<string, ModelLoadState>();
   private contentChangeListeners = new Map<string, monaco.IDisposable>();
   private disposalTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private documentModels = new Set<string>();
   /** Disposal delay (ms), 0 for immediate */
   private disposalDelay = 10000;
   
@@ -111,12 +112,15 @@ class MonacoModelManager {
     filePath: string,
     language: string,
     initialContent: string = '',
-    workspacePath?: string
+    workspacePath?: string,
+    modelKey: string = filePath
   ): monaco.editor.ITextModel {
     this.ensureGlobalListeners();
 
-    const uri = this.normalizeUri(filePath);
+    const uri = this.normalizeUri(modelKey);
     const uriString = uri.toString();
+
+    if (modelKey !== filePath) this.documentModels.add(uriString);
 
     this.cancelDisposalTimer(uriString);
 
@@ -212,7 +216,8 @@ class MonacoModelManager {
       const metadata = this.modelMetadata.get(uriString);
       if (metadata) {
         const currentVersionId = model.getAlternativeVersionId();
-        metadata.isDirty = currentVersionId !== metadata.savedVersionId;
+        metadata.isDirty = this.documentModels.has(uriString) ? model.getValue() !== metadata.originalContent
+          : currentVersionId !== metadata.savedVersionId;
         
         window.dispatchEvent(new CustomEvent('monaco-model-dirty-changed', {
           detail: {
@@ -248,6 +253,7 @@ class MonacoModelManager {
     metadata.lastAccessedAt = Date.now();
     
     if (metadata.referenceCount === 0) {
+      if (this.documentModels.has(uriString)) return;
       if (immediate || this.disposalDelay === 0) {
         this.disposeModel(uriString);
       } else {
@@ -261,12 +267,19 @@ class MonacoModelManager {
     
     const timer = setTimeout(() => {
       const metadata = this.modelMetadata.get(uriString);
-      if (metadata && metadata.referenceCount === 0) {
+      if (metadata && metadata.referenceCount === 0 && !this.documentModels.has(uriString)) {
         this.disposeModel(uriString);
       }
     }, this.disposalDelay);
     
     this.disposalTimers.set(uriString, timer);
+  }
+
+  public releaseDocumentModel(modelKey: string): void {
+    if (!getMonacoRuntime()) return;
+    const uri = this.normalizeUri(modelKey).toString();
+    this.documentModels.delete(uri);
+    if (this.modelMetadata.get(uri)?.referenceCount === 0) this.disposeModel(uri);
   }
   
   private cancelDisposalTimer(uriString: string): void {
@@ -305,6 +318,7 @@ class MonacoModelManager {
   }
   
   private cleanupMetadata(uriString: string): void {
+    this.documentModels.delete(uriString);
     this.modelMetadata.delete(uriString);
     this.modelLoadStates.delete(uriString);
     this.cancelDisposalTimer(uriString);
@@ -354,23 +368,23 @@ class MonacoModelManager {
     }
   }
   
-  public markAsSaved(filePath: string): void {
+  public markAsSaved(filePath: string, savedContent?: string, savedVersionId?: number): void {
     const uri = this.normalizeUri(filePath);
     const uriString = uri.toString();
     const model = monacoApi.editor.getModel(uri);
     const metadata = this.modelMetadata.get(uriString);
     
     if (model && metadata) {
-      metadata.savedVersionId = model.getAlternativeVersionId();
-      metadata.originalContent = model.getValue();
-      metadata.isDirty = false;
+      metadata.savedVersionId = savedVersionId ?? model.getAlternativeVersionId();
+      metadata.originalContent = savedContent ?? model.getValue();
+      metadata.isDirty = model.getValue() !== metadata.originalContent;
       metadata.lastAccessedAt = Date.now();
       
       window.dispatchEvent(new CustomEvent('monaco-model-dirty-changed', {
         detail: {
           uri: uriString,
           filePath: metadata.filePath,
-          isDirty: false
+          isDirty: metadata.isDirty
         }
       }));
     }
@@ -437,6 +451,7 @@ class MonacoModelManager {
   }
   
   public normalizeUri(filePath: string): monaco.Uri {
+    if (filePath.startsWith('openbitfun-document:')) return monacoApi.Uri.parse(filePath);
     try {
       if (filePath.includes('%')) {
         filePath = decodeURIComponent(filePath);
@@ -489,7 +504,7 @@ class MonacoModelManager {
   public cleanupUnusedModels(): void {
     const toDispose: string[] = [];
     this.modelMetadata.forEach((metadata, uri) => {
-      if (metadata.referenceCount === 0) {
+      if (metadata.referenceCount === 0 && !this.documentModels.has(uri)) {
         toDispose.push(uri);
       }
     });

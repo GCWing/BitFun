@@ -21,8 +21,8 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+vi.mock('@/infrastructure/i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
 }));
 
 vi.mock('./RealtimeVoiceCallContext', () => ({
@@ -30,7 +30,11 @@ vi.mock('./RealtimeVoiceCallContext', () => ({
 }));
 
 vi.mock('./RealtimeVoiceCallPanel', () => ({
-  RealtimeVoiceCallPanel: () => <div data-testid="voice-panel" />,
+  RealtimeVoiceCallPanel: ({ onClose }: { onClose?: () => void }) => (
+    <div data-testid="voice-panel">
+      <button type="button" data-testid="voice-panel-close" onClick={onClose}>Close</button>
+    </div>
+  ),
 }));
 
 const miniAppTarget: VoiceMiniAppCallTarget = {
@@ -78,11 +82,12 @@ describe('ConversationModeSurface', () => {
     expect(mocks.controller.start).toHaveBeenCalledWith(miniAppTarget);
   });
 
-  it('renders the same voice panel for every host and switches back through one action', async () => {
+  it('delegates voice-window closing to the host without duplicating the mode switch', async () => {
+    const onCloseVoice = vi.fn();
     mocks.controller.phase = 'live';
     await act(async () => {
       root.render(
-        <ConversationModeSurface>
+        <ConversationModeSurface onCloseVoice={onCloseVoice}>
           <div data-testid="chat-surface" />
         </ConversationModeSurface>,
       );
@@ -90,11 +95,13 @@ describe('ConversationModeSurface', () => {
 
     expect(container.querySelector('[data-testid="voice-panel"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="chat-surface"]')).toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="modeSwitch"]')).toBeNull();
 
     await act(async () => {
-      container.querySelector('button')?.click();
+      container.querySelector<HTMLButtonElement>('[data-testid="voice-panel-close"]')?.click();
     });
-    expect(mocks.controller.end).toHaveBeenCalledOnce();
+    expect(onCloseVoice).toHaveBeenCalledOnce();
+    expect(mocks.controller.end).not.toHaveBeenCalled();
   });
 
   it('cannot silently fall back to workspace voice while a MiniApp route is unavailable', async () => {
@@ -127,21 +134,23 @@ describe('ConversationModeSurface', () => {
     expect(container.querySelector('button')).toBeNull();
   });
 
-  it('keeps the hang-up switch while a call is already live after the assistant is disabled', async () => {
+  it('keeps the shared voice panel available after the assistant is disabled during a call', async () => {
+    const onCloseVoice = vi.fn();
     mocks.controller.enabled = false;
     mocks.controller.phase = 'live';
     await act(async () => {
       root.render(
-        <ConversationModeSurface>
+        <ConversationModeSurface onCloseVoice={onCloseVoice}>
           <div data-testid="chat-surface" />
         </ConversationModeSurface>,
       );
     });
 
-    expect(container.querySelector('[data-openbitfun-part="modeSwitch"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="voice-panel"]')).not.toBeNull();
+    expect(container.querySelector('[data-openbitfun-part="modeSwitch"]')).toBeNull();
     await act(async () => {
-      container.querySelector('button')?.click();
+      container.querySelector<HTMLButtonElement>('[data-testid="voice-panel-close"]')?.click();
     });
-    expect(mocks.controller.end).toHaveBeenCalledOnce();
+    expect(onCloseVoice).toHaveBeenCalledOnce();
   });
 });

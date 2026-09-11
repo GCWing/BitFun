@@ -22,6 +22,27 @@ vi.mock('@/shared/utils/logger', () => ({
 }));
 
 describe('ExplorerController startup observability', () => {
+  it('reloads the same POSIX root against a new SSH connection and discards the old read', async () => {
+    let finishOld!: (nodes: Awaited<ReturnType<ExplorerFileSystemProvider['getChildren']>>) => void;
+    const provider: ExplorerFileSystemProvider = {
+      getChildren: vi.fn(request => request.remoteConnectionId === 'ssh-a'
+        ? new Promise(resolve => { finishOld = resolve; })
+        : Promise.resolve([{ path: '/repo/b.txt', name: 'b.txt', isDirectory: false }])),
+      watch: vi.fn(() => () => {}),
+    };
+    const controller = new ExplorerController(provider);
+    try {
+      const old = controller.configure({ rootPath: '/repo', remoteConnectionId: 'ssh-a', enableAutoWatch: false });
+      await controller.configure({ rootPath: '/repo', remoteConnectionId: 'ssh-b', enableAutoWatch: false });
+      finishOld([{ path: '/repo/a.txt', name: 'a.txt', isDirectory: false }]);
+      await old;
+      expect(provider.getChildren).toHaveBeenLastCalledWith(expect.objectContaining({ path: '/repo', remoteConnectionId: 'ssh-b' }));
+      expect(JSON.stringify(controller.getSnapshot().fileTree)).toContain('b.txt');
+      expect(JSON.stringify(controller.getSnapshot().fileTree)).not.toContain('a.txt');
+    } finally {
+      controller.dispose();
+    }
+  });
   beforeEach(() => {
     startupTraceMock.markPhase.mockClear();
     loggerMock.debug.mockClear();

@@ -15,6 +15,7 @@ import com.openbitfun.mobile.core.persistence.PersistedRemoteSession
 import com.openbitfun.mobile.core.domain.RemoteSession
 import com.openbitfun.mobile.core.domain.SessionNaming
 import com.openbitfun.mobile.core.domain.SessionAgentTypes
+import com.openbitfun.mobile.core.domain.TranscriptIntegrityPolicy
 import com.openbitfun.mobile.core.feature.connection.ConnectionPhase
 import com.openbitfun.mobile.core.protocol.ActiveTurnSnapshotResponse
 import com.openbitfun.mobile.core.protocol.ChatMessageItemResponse
@@ -50,6 +51,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -75,6 +78,8 @@ public class RemoteSessionStore internal constructor(
     private val _createOperation = MutableStateFlow<CreateSessionOperationState>(CreateSessionOperationState.Idle)
     /** Outcome is changed only by create operations, never by open/list selection. */
     public val createOperation: StateFlow<CreateSessionOperationState> = _createOperation.asStateFlow()
+    private val _workspaceDirectory = MutableStateFlow(WorkspaceSessionDirectoryUiState(emptyList()))
+    public val workspaceDirectory: StateFlow<WorkspaceSessionDirectoryUiState> = _workspaceDirectory.asStateFlow()
     private var nextCreateRequestId: Long = 0
     private var nextCreateGeneration: Long = 0
     private var activeCreateGeneration: Long? = null
@@ -86,6 +91,8 @@ public class RemoteSessionStore internal constructor(
     private var modelCatalog: RemoteModelCatalog? = null
     private var modelCatalogFailure: ModelCatalogFailure? = null
     private val locallyCreatedSessions: MutableMap<String, RemoteSession> = mutableMapOf()
+    private val workspaceDirectoryJobs: MutableMap<String, Job> = mutableMapOf()
+    private val workspaceDirectoryGenerations: MutableMap<String, Long> = mutableMapOf()
 
     /**
      * The re-read of the transcript that follows a turn ending.
@@ -95,6 +102,8 @@ public class RemoteSessionStore internal constructor(
      * repeatedly — one in flight is enough.
      */
     private var turnEndSync: Job? = null
+    private var historyRewriteSync: Job? = null
+    private val initialTranscriptMutex = Mutex()
 
     /**
      * The workspace the desktop currently has open, learned from `get_workspace_info`.
@@ -112,6 +121,8 @@ public class RemoteSessionStore internal constructor(
                 load(current?.query.orEmpty(), current?.agentFilter ?: SessionAgentFilter.ALL)
             RemoteSessionIntent.LoadMore -> loadMore()
             RemoteSessionIntent.LoadOlderMessages -> loadOlderMessages()
+            is RemoteSessionIntent.LoadWorkspaceSessions -> loadWorkspaceSessions(intent.path, false)
+            is RemoteSessionIntent.RetryWorkspaceSessions -> loadWorkspaceSessions(intent.path, true)
             is RemoteSessionIntent.Search ->
                 load(intent.query, current?.agentFilter ?: SessionAgentFilter.ALL)
             is RemoteSessionIntent.SetAgentFilter -> load(current?.query.orEmpty(), intent.filter)
@@ -237,7 +248,7 @@ public class RemoteSessionStore internal constructor(
                     cancelCreateIfActive(normalizedRequestId, generation, CreateSessionOperationFailure.CANCELLED)
                     return@launch
                 }
-                if (beforeSelection !is RemoteWorkspaceUiState.Ready) {
+                if (beforeSelection !is RemoteWorkspaceUiState.Ready || beforeSelection.loadFailure) {
                     failCreate(normalizedRequestId, generation, CreateSessionOperationFailure.WORKSPACE, true, false)
                     return@launch
                 }
@@ -253,16 +264,19 @@ public class RemoteSessionStore internal constructor(
                 val selected = withTimeout(30_000) {
                     workspaceStore.state.first { state ->
                         workspaceStore.stopVersion.value != stopVersion || when (state) {
-                            is RemoteWorkspaceUiState.Ready -> !state.busy &&
-                                state.selected?.path == normalizedPath &&
-                                state.assistants.any { it.path == normalizedPath }
+                            is RemoteWorkspaceUiState.Ready -> state.loadFailure ||
+                                (!state.busy &&
+                                    state.selected?.path == normalizedPath &&
+                                    state.assistants.any { it.path == normalizedPath })
                             is RemoteWorkspaceUiState.Failed -> true
                             else -> false
                         }
                     }
                 }
                 if (!isCurrentWork(operationToken) || activeCreateGeneration != generation) return@launch
-                if (workspaceStore.stopVersion.value != stopVersion || selected !is RemoteWorkspaceUiState.Ready) {
+                if (workspaceStore.stopVersion.value != stopVersion ||
+                    selected !is RemoteWorkspaceUiState.Ready || selected.loadFailure
+                ) {
                     failCreate(normalizedRequestId, generation, CreateSessionOperationFailure.WORKSPACE, true, false)
                     return@launch
                 }
@@ -298,6 +312,128 @@ public class RemoteSessionStore internal constructor(
         return projectConfirmedCreatedSession(session)
     }
 
+    /** Last device-scoped list stored on disk, used by the multi-device directory without a request. */
+    internal fun cachedSessions(): List<RemoteSession> {
+        if (!persistenceEnabled) return emptyList()
+        val rows = persistedSessionSlice()?.sessions.orEmpty()
+        restorePendingConfirmed(rows)
+        return rows.map(::toRemoteSession)
+    }
+
+    /** Loads one disclosed workspace without changing the desktop's active workspace. */
+    internal suspend fun sessionsForWorkspace(path: String): List<RemoteSession> {
+        val normalizedPath = path.trim()
+        if (normalizedPath.isEmpty()) return emptyList()
+        val response = transport.send<SessionListResponse>(
+            RemoteCommand(
+                cmd = "list_sessions",
+                workspacePath = normalizedPath,
+                limit = DIRECTORY_WORKSPACE_PAGE_SIZE,
+                offset = 0,
+            ),
+        )
+        val server = response.sessions
+            .map(RemoteResponseMapper::session)
+            .filter { SessionAgentTypes.isMobileVisible(it.agentType) }
+            .map { session ->
+                if (session.workspacePath.isNullOrBlank()) session.copy(workspacePath = normalizedPath) else session
+            }
+        val serverIds = server.mapTo(mutableSetOf()) { it.id }
+        serverIds.forEach(locallyCreatedSessions::remove)
+        val pending = locallyCreatedSessions.values.filter { session ->
+            session.id !in serverIds && session.workspacePath.orEmpty().trim() == normalizedPath
+        }
+        return pending + server
+    }
+
+    /** Persists the directory's merged cross-workspace snapshot for offline restore. */
+    internal fun persistDirectorySessions(sessions: List<RemoteSession>) {
+        savePersistedSessions(sessions, false)
+    }
+
+    private fun loadWorkspaceSessions(path: String, force: Boolean) {
+        val normalizedPath = normalizeWorkspacePath(path)
+        if (normalizedPath.isEmpty()) return
+        if (workspaceDirectoryJobs[normalizedPath]?.isActive == true) return
+        val existing = _workspaceDirectory.value.workspace(normalizedPath)
+        if (!force && existing?.status == WorkspaceSessionDirectoryStatus.READY) return
+        val generation = (workspaceDirectoryGenerations[normalizedPath] ?: 0L) + 1L
+        workspaceDirectoryGenerations[normalizedPath] = generation
+        updateWorkspaceDirectory(normalizedPath) {
+            it.copy(status = WorkspaceSessionDirectoryStatus.LOADING)
+        }
+        val job = scope.launch {
+            try {
+                val loaded = sessionsForWorkspace(normalizedPath)
+                if (workspaceDirectoryGenerations[normalizedPath] != generation) return@launch
+                if (persistenceEnabled) {
+                    val cached = cachedSessions()
+                    persistDirectorySessions(replaceWorkspaceSessions(cached, normalizedPath, loaded))
+                }
+                updateWorkspaceDirectory(normalizedPath) {
+                    it.copy(status = WorkspaceSessionDirectoryStatus.READY, sessions = loaded)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                if (workspaceDirectoryGenerations[normalizedPath] == generation) {
+                    updateWorkspaceDirectory(normalizedPath) {
+                        it.copy(status = WorkspaceSessionDirectoryStatus.FAILED)
+                    }
+                }
+            } finally {
+                if (workspaceDirectoryJobs[normalizedPath] === coroutineContext[Job]) {
+                    workspaceDirectoryJobs.remove(normalizedPath)
+                }
+            }
+        }
+        workspaceDirectoryJobs[normalizedPath] = job
+        if (!job.isActive && workspaceDirectoryJobs[normalizedPath] === job) {
+            workspaceDirectoryJobs.remove(normalizedPath)
+        }
+    }
+
+    private fun updateWorkspaceDirectory(
+        path: String,
+        transform: (WorkspaceSessionDirectoryEntry) -> WorkspaceSessionDirectoryEntry,
+    ) {
+        var found = false
+        val entries = _workspaceDirectory.value.workspaces.map { entry ->
+            if (normalizeWorkspacePath(entry.path) == normalizeWorkspacePath(path)) {
+                found = true
+                transform(entry)
+            } else {
+                entry
+            }
+        }.toMutableList()
+        if (!found) {
+            entries += transform(
+                WorkspaceSessionDirectoryEntry(path, WorkspaceSessionDirectoryStatus.IDLE, emptyList()),
+            )
+        }
+        _workspaceDirectory.value = WorkspaceSessionDirectoryUiState(entries)
+    }
+
+    private fun replaceWorkspaceSessions(
+        sessions: List<RemoteSession>,
+        path: String,
+        replacement: List<RemoteSession>,
+    ): List<RemoteSession> {
+        val normalizedPath = normalizeWorkspacePath(path)
+        val replacementIds = replacement.mapTo(mutableSetOf()) { it.id }
+        val retained = sessions.filter { session ->
+            session.id !in replacementIds &&
+                normalizeWorkspacePath(session.workspacePath.orEmpty()) != normalizedPath
+        }
+        return replacement + retained
+    }
+
+    private fun normalizeWorkspacePath(path: String): String {
+        val trimmed = path.trim()
+        val normalized = trimmed.trimEnd('/')
+        return normalized.ifEmpty { trimmed }
+    }
+
     private fun projectConfirmedCreatedSession(session: RemoteSession): Boolean {
         val sessionId = session.id.trim()
         if (sessionId.isEmpty()) return false
@@ -307,13 +443,12 @@ public class RemoteSessionStore internal constructor(
         if (current != null) {
             publishAuthorityReady(current.copy(sessions = mergeConfirmed(current.sessions, confirmed)))
         }
-        if (persistenceEnabled) {
-            val persistedRows = persistence!!.remoteSessions.load(deviceKey!!)
+        persistedSessionSlice()?.let { persisted ->
+            val persistedRows = persisted.sessions
             restorePendingConfirmed(persistedRows)
-            persistence.remoteSessions.save(
-                deviceKey,
-                mergeConfirmed(persistedRows.map(::toRemoteSession), confirmed).map(::toPersistedSession),
-                persistence.remoteSessions.hasMore(deviceKey),
+            savePersistedSessions(
+                mergeConfirmed(persistedRows.map(::toRemoteSession), confirmed),
+                persisted.hasMore,
             )
         }
         return true
@@ -367,8 +502,24 @@ public class RemoteSessionStore internal constructor(
         }
         beginWork()
         work = null
+        workspaceDirectoryJobs.values.forEach(Job::cancel)
+        workspaceDirectoryJobs.clear()
+        workspaceDirectoryGenerations.keys.forEach { path ->
+            workspaceDirectoryGenerations[path] = (workspaceDirectoryGenerations[path] ?: 0L) + 1L
+        }
+        _workspaceDirectory.value = WorkspaceSessionDirectoryUiState(
+            _workspaceDirectory.value.workspaces.map { entry ->
+                if (entry.status == WorkspaceSessionDirectoryStatus.LOADING) {
+                    entry.copy(status = WorkspaceSessionDirectoryStatus.IDLE)
+                } else {
+                    entry
+                }
+            },
+        )
         turnEndSync?.cancel()
         turnEndSync = null
+        historyRewriteSync?.cancel()
+        historyRewriteSync = null
         controller.stop()
         _connectionPhase.value = ConnectionPhase.DISCONNECTED
     }
@@ -377,14 +528,15 @@ public class RemoteSessionStore internal constructor(
         if (_state.value is RemoteSessionUiState.Loading) return
         val current = _state.value as? RemoteSessionUiState.Ready
         if (current == null && persistenceEnabled) {
-            val cached = persistence!!.remoteSessions.load(deviceKey!!)
+            val cachedSlice = persistedSessionSlice()
+            val cached = cachedSlice?.sessions.orEmpty()
             restorePendingConfirmed(cached)
             if (cached.isNotEmpty()) {
                 publishAuthorityReady(RemoteSessionUiState.Ready(
                     sessions = cached.map(::toRemoteSession), selectedSessionId = null, timeline = null,
                     busy = true, permissionMode = null, permissionModeFailure = null,
                     query = query, agentFilter = filter,
-                    hasMore = persistence.remoteSessions.hasMore(deviceKey), hasMoreMessages = false,
+                    hasMore = cachedSlice?.hasMore ?: false, hasMoreMessages = false,
                     modelCatalog = null,
                 ))
             }
@@ -416,7 +568,7 @@ public class RemoteSessionStore internal constructor(
                 commitSessionPage(page)
                 commitModelCatalog(catalog)
                 if (persistenceEnabled && query.isEmpty() && filter == SessionAgentFilter.ALL) {
-                    persistence!!.remoteSessions.save(deviceKey!!, page.sessions.map(::toPersistedSession), page.hasMore)
+                    savePersistedSessions(page.sessions, page.hasMore)
                 }
                 if (generation != workGeneration) return@launch
                 publishAuthorityReady(RemoteSessionUiState.Ready(
@@ -459,7 +611,7 @@ public class RemoteSessionStore internal constructor(
                 val sessions = current.sessions + page.sessions.filterNot { it.id in known }
                 commitSessionPage(page)
                 if (persistenceEnabled && current.query.isEmpty() && current.agentFilter == SessionAgentFilter.ALL) {
-                    persistence!!.remoteSessions.save(deviceKey!!, sessions.map(::toPersistedSession), page.hasMore)
+                    savePersistedSessions(sessions, page.hasMore)
                 }
                 publishAuthorityReady(ready.copy(
                     sessions = sessions,
@@ -591,6 +743,10 @@ public class RemoteSessionStore internal constructor(
         )
 
     private fun open(sessionId: String) {
+        turnEndSync?.cancel()
+        turnEndSync = null
+        historyRewriteSync?.cancel()
+        historyRewriteSync = null
         val normalized = sessionId.trim()
         if (normalized.isEmpty()) {
             _state.value = RemoteSessionUiState.Failed(RemoteSessionFailureReason.SESSION_NOT_FOUND)
@@ -598,18 +754,35 @@ public class RemoteSessionStore internal constructor(
             return
         }
         val current = _state.value as? RemoteSessionUiState.Ready
-        val restoredDraft = if (persistenceEnabled) persistence!!.drafts.load(draftId(normalized)).orEmpty() else ""
+        val restoredDraft = loadPersistedDraft(normalized)
+        var resumableCursor: ChatSessionCursor? = null
         if (persistenceEnabled) {
-            val cached = persistence!!.remoteTranscripts.load(deviceKey!!, normalized)
+            val cached = try {
+                persistence!!.remoteTranscripts.load(deviceKey!!, normalized)
+            } catch (_: Throwable) {
+                emptyList()
+            }
             if (cached.isNotEmpty()) {
                 timelineStore.reset(normalized)
-                timelineStore.setPersistedMessages(cached.map(::toChatMessage))
-                persistence.remoteTranscripts.loadCursor(deviceKey, normalized)?.let { cursor ->
-                    timelineStore.setCursor(ChatSessionCursor(
-                        cursor.pollVersion.toIntOrNull() ?: 0,
-                        cursor.knownMessageCount,
-                        cursor.knownModelCatalogVersion.toLongOrNull() ?: 0L,
-                    ))
+                val restoredMessages = cached.map(::toChatMessage)
+                timelineStore.setPersistedMessages(restoredMessages)
+                val cursor = try {
+                    persistence!!.remoteTranscripts.loadCursor(deviceKey!!, normalized)
+                } catch (_: Throwable) {
+                    null
+                }
+                cursor?.let {
+                    val restoredCursor = ChatSessionCursor(
+                        it.pollVersion.toIntOrNull() ?: 0,
+                        it.knownMessageCount,
+                        it.knownModelCatalogVersion.toLongOrNull() ?: 0L,
+                    )
+                    timelineStore.setCursor(restoredCursor)
+                    if (it.knownMessageCount == restoredMessages.size &&
+                        !TranscriptIntegrityPolicy.hasHollowAssistants(restoredMessages)
+                    ) {
+                        resumableCursor = restoredCursor
+                    }
                 }
                 _state.value = RemoteSessionUiState.Ready(
                     sessions = current?.sessions.orEmpty(), selectedSessionId = normalized,
@@ -630,7 +803,7 @@ public class RemoteSessionStore internal constructor(
             ?: RemoteSessionUiState.Loading
         work = scope.launch {
             try {
-                val opened = openSession(normalized, operationToken) ?: return@launch
+                val opened = openSession(normalized, operationToken, resumableCursor) ?: return@launch
                 if (!isCurrentWork(operationToken)) return@launch
                 _state.value = RemoteSessionUiState.Ready(
                     sessions = current?.sessions.orEmpty(),
@@ -660,10 +833,27 @@ public class RemoteSessionStore internal constructor(
     }
 
     /** Loads a session's history, starts polling it, and reports its permission mode. */
-    private suspend fun openSession(sessionId: String, operationToken: Long): OpenedSession? {
-        val response = transport.send<com.openbitfun.mobile.core.protocol.SessionMessagesResponse>(
-            RemoteCommand(cmd = "get_session_messages", sessionId = sessionId, limit = 100),
-        )
+    private suspend fun openSession(
+        sessionId: String,
+        operationToken: Long,
+        resumableCursor: ChatSessionCursor? = null,
+    ): OpenedSession? {
+        if (resumableCursor != null && timelineStore.snapshot().sessionId == sessionId) {
+            // A peer can restart while the phone retains its cursor version. Resume
+            // from the cached message count, but always reset the volatile version.
+            val restartSafeCursor = resumableCursor.copy(pollVersion = 0)
+            timelineStore.setCursor(restartSafeCursor)
+            controller.start(sessionId, restartSafeCursor)
+            val permission = readPermissionMode()
+            if (!isCurrentWork(operationToken)) return null
+            return OpenedSession(permission, false)
+        }
+        val response = initialTranscriptMutex.withLock {
+            if (!isCurrentWork(operationToken)) return@withLock null
+            transport.send<com.openbitfun.mobile.core.protocol.SessionMessagesResponse>(
+                RemoteCommand(cmd = "get_session_messages", sessionId = sessionId, limit = 100),
+            )
+        } ?: return null
         if (!isCurrentWork(operationToken)) return null
         val cursor = timelineStore.snapshot().cursor.takeIf { timelineStore.snapshot().sessionId == sessionId }
         timelineStore.reset(sessionId)
@@ -939,11 +1129,27 @@ public class RemoteSessionStore internal constructor(
                 transport.send<CommandStatusResponse>(
                     RemoteCommand(cmd = "delete_session", sessionId = normalized),
                 )
-                if (!isCurrentWork(operationToken)) return@launch
                 locallyCreatedSessions.remove(normalized)
+                if (persistenceEnabled) {
+                    persistedSessionSlice()?.let { persisted ->
+                        val persistedSessions = persisted.sessions
+                            .filterNot { it.sessionId == normalized }
+                        savePersistedSessionRows(persistedSessions, persisted.hasMore)
+                    }
+                    try {
+                        persistence!!.drafts.delete(draftId(normalized))
+                    } catch (_: Throwable) {
+                        // Each optional cache is cleaned independently so one failure does not block another.
+                    }
+                    try {
+                        persistence!!.remoteTranscripts.delete(deviceKey!!, normalized)
+                    } catch (_: Throwable) {
+                        // Each optional cache is cleaned independently so one failure does not block another.
+                    }
+                }
+                if (!isCurrentWork(operationToken)) return@launch
                 val closingOpenSession = current.selectedSessionId == normalized
                 if (closingOpenSession) {
-                    if (persistenceEnabled) persistence!!.drafts.delete(draftId(normalized))
                     controller.stop()
                     timelineStore.reset("")
                 }
@@ -980,6 +1186,14 @@ public class RemoteSessionStore internal constructor(
                 transport.send<CommandStatusResponse>(
                     RemoteCommand(cmd = "update_session_title", sessionId = sessionId, title = title),
                 )
+                if (persistenceEnabled) {
+                    persistedSessionSlice()?.let { persisted ->
+                        val persistedSessions = persisted.sessions.map { session ->
+                            if (session.sessionId == sessionId) session.copy(title = title) else session
+                        }
+                        savePersistedSessionRows(persistedSessions, persisted.hasMore)
+                    }
+                }
                 if (!isCurrentWork(operationToken)) return@launch
                 val ready = (_state.value as? RemoteSessionUiState.Ready) ?: current
                 publishAuthorityReady(ready.copy(
@@ -1011,6 +1225,10 @@ public class RemoteSessionStore internal constructor(
 
     private fun updateTimeline(snapshot: ChatSessionSnapshot) {
         if (snapshot.sessionId != timelineStore.snapshot().sessionId) return
+        if (snapshot.historyRewritten && snapshot.messageSnapshot == null) {
+            reloadRewrittenTranscript(snapshot.sessionId)
+            return
+        }
         timelineStore.applySnapshot(snapshot)
         snapshot.modelCatalog?.let { catalog ->
             if (catalog.version > 0L || catalog.models.isNotEmpty()) modelCatalog = catalog
@@ -1023,9 +1241,46 @@ public class RemoteSessionStore internal constructor(
             )
             markConnected()
         }
-        if (snapshot.shouldSyncAfterTurnEnded) {
+        if (snapshot.messageSnapshot != null) {
+            persistTranscript(snapshot.sessionId, preserveOlder = false)
+        } else if (snapshot.changed) {
             persistTranscript(snapshot.sessionId)
+        }
+        if (snapshot.shouldSyncAfterTurnEnded && snapshot.messageSnapshot == null) {
             syncAfterTurnEnded(snapshot.sessionId)
+        }
+    }
+
+    /** Repairs a legacy poll response that reports a shorter history without a snapshot. */
+    private fun reloadRewrittenTranscript(sessionId: String) {
+        if (sessionId.isEmpty() || historyRewriteSync?.isActive == true) return
+        historyRewriteSync = scope.launch {
+            try {
+                val response = transport.send<com.openbitfun.mobile.core.protocol.SessionMessagesResponse>(
+                    RemoteCommand(cmd = "get_session_messages", sessionId = sessionId, limit = 100),
+                )
+                if (timelineStore.snapshot().sessionId != sessionId) return@launch
+                timelineStore.setPersistedMessages(response.messages.map(RemoteResponseMapper::chatMessage))
+                val cursor = ChatSessionCursor(
+                    pollVersion = 0,
+                    knownMessageCount = response.messages.size,
+                    knownModelCatalogVersion = timelineStore.snapshot().cursor.knownModelCatalogVersion,
+                )
+                timelineStore.setCursor(cursor)
+                controller.updateCursor(cursor)
+                persistTranscript(sessionId, preserveOlder = false)
+                val current = _state.value
+                if (current is RemoteSessionUiState.Ready) {
+                    _state.value = current.copy(
+                        timeline = timelineStore.snapshot(),
+                        hasMoreMessages = response.hasMore,
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                // Keep the cached transcript visible and let a later poll retry the fence.
+            }
         }
     }
 
@@ -1080,8 +1335,9 @@ public class RemoteSessionStore internal constructor(
     private fun sendMessage(intent: RemoteSessionIntent.SendMessage) {
         val sessionId = intent.sessionId.trim()
         val content = intent.content
-        if (sessionId.isEmpty() || content.trim().isEmpty()) return
+        if (sessionId.isEmpty() || (content.trim().isEmpty() && intent.images.isNullOrEmpty())) return
         val current = _state.value as? RemoteSessionUiState.Ready ?: return
+        if (current.busy || current.selectedSessionId != sessionId) return
         val wireImages = intent.images?.map { image ->
             com.openbitfun.mobile.core.protocol.ImageAttachment(
                 name = image.id,
@@ -1131,17 +1387,27 @@ public class RemoteSessionStore internal constructor(
                 if (!isCurrentWork(operationToken)) return@launch
                 response.turnId?.let(timelineStore::setLocalActiveTurn)
                 controller.nudge()
-                if (persistenceEnabled) persistence!!.drafts.delete(draftId(sessionId))
                 val ready = ((_state.value as? RemoteSessionUiState.Ready) ?: current)
-                if (ready.selectedSessionId == sessionId) _state.value = ready.copy(draft = "")
+                if (ready.selectedSessionId == sessionId) {
+                    // An acknowledgement owns only the submitted draft. Keep
+                    // newer typing and let each native picker remove only the
+                    // acknowledged images; failed sends retain their pixels.
+                    val draftUnchanged = ready.draft == current.draft && ready.draft.trim() == content.trim()
+                    if (draftUnchanged) deletePersistedDraft(sessionId)
+                    _state.value = ready.copy(
+                        draft = if (draftUnchanged) "" else ready.draft,
+                        lastSentMessage = SentChatMessage(
+                            local.id, sessionId, content, intent.images.orEmpty().map { it.id },
+                        ),
+                    )
+                }
                 setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Throwable) {
                 if (isCurrentWork(operationToken)) {
                     timelineStore.markOptimisticMessageFailed(local.id)
-                    setBusy((_state.value as? RemoteSessionUiState.Ready) ?: current, false)
-                    handleFailure(error, current)
+                    handleFailure(error, (_state.value as? RemoteSessionUiState.Ready) ?: current)
                 }
             }
         }
@@ -1150,11 +1416,61 @@ public class RemoteSessionStore internal constructor(
     private fun updateDraft(text: String) {
         val current = _state.value as? RemoteSessionUiState.Ready ?: return
         val id = current.selectedSessionId ?: return
-        if (persistenceEnabled) {
-            if (text.isEmpty()) persistence!!.drafts.delete(draftId(id))
-            else persistence!!.drafts.save(draftId(id), text)
-        }
+        savePersistedDraft(id, text)
         _state.value = current.copy(draft = text)
+    }
+
+    private data class PersistedSessionSlice(
+        val sessions: List<PersistedRemoteSession>,
+        val hasMore: Boolean,
+    )
+
+    private fun persistedSessionSlice(): PersistedSessionSlice? {
+        if (!persistenceEnabled) return null
+        return try {
+            PersistedSessionSlice(
+                persistence!!.remoteSessions.load(deviceKey!!),
+                persistence.remoteSessions.hasMore(deviceKey),
+            )
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun savePersistedSessions(sessions: List<RemoteSession>, hasMore: Boolean) {
+        savePersistedSessionRows(sessions.map(::toPersistedSession), hasMore)
+    }
+
+    private fun savePersistedSessionRows(sessions: List<PersistedRemoteSession>, hasMore: Boolean) {
+        if (!persistenceEnabled) return
+        try {
+            persistence!!.remoteSessions.save(deviceKey!!, sessions, hasMore)
+        } catch (_: Throwable) {
+            // Remote state stays authoritative when its optional cache is unavailable.
+        }
+    }
+
+    private fun loadPersistedDraft(sessionId: String): String {
+        if (!persistenceEnabled) return ""
+        return try {
+            persistence!!.drafts.load(draftId(sessionId)).orEmpty()
+        } catch (_: Throwable) {
+            ""
+        }
+    }
+
+    private fun savePersistedDraft(sessionId: String, text: String) {
+        if (!persistenceEnabled) return
+        try {
+            if (text.isEmpty()) persistence!!.drafts.delete(draftId(sessionId))
+            else persistence!!.drafts.save(draftId(sessionId), text)
+        } catch (_: Throwable) {
+            // Draft persistence is best effort; the in-memory composer remains usable.
+        }
+    }
+
+    private fun deletePersistedDraft(sessionId: String) {
+        savePersistedDraft(sessionId, "")
     }
 
     private fun draftId(sessionId: String): String = "remote-composer:$deviceKey:$sessionId"
@@ -1338,22 +1654,31 @@ public class RemoteSessionStore internal constructor(
         RemotePermissionMode.Unknown -> SessionPermissionMode.UNKNOWN
     }
 
-    private fun persistTranscript(sessionId: String) {
+    private fun persistTranscript(sessionId: String, preserveOlder: Boolean = true) {
         if (!persistenceEnabled || sessionId.isEmpty()) return
         val snapshot = timelineStore.snapshot()
         if (snapshot.sessionId != sessionId) return
-        val p = persistence!!
-        val window = snapshot.persistedMessages.map { toPersisted(sessionId, it) }
-        val windowIds = window.mapTo(mutableSetOf()) { it.messageId }
-        // A paginated re-read (limit 100) must not truncate pages the user already
-        // loaded: keep older cached rows the current window does not cover.
-        val older = p.remoteTranscripts.load(deviceKey!!, sessionId).filterNot { it.messageId in windowIds }
-        p.remoteTranscripts.replace(deviceKey, sessionId, older + window)
-        p.remoteTranscripts.saveCursor(deviceKey, sessionId, PersistedRemoteCursor(
-            pollVersion = snapshot.cursor.pollVersion.toString(),
-            knownMessageCount = snapshot.cursor.knownMessageCount,
-            knownModelCatalogVersion = snapshot.cursor.knownModelCatalogVersion.toString(),
-        ))
+        try {
+            val p = persistence!!
+            val persistedDeviceKey = deviceKey!!
+            val window = snapshot.persistedMessages.map { toPersisted(sessionId, it) }
+            val windowIds = window.mapTo(mutableSetOf()) { it.messageId }
+            // A paginated re-read (limit 100) must not truncate pages the user already
+            // loaded: keep older cached rows the current window does not cover.
+            val older = if (preserveOlder) {
+                p.remoteTranscripts.load(persistedDeviceKey, sessionId).filterNot { it.messageId in windowIds }
+            } else {
+                emptyList()
+            }
+            p.remoteTranscripts.replace(persistedDeviceKey, sessionId, older + window)
+            p.remoteTranscripts.saveCursor(persistedDeviceKey, sessionId, PersistedRemoteCursor(
+                pollVersion = snapshot.cursor.pollVersion.toString(),
+                knownMessageCount = snapshot.cursor.knownMessageCount,
+                knownModelCatalogVersion = snapshot.cursor.knownModelCatalogVersion.toString(),
+            ))
+        } catch (_: Throwable) {
+            // Transcript persistence is optional; live session state remains authoritative.
+        }
     }
 
     private fun restorePendingConfirmed(rows: List<PersistedRemoteSession>) {
@@ -1444,7 +1769,7 @@ public class RemoteSessionStore internal constructor(
             )
             val version = if (response.version > 0) response.version else sinceVersion
             return PollSessionResult(
-                version = response.version,
+                version = version,
                 changed = response.changed,
                 sessionState = response.sessionState.orEmpty(),
                 title = response.title.orEmpty(),
@@ -1452,6 +1777,8 @@ public class RemoteSessionStore internal constructor(
                 totalMessageCount = response.totalMessageCount ?: knownMessageCount,
                 activeTurn = response.activeTurn?.let { RemoteResponseMapper.activeTurn(it, version) },
                 modelCatalog = response.modelCatalog,
+                messageSnapshot = response.messageSnapshot?.map(RemoteResponseMapper::chatMessage),
+                hasAuthoritativeMessageCount = response.totalMessageCount != null,
             )
         }
     }
@@ -1465,6 +1792,7 @@ public class RemoteSessionStore internal constructor(
          * to 100, so asking for more only costs round trips.
          */
         private const val FILTER_PAGE_SIZE: Int = 100
+        private const val DIRECTORY_WORKSPACE_PAGE_SIZE: Int = 50
 
         internal fun create(scope: CoroutineScope, transport: RemoteCommandTransport): RemoteSessionStore =
             RemoteSessionStore(scope, transport)

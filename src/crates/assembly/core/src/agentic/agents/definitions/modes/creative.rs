@@ -4,14 +4,12 @@
 //! default tool manifests of general coding, office, or assistant modes.
 
 use crate::agentic::agents::{
-    standard_harness_tool_exposure_overrides, standard_harness_tools,
-    standard_harness_user_context_policy, Agent, AgentToolPolicyOverrides, UserContextPolicy,
+    standard_harness_tools, standard_harness_user_context_policy, Agent, UserContextPolicy,
 };
 use async_trait::async_trait;
 
 pub struct CreativeHarness {
     default_tools: Vec<String>,
-    tool_exposure_overrides: AgentToolPolicyOverrides,
 }
 
 impl Default for CreativeHarness {
@@ -33,10 +31,7 @@ impl CreativeHarness {
             .into_iter()
             .map(str::to_string),
         );
-        Self {
-            default_tools,
-            tool_exposure_overrides: standard_harness_tool_exposure_overrides(),
-        }
+        Self { default_tools }
     }
 }
 
@@ -64,10 +59,6 @@ impl Agent for CreativeHarness {
 
     fn default_tools(&self) -> Vec<String> {
         self.default_tools.clone()
-    }
-
-    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
-        &self.tool_exposure_overrides
     }
 
     fn user_context_policy(&self) -> UserContextPolicy {

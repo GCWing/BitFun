@@ -239,6 +239,7 @@ public object FileTargetResolver {
         if (scheme.length == 1 && reference.length >= 3 && (reference[2] == '/' || reference[2] == '\\')) {
             return false
         }
+        if (reference.startsWith("openbitfun://runtime/") || reference.startsWith("openbitfun://current-session/")) return false
         return scheme.lowercase() != "computer" && scheme.lowercase() != "file"
     }
 

@@ -43,6 +43,16 @@ pub(crate) async fn evaluate(repo_root: PathBuf, policy: AutoIndexPolicy) -> Aut
     }
 }
 
+/// Checks the local indexed-search prerequisite without opening a daemon session
+/// or counting files. Callers must route remote paths before using this probe.
+/// A negative result lets content-search callers use their local filesystem backend.
+pub async fn workspace_search_supports_local_root(repo_root: impl AsRef<Path>) -> bool {
+    let repo_root = repo_root.as_ref().to_path_buf();
+    spawn_blocking(move || git_worktree_root(&repo_root).is_ok())
+        .await
+        .unwrap_or(false)
+}
+
 fn evaluate_blocking(repo_root: &Path, policy: AutoIndexPolicy) -> AutoIndexDecision {
     if policy.min_indexable_files == 0 {
         return AutoIndexDecision::Eligible {

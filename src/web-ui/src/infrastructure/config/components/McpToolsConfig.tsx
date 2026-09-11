@@ -204,6 +204,7 @@ const McpToolsConfig: React.FC = () => {
     Record<string, MCPServerLifecycleAction>
   >({});
   const [authDialogServer, setAuthDialogServer] = useState<MCPServerInfo | null>(null);
+  const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [authValue, setAuthValue] = useState('');
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [oauthSession, setOauthSession] = useState<MCPRemoteOAuthSessionSnapshot | null>(null);
@@ -283,7 +284,6 @@ const McpToolsConfig: React.FC = () => {
     const requestId = ++serverLoadRequestIdRef.current;
     try {
       setMcpLoading(true);
-      setServerLoadFailed(false);
       const serverList = await Promise.race([
         MCPAPI.getServers(),
         new Promise<never>((_, reject) =>
@@ -445,6 +445,8 @@ const McpToolsConfig: React.FC = () => {
       setJsonLoading(false);
       setJsonLoadFailed(false);
       setAuthDialogServer(null);
+      setAuthDialogOpen(false);
+      setAuthValue('');
       setAuthSubmitting(false);
       setOauthSession(null);
       setOauthStarting(false);
@@ -876,6 +878,7 @@ const McpToolsConfig: React.FC = () => {
     const capabilityEpoch = currentCapabilityEpoch();
     if (capabilityEpoch === null) return;
     setAuthDialogServer(server);
+    setAuthDialogOpen(true);
     setAuthValue('');
     setOauthSession(null);
     setOauthStarting(false);
@@ -901,15 +904,16 @@ const McpToolsConfig: React.FC = () => {
 
   function closeAuthDialog() {
     stopOAuthPolling();
-    setAuthDialogServer(null);
+    // Preserve the server and status copy while Dialog animates out. The next
+    // open resets them; clearing them here collapses the exiting surface.
+    setAuthDialogOpen(false);
     setAuthValue('');
-    setOauthSession(null);
     setOauthStarting(false);
     setOauthCancelling(false);
   }
 
   const handleCloseAuthDialog = () => {
-    if (authSubmitting || oauthCancelling) return;
+    if (!authDialogOpen || authSubmitting || oauthCancelling) return;
     const capabilityEpoch = currentCapabilityEpoch();
     if (capabilityEpoch === null) {
       closeAuthDialog();
@@ -945,7 +949,7 @@ const McpToolsConfig: React.FC = () => {
   };
 
   const handleSaveRemoteAuth = async () => {
-    if (!authDialogServer || authSubmitting) return;
+    if (!authDialogOpen || !authDialogServer || authSubmitting) return;
     const capabilityEpoch = currentCapabilityEpoch();
     if (capabilityEpoch === null) return;
 
@@ -1065,7 +1069,7 @@ const McpToolsConfig: React.FC = () => {
   }
 
   const handleStartRemoteOAuth = async () => {
-    if (!authDialogServer || oauthStarting || authSubmitting) return;
+    if (!authDialogOpen || !authDialogServer || oauthStarting || authSubmitting) return;
     await startRemoteOAuthFlow(authDialogServer);
   };
 
@@ -1254,7 +1258,7 @@ const McpToolsConfig: React.FC = () => {
 
   const renderServerControl = (server: MCPServerInfo) => {
     const pendingAction = serverLifecycleActions[server.id];
-    const oauthPending = authDialogServer?.id === server.id
+    const oauthPending = authDialogOpen && authDialogServer?.id === server.id
       && oauthSession !== null
       && !['authorized', 'failed', 'cancelled'].includes(oauthSession.status);
     const lifecyclePending = pendingAction !== undefined || oauthPending;
@@ -1547,7 +1551,8 @@ const McpToolsConfig: React.FC = () => {
             </div>
           )}
 
-          {desktopConfigAvailable && !showJsonEditor && mcpLoading && (
+          {/* Polling updates existing cards in place; only an empty list needs a loading placeholder. */}
+          {desktopConfigAvailable && !showJsonEditor && mcpLoading && servers.length === 0 && (
             <div className="openbitfun-collection-empty" data-openbitfun-component="mcp-tools-config" data-openbitfun-part="empty">
               <p>{tMcp('loading')}</p>
             </div>
@@ -1587,7 +1592,7 @@ const McpToolsConfig: React.FC = () => {
         {!showJsonEditor && <ExternalMcpOverview />}
       </ConfigPageContent>
       <Dialog
-        open={desktopConfigAvailable && !!authDialogServer}
+        open={desktopConfigAvailable && authDialogOpen}
         onOpenChange={(nextOpen) => { if (!nextOpen) handleCloseAuthDialog(); }}
         size="md"
       >

@@ -39,8 +39,6 @@ use openbitfun_runtime_ports::{AgentContextReloadRequest, SessionTurnWindowReque
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-const UI_CUSTOM_METADATA_KEYS: [&str; 3] = ["titleSource", "titleKey", "titleParams"];
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum UiSessionMetadataField {
@@ -960,23 +958,7 @@ fn merge_ui_owned_session_metadata(
         current.needs_user_attention = incoming.needs_user_attention.clone();
     }
     if fields.contains(&UiSessionMetadataField::TitleMetadata) {
-        let mut custom = current
-            .custom_metadata
-            .as_ref()
-            .and_then(serde_json::Value::as_object)
-            .cloned()
-            .unwrap_or_default();
-        let incoming_custom = incoming
-            .custom_metadata
-            .as_ref()
-            .and_then(serde_json::Value::as_object);
-        for key in UI_CUSTOM_METADATA_KEYS {
-            custom.remove(key);
-            if let Some(value) = incoming_custom.and_then(|metadata| metadata.get(key)) {
-                custom.insert(key.to_string(), value.clone());
-            }
-        }
-        current.custom_metadata = (!custom.is_empty()).then_some(serde_json::Value::Object(custom));
+        openbitfun_core::service::session::apply_session_title_metadata(current, incoming);
     }
 }
 

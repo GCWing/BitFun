@@ -49,6 +49,8 @@ interface CanvasStoreActions {
   
   /** Add tab */
   addTab: (content: PanelContent, state?: TabState, groupId?: EditorGroupId) => void;
+  /** Move a view to the workbench without closing its document or process. */
+  detachTab: (tabId: string, groupId: EditorGroupId) => void;
   
   /** Close tab; terminal tabs are always removed and cannot be restored. */
   closeTab: (tabId: string, groupId: EditorGroupId, options?: { forceRemove?: boolean }) => void;
@@ -247,6 +249,12 @@ const createCanvasStoreHook = () => create<CanvasStore>()(
         });
       },
       
+      detachTab: (tabId, groupId) => set(draft => {
+        const group = getGroup(draft, groupId);
+        group.tabs = group.tabs.filter(tab => tab.id !== tabId);
+        ensureValidActiveTab(group);
+      }),
+
       closeTab: (tabId, groupId, options) => {
         set((draft) => {
           const group = getGroup(draft, groupId);
@@ -1149,7 +1157,7 @@ const createCanvasStoreHook = () => create<CanvasStore>()(
     }))
 );
 
-export type CanvasStoreMode = 'agent' | 'project' | 'git' | 'panel-view' | 'bottom-terminal';
+export type CanvasStoreMode = 'agent' | 'git' | 'bottom-terminal';
 
 /**
  * Selects which canvas store instance is used by the current subtree.
@@ -1158,9 +1166,7 @@ export type CanvasStoreMode = 'agent' | 'project' | 'git' | 'panel-view' | 'bott
 export const CanvasStoreModeContext = createContext<CanvasStoreMode>('agent');
 
 export const useAgentCanvasStore = createCanvasStoreHook();
-export const useProjectCanvasStore = createCanvasStoreHook();
 export const useGitCanvasStore = createCanvasStoreHook();
-export const usePanelViewCanvasStore = createCanvasStoreHook();
 export const useBottomTerminalCanvasStore = createCanvasStoreHook();
 
 // ==================== Agent canvas: per-workspace snapshots (AuxPane / Session scene) ====================
@@ -1170,8 +1176,6 @@ export const useBottomTerminalCanvasStore = createCanvasStoreHook();
 const AGENT_CANVAS_SNAPSHOT_MAX = 12;
 const agentWorkspaceSnapshots = new Map<string, CanvasStoreState>();
 const agentSnapshotLruOrder: string[] = [];
-/** Dedupes React Strict Mode double-invoke when `prev` is null (ref reset on remount). */
-let lastAgentCanvasSwitchTargetKey: string | null = null;
 
 function normalizeAgentWorkspaceKey(id: string | null | undefined): string {
   return id ?? '__none__';
@@ -1227,36 +1231,28 @@ function applyEmptyAgentCanvas(workspaceKey?: string): void {
 export function clearAgentCanvasForPeerSwitch(): void {
   agentWorkspaceSnapshots.clear();
   agentSnapshotLruOrder.length = 0;
-  lastAgentCanvasSwitchTargetKey = null;
   applyEmptyAgentCanvas();
-  useProjectCanvasStore.getState().reset();
   useGitCanvasStore.getState().reset();
-  usePanelViewCanvasStore.getState().reset();
   useBottomTerminalCanvasStore.getState().reset();
 }
 
 /**
- * Save the current agent canvas under `prevWorkspaceId` (unless first mount) and restore the snapshot
- * for `nextWorkspaceId` (or empty canvas if none). Capture target snapshot before LRU eviction.
+ * The store owns its live workspace. A later host mount or stale caller cannot
+ * overwrite content already committed for the target workspace.
  */
 export function switchAgentCanvasWorkspace(
-  prevWorkspaceId: string | null | undefined,
+  _prevWorkspaceId: string | null | undefined,
   nextWorkspaceId: string | null | undefined
 ): void {
-  const from =
-    prevWorkspaceId === null || prevWorkspaceId === undefined
-      ? null
-      : normalizeAgentWorkspaceKey(prevWorkspaceId);
+  const from = useAgentCanvasStore.getState().workspaceKey;
   const to = normalizeAgentWorkspaceKey(nextWorkspaceId);
 
-  if (from === null && lastAgentCanvasSwitchTargetKey === to) {
-    return;
-  }
+  if (from === to) return;
 
   const rawNext = agentWorkspaceSnapshots.get(to);
   const nextSnapshotClone = rawNext ? structuredClone(rawNext) : null;
 
-  if (from !== null) {
+  if (from !== undefined) {
     const current = extractAgentPersistableState(useAgentCanvasStore.getState() as CanvasStore);
     rememberAgentSnapshot(from, current);
   }
@@ -1279,7 +1275,6 @@ export function switchAgentCanvasWorkspace(
     applyEmptyAgentCanvas(to);
   }
 
-  lastAgentCanvasSwitchTargetKey = to;
 }
 
 /** Drop cached canvas for a closed workspace (does not touch the live canvas unless user switches back). */
@@ -1300,14 +1295,10 @@ export function useCanvasStore<T>(selector?: (state: CanvasStore) => T): T | Can
 
   // Keep hook order stable across mode switches by subscribing to each scoped store.
   const agentValue = useAgentCanvasStore(resolvedSelector);
-  const projectValue = useProjectCanvasStore(resolvedSelector);
   const gitValue = useGitCanvasStore(resolvedSelector);
-  const panelViewValue = usePanelViewCanvasStore(resolvedSelector);
   const bottomTerminalValue = useBottomTerminalCanvasStore(resolvedSelector);
 
-  if (mode === 'project') return projectValue;
   if (mode === 'git') return gitValue;
-  if (mode === 'panel-view') return panelViewValue;
   if (mode === 'bottom-terminal') return bottomTerminalValue;
   return agentValue;
 }
@@ -1348,3 +1339,9 @@ export const useDragging = () => {
     draggingFromGroupId: state.draggingFromGroupId,
   }));
 };
+
+/** Includes suspended workspace snapshots so unmounting a view does not discard its document. */
+export function hasRetainedCanvasTab(tabId: string): boolean {
+  const states = [useAgentCanvasStore.getState(), useGitCanvasStore.getState(), useBottomTerminalCanvasStore.getState(), ...agentWorkspaceSnapshots.values()];
+  return states.some(state => [state.primaryGroup, state.secondaryGroup, state.tertiaryGroup].some(group => group.tabs.some(tab => tab.id === tabId)));
+}

@@ -24,6 +24,7 @@ export class RemotePageState {
   @Trace userId: string = '';
   @Trace requiresAccountAuth: boolean = false;
   @Trace accountUsername: string = '';
+  @Trace accountAvatarUrl: string = '';
   @Trace accountUserId: string = '';
   @Trace authenticatedUserId: string = '';
   @Trace hostCapabilities: string[] = [];
@@ -101,6 +102,10 @@ export class RemotePageState {
   setAccountPairing(requiresAccountAuth: boolean, accountUsername: string): void {
     this.requiresAccountAuth = requiresAccountAuth;
     this.accountUsername = accountUsername;
+  }
+
+  setAccountAvatarUrl(avatarUrl: string): void {
+    this.accountAvatarUrl = avatarUrl;
   }
 
   setAccountUsername(accountUsername: string): void {

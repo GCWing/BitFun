@@ -48,8 +48,8 @@ internal fun CircleControl(
         onClick = onClick,
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        shadowElevation = 3.dp,
+
+        shadowElevation = 1.dp,
         modifier = modifier.size(MobileDesignGeometry.ControlTouchSize),
     ) {
         Box(contentAlignment = Alignment.Center) {

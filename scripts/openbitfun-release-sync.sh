@@ -3,7 +3,7 @@
 # sync-release.sh — Mirror OpenBitFun release assets from GitHub to openbitfun.com.
 #
 # Flow:
-#   1. Fetch the selected channel's latest.json from GitHub
+#   1. Fetch the selected channel's latest-v1.json from GitHub
 #   2. Mirror the signed Relay image descriptor and Linux binary manifest FIRST
 #      (small trust metadata must not queue behind ~700 MB of Desktop packages)
 #   3. Download every Desktop updater package plus the standalone Windows
@@ -12,12 +12,12 @@
 #   5. Atomically publish versioned and root manifests
 #   6. Remove old version dirs, keeping only the most recent KEEP_VERSIONS
 #
-# The published release/latest.json and release/beta/latest.json files are the
+# The published release/latest-v1.json and release/beta/latest-v1.json files are the
 # stable and beta Tauri updater fallback endpoints.
 # When GitHub is unreachable, the desktop client automatically falls through
-# to https://openbitfun.com/release/latest.json and downloads from this mirror.
+# to https://openbitfun.com/release/latest-v1.json and downloads from this mirror.
 # The published release/downloads.json is for the website. Its Windows URL uses
-# latest.json's manual_installers entry while the updater keeps the versioned
+# latest-v1.json's manual_installers entry while the updater keeps the versioned
 # Tauri setup.exe URL.
 #
 # Cron (every 10 minutes). Run the in-repo script from the OpenBitFun checkout so a
@@ -57,15 +57,15 @@ case "$RELEASE_CHANNEL" in
     ;;
   beta)
     CHANNEL_PATH="/beta"
-    GITHUB_RELEASE_ROOT="https://github.com/GCWing/OpenBitFun/releases/download/channel-beta"
+    GITHUB_RELEASE_ROOT="https://github.com/GCWing/OpenBitFun/releases/download/channel-v1-beta"
     ;;
   *)
     echo "Unsupported OPENBITFUN_RELEASE_CHANNEL: $RELEASE_CHANNEL" >&2
     exit 1
     ;;
 esac
-GITHUB_LATEST_JSON_URL="${GITHUB_RELEASE_ROOT}/latest.json"
-GITHUB_LINUX_BINARIES_URL="${GITHUB_RELEASE_ROOT}/linux-binaries.json"
+GITHUB_LATEST_JSON_URL="${GITHUB_RELEASE_ROOT}/latest-v1.json"
+GITHUB_LINUX_BINARIES_URL="${GITHUB_RELEASE_ROOT}/linux-binaries-v1.json"
 GITHUB_RELAY_IMAGE_URL="${GITHUB_RELEASE_ROOT}/relay-image.json"
 OPENBITFUN_BASE_URL="https://openbitfun.com/release${CHANNEL_PATH}"
 # The mirror deliberately lives outside the website checkout. It used to be
@@ -138,7 +138,7 @@ publish_file_atomically() {
 }
 
 # Mirror the custom Windows installer used for interactive website installs.
-# RELEASE_ASSET_BASE_URL is derived from latest.json rather than from
+# RELEASE_ASSET_BASE_URL is derived from latest-v1.json rather than from
 # /releases/latest/download so the installer and setup package cannot come from
 # different releases while GitHub is advancing the latest-release pointer.
 mirror_windows_installer() {
@@ -188,7 +188,7 @@ write_website_download_manifest() {
   local output_tmp="${output}.part"
 
   "$PYTHON" - \
-    "${VERSION_DIR}/latest.json" \
+    "${VERSION_DIR}/latest-v1.json" \
     "$output_tmp" \
     "$OPENBITFUN_BASE_URL" \
     "$WINDOWS_INSTALLER_FILENAME" <<'PY'
@@ -207,7 +207,7 @@ for target, entry in updater.get("platforms", {}).items():
 
 windows = platforms.get("windows-x86_64")
 if windows is None:
-    raise SystemExit("latest.json is missing windows-x86_64")
+    raise SystemExit("latest-v1.json is missing windows-x86_64")
 
 manual = updater.get("manual_installers", {}).get("windows-x86_64")
 if manual:
@@ -275,7 +275,7 @@ verify_mirrored_checksums() {
   return 0
 }
 
-# Fetch linux-binaries.json into $LINUX_MANIFEST_TMP, retrying transient
+# Fetch linux-binaries-v1.json into $LINUX_MANIFEST_TMP, retrying transient
 # failures. Sets LINUX_MANIFEST_STATE to one of:
 #   ok        — downloaded
 #   missing   — GitHub answered 404: the release genuinely has no manifest
@@ -299,7 +299,7 @@ fetch_linux_manifest() {
       LINUX_MANIFEST_STATE="missing"
       return 0
     fi
-    log "  Retry $attempt/$MAX_RETRIES for linux-binaries.json (HTTP $status)"
+    log "  Retry $attempt/$MAX_RETRIES for linux-binaries-v1.json (HTTP $status)"
     sleep "$RETRY_DELAY"
   done
   return 0
@@ -362,7 +362,7 @@ PY
     # two copies can still be compared.
     cut -f2 <<< "$LINUX_ASSET_LIST" | verify_mirrored_checksums || exit 1
 
-    "$PYTHON" - "$LINUX_MANIFEST_TMP" "${VERSION_DIR}/linux-binaries.json" \
+    "$PYTHON" - "$LINUX_MANIFEST_TMP" "${VERSION_DIR}/linux-binaries-v1.json" \
       "$OPENBITFUN_BASE_URL" <<'PY'
 import json, sys
 source, dest, base = sys.argv[1:]
@@ -381,11 +381,11 @@ with open(dest, "w", encoding="utf-8") as f:
 PY
     rm -f "$LINUX_MANIFEST_TMP"
     publish_file_atomically \
-      "${VERSION_DIR}/linux-binaries.json" \
-      "${WEBSITE_RELEASE_DIR}/linux-binaries.json"
-    log "Updated ${WEBSITE_RELEASE_DIR}/linux-binaries.json"
+      "${VERSION_DIR}/linux-binaries-v1.json" \
+      "${WEBSITE_RELEASE_DIR}/linux-binaries-v1.json"
+    log "Updated ${WEBSITE_RELEASE_DIR}/linux-binaries-v1.json"
   elif [ "$LINUX_MANIFEST_STATE" = "missing" ]; then
-    rm -f "${WEBSITE_RELEASE_DIR}/linux-binaries.json"
+    rm -f "${WEBSITE_RELEASE_DIR}/linux-binaries-v1.json"
     log "Linux binaries manifest is not present in the latest release yet; Desktop mirror only."
   else
     # Transient failure. Keep whatever is already published: CLI self-update and
@@ -397,7 +397,7 @@ PY
 
 # macOS SSH Dispatch uses the standalone CLI archives published by the CLI
 # workflow after the Desktop release exists. They are not represented by
-# linux-binaries.json, so mirror the deterministic names separately. Missing
+# linux-binaries-v1.json, so mirror the deterministic names separately. Missing
 # files are normal while that second workflow is still publishing; a later cron
 # run completes the set atomically enough for clients (every install verifies
 # the signed checksum before using an archive).
@@ -523,20 +523,20 @@ main() {
 
   mkdir -p "$WEBSITE_RELEASE_DIR"
 
-  # 1. Fetch latest.json from GitHub
-  log "Fetching latest.json from GitHub..."
+  # 1. Fetch latest-v1.json from GitHub
+  log "Fetching latest-v1.json from GitHub..."
   LATEST_JSON=$(curl -fsSL \
     --connect-timeout "$CONNECT_TIMEOUT" \
     --max-time "$MAX_TIME" \
     "$GITHUB_LATEST_JSON_URL") || {
-    log "ERROR: Failed to fetch latest.json from GitHub"
+    log "ERROR: Failed to fetch latest-v1.json from GitHub"
     exit 1
   }
 
   # 2. Extract version
   VERSION=$(printf '%s' "$LATEST_JSON" | "$PYTHON" -c \
     "import sys,json;print(json.load(sys.stdin)['version'])") || {
-    log "ERROR: Failed to parse version from latest.json"
+    log "ERROR: Failed to parse version from latest-v1.json"
     exit 1
   }
   log "Latest version: $VERSION"
@@ -551,12 +551,12 @@ if len(bases) != 1:
     raise SystemExit(f'expected one release asset base, got {sorted(bases)}')
 print(bases.pop())
 ") || {
-    log "ERROR: Failed to resolve the release asset base from latest.json"
+    log "ERROR: Failed to resolve the release asset base from latest-v1.json"
     exit 1
   }
 
   GITHUB_RELAY_IMAGE_URL="${RELEASE_ASSET_BASE_URL}/relay-image.json"
-  GITHUB_LINUX_BINARIES_URL="${RELEASE_ASSET_BASE_URL}/linux-binaries.json"
+  GITHUB_LINUX_BINARIES_URL="${RELEASE_ASSET_BASE_URL}/linux-binaries-v1.json"
 
   INSTALLER_METADATA=$(printf '%s' "$LATEST_JSON" | "$PYTHON" -c "
 import json, sys
@@ -566,7 +566,7 @@ if entry:
     print(entry['url'])
     print(entry.get('signature_url', entry['url'] + '.sig'))
 ") || {
-    log "ERROR: Failed to resolve the manual Windows installer from latest.json"
+    log "ERROR: Failed to resolve the manual Windows installer from latest-v1.json"
     exit 1
   }
   if [ -n "$INSTALLER_METADATA" ]; then
@@ -610,7 +610,7 @@ for p, info in data.get('platforms', {}).items():
     fname = url.split('/')[-1]
     print(f'{url}\t{fname}')
 ") || {
-    log "ERROR: Failed to extract asset list from latest.json"
+    log "ERROR: Failed to extract asset list from latest-v1.json"
     exit 1
   }
 
@@ -623,8 +623,8 @@ for p, info in data.get('platforms', {}).items():
   # Mirror the manual installer separately while preserving the updater URL.
   mirror_windows_installer
 
-  # 6. Rewrite URLs in latest.json to point at openbitfun.com
-  LATEST_MANIFEST_TMP="${VERSION_DIR}/latest.json.part"
+  # 6. Rewrite URLs in latest-v1.json to point at openbitfun.com
+  LATEST_MANIFEST_TMP="${VERSION_DIR}/latest-v1.json.part"
   printf '%s' "$LATEST_JSON" | "$PYTHON" -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -639,15 +639,15 @@ for p, info in data.get('manual_installers', {}).items():
             info[key] = base + '/' + info[key].split('/')[-1]
 print(json.dumps(data, indent=2))
 " > "$LATEST_MANIFEST_TMP"
-  mv "$LATEST_MANIFEST_TMP" "${VERSION_DIR}/latest.json"
-  log "Saved ${VERSION_DIR}/latest.json"
+  mv "$LATEST_MANIFEST_TMP" "${VERSION_DIR}/latest-v1.json"
+  log "Saved ${VERSION_DIR}/latest-v1.json"
 
   # 7. Generate the website manifest, then atomically publish both root files.
   write_website_download_manifest
   publish_file_atomically \
-    "${VERSION_DIR}/latest.json" \
-    "${WEBSITE_RELEASE_DIR}/latest.json"
-  log "Updated ${WEBSITE_RELEASE_DIR}/latest.json"
+    "${VERSION_DIR}/latest-v1.json" \
+    "${WEBSITE_RELEASE_DIR}/latest-v1.json"
+  log "Updated ${WEBSITE_RELEASE_DIR}/latest-v1.json"
   publish_file_atomically \
     "${VERSION_DIR}/${WEBSITE_DOWNLOADS_MANIFEST}" \
     "${WEBSITE_RELEASE_DIR}/${WEBSITE_DOWNLOADS_MANIFEST}"
@@ -657,7 +657,7 @@ print(json.dumps(data, indent=2))
   ALL_DIRS=()
   while IFS= read -r d; do
     ALL_DIRS+=("$d")
-  done < <(find "$WEBSITE_RELEASE_DIR" -mindepth 1 -maxdepth 1 -type d | sort -V)
+  done < <(find "$WEBSITE_RELEASE_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '0.2.*' | sort -V)
   TOTAL=${#ALL_DIRS[@]}
   if [ "$TOTAL" -gt "$KEEP_VERSIONS" ]; then
     REMOVE_COUNT=$((TOTAL - KEEP_VERSIONS))

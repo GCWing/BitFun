@@ -1,3 +1,4 @@
+import OpenBitFunMobileCore
 import SwiftUI
 
 private func normalizedDeviceKey(_ key: String?) -> String? {
@@ -37,7 +38,7 @@ struct SidebarView: View {
     @State private var searchVisible = false
     @State private var visibleRecentCount = 6
     @State private var expandedWorkspacePaths: Set<String> = []
-    @State private var expandedDeviceWorkspaceLists: Set<String> = []
+    @State private var visibleDeviceWorkspaceCounts: [String: Int] = [:]
     @State private var compactActionSession: ChatSession?
     @State private var workspacePickerDevice: MobileDeviceDirectoryEntry?
     @State private var workspaceCreatePath: String?
@@ -62,27 +63,29 @@ struct SidebarView: View {
     private var directoryEntries: [MobileDeviceDirectoryEntry] { model.deviceDirectory }
 
     private var selectedDirectoryEntry: MobileDeviceDirectoryEntry? {
-        if let selectedID = model.accountSelectedDeviceID,
-           let selected = directoryEntries.first(where: { $0.id == selectedID }) {
-            return selected
-        }
-        return directoryEntries.first(where: \.online) ?? directoryEntries.first
+        directoryEntries.first(where: \.expanded)
+    }
+
+    private var showsPrimaryNavigation: Bool {
+        model.accountUser != nil || model.remoteExpectedDeviceKey != nil || model.remoteConnected
     }
 
     var body: some View {
         GeometryReader { proxy in
             VStack(alignment: .leading, spacing: 0) {
-                if model.accountUser == nil { signedOutHeader } else { authenticatedHeader }
+                if showsPrimaryNavigation { authenticatedHeader } else { signedOutHeader }
                 if searchVisible {
                     searchField
                 }
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        workspaceSection
+                ZStack(alignment: .bottom) {
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            workspaceSection
+                        }
+                        .padding(.bottom, showsPrimaryNavigation ? 84 : 142)
                     }
-                    .padding(.bottom, model.accountUser == nil && !model.remoteConnected ? 142 : 84)
+                    footer
                 }
-                footer
             }
             .padding(.horizontal, 20)
             .padding(.top, 4)
@@ -95,6 +98,7 @@ struct SidebarView: View {
             .background(OpenBitFunTheme.page)
         }
         .sheet(item: $compactActionSession) { session in
+            let detentHeight: CGFloat = model.surface == .local ? 330 : 230
             let surface = SessionActionSurface(
                 model: model,
                 session: session,
@@ -111,15 +115,17 @@ struct SidebarView: View {
                 },
                 onClose: { compactActionSession = nil }
             )
-            .presentationDetents([.height(380)])
-            .presentationDragIndicator(.hidden)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .presentationDetents([.height(detentHeight)])
+            .presentationDragIndicator(.visible)
             if #available(iOS 16.4, *) {
                 surface.presentationCornerRadius(MobileDesignGeometry.popoverRadius)
             } else {
                 surface
             }
         }
-        .sheet(item: $workspacePickerDevice) { device in
+        .sheet(item: $workspacePickerDevice) { requestedDevice in
+            let device = directoryEntries.first(where: { $0.id == requestedDevice.id }) ?? requestedDevice
             SidebarWorkspacePickerSheet(
                 device: device,
                 onClose: { workspacePickerDevice = nil },
@@ -137,7 +143,9 @@ struct SidebarView: View {
                    let workspace = model.remoteWorkspaces.first(where: { $0.path == path }),
                    let anchor = anchors[path] {
                     let frame = proxy[anchor]
-                    let menuHeight = MobileDesignGeometry.compactPopoverActionHeight * 2 + 16
+                    let menuHeight = HarnessProfilePolicy.shared.supported(capabilities: model.remoteHostCapabilities)
+                        ? 46 * 3 + MobileDesignGeometry.compactPopoverActionHeight + 16
+                        : MobileDesignGeometry.compactPopoverActionHeight * 2 + 16
                     ZStack(alignment: .topLeading) {
                         OpenBitFunTheme.transparent
                             .contentShape(Rectangle())
@@ -198,7 +206,9 @@ struct SidebarView: View {
                 withAnimation(.easeOut(duration: 0.18)) { searchVisible.toggle() }
                 if !searchVisible { search = "" }
             } label: {
-                ReferenceImage(assetName: "SidebarSearchGlyph", width: 22, height: 22)
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 18, weight: .regular))
+                    .frame(width: 22, height: 22)
                     .frame(width: 44, height: 44)
                     .background(OpenBitFunTheme.card)
                     .overlay(Circle().stroke(OpenBitFunTheme.line, lineWidth: 0.5))
@@ -284,7 +294,9 @@ struct SidebarView: View {
                     .accessibilityLabel(Text(model.localized("刷新设备")))
                 }
                 Button { model.scanRemote() } label: {
-                    ReferenceImage(assetName: "SidebarPlusGlyph", width: 17, height: 20)
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .regular))
+                        .frame(width: 17, height: 20)
                         .frame(width: 32, height: 32)
                 }
                 .buttonStyle(.plain)
@@ -311,7 +323,10 @@ struct SidebarView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(OpenBitFunTheme.muted)
                     Spacer(minLength: 0)
-                    Button { workspacePickerDevice = selectedDirectoryEntry } label: {
+                    Button {
+                        workspacePickerDevice = selectedDirectoryEntry
+                        model.refreshDirectoryWorkspacesForPicker(selectedDirectoryEntry)
+                    } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(selectedDirectoryEntry.online ? OpenBitFunTheme.ink : OpenBitFunTheme.muted)
@@ -335,7 +350,9 @@ struct SidebarView: View {
         let selected = selectedDirectoryEntry?.id == device.id
         Button { selectDirectoryDevice(device) } label: {
             HStack(spacing: 8) {
-                ReferenceImage(assetName: "SidebarDeviceGlyph", width: 24, height: 20)
+                Image(systemName: "desktopcomputer")
+                    .font(.system(size: 18, weight: .regular))
+                    .frame(width: 24, height: 20)
                 Text(device.name)
                     .font(.system(size: 15, weight: selected ? .medium : .regular))
                     .foregroundStyle(device.online ? OpenBitFunTheme.ink : OpenBitFunTheme.muted)
@@ -359,7 +376,7 @@ struct SidebarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(!device.online || selected)
+        .disabled(!device.online)
         .opacity(device.online ? 1 : 0.58)
         .accessibilityIdentifier("sidebar.device.\(device.id)")
         .accessibilityLabel(Text(device.name))
@@ -367,9 +384,17 @@ struct SidebarView: View {
     }
 
     private func selectDirectoryDevice(_ device: MobileDeviceDirectoryEntry) {
-        guard device.online, selectedDirectoryEntry?.id != device.id else { return }
+        guard device.online else { return }
+        if device.expanded {
+            model.toggleDeviceDirectory(device)
+            return
+        }
+        if let selected = selectedDirectoryEntry, selected.id != device.id {
+            model.toggleDeviceDirectory(selected)
+        }
+        model.toggleDeviceDirectory(device)
         guard let accountDevice = model.accountDevices.first(where: { $0.id == device.id }) else { return }
-        model.selectRemoteDevice(accountDevice)
+        model.selectRemoteDevice(accountDevice, preserveDrawer: true)
     }
 
     @ViewBuilder
@@ -390,7 +415,8 @@ struct SidebarView: View {
                 .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
                 .accessibilityIdentifier("sidebar.emptyWorkspaces")
         }
-        ForEach((expandedDeviceWorkspaceLists.contains(device.id) ? device.workspaces : Array(device.workspaces.prefix(3)))) { workspace in
+        let visibleWorkspaceCount = visibleDeviceWorkspaceCounts[device.id] ?? 3
+        ForEach(device.workspaces.prefix(visibleWorkspaceCount)) { workspace in
             let scopedWorkspace = MobileWorkspaceGroup(
                 path: workspace.path,
                 name: workspace.name,
@@ -400,14 +426,22 @@ struct SidebarView: View {
                     scopedSession.deviceKey = device.id
                     return scopedSession
                 },
-                deviceKey: device.id
+                deviceKey: device.id,
+                directoryExpanded: workspace.directoryExpanded,
+                directoryStatus: workspace.directoryStatus
             )
             SidebarWorkspaceRow(
                 workspace: scopedWorkspace,
-                expanded: expandedWorkspacePaths.contains(workspace.id),
+                expanded: workspace.directoryExpanded,
                 selectedSessionID: model.surface == .remote ? model.selectedSessionID : nil,
                 metadata: { _ in nil },
-                onToggle: { if expandedWorkspacePaths.contains(workspace.id) { expandedWorkspacePaths.remove(workspace.id) } else { expandedWorkspacePaths.insert(workspace.id) } },
+                onToggle: {
+                    model.setDirectoryWorkspaceExpanded(
+                        device: device,
+                        workspace: scopedWorkspace,
+                        expanded: !workspace.directoryExpanded
+                    )
+                },
                 onToggleCreate: {
                     model.openDirectoryRemoteDraft(device: device, workspace: scopedWorkspace)
                 },
@@ -415,18 +449,25 @@ struct SidebarView: View {
                 onOpenSession: { model.selectDirectorySession($0) }, onActions: { session in
                     if permanent { onPermanentActions?(session) } else { compactActionSession = session }
                 },
-                sessionLimit: expandedWorkspacePaths.contains(workspace.id) ? workspace.sessions.count : 3,
                 selectedDeviceKey: model.accountSelectedDeviceID,
                 selectedWorkspacePath: model.workspaceCatalog.first(where: { $0.selected })?.path,
-                onShowMore: { expandedWorkspacePaths.insert(workspace.id) }
+                directoryLoadStatus: workspace.directoryStatus,
+                onRetryDirectoryLoad: {
+                    model.retryDirectoryWorkspace(device: device, workspace: scopedWorkspace)
+                }
             )
-            .padding(.leading, 20)
         }
-        if device.workspaces.count > 3 {
+        if device.workspaces.count > visibleWorkspaceCount {
             Button {
-                expandedDeviceWorkspaceLists.insert(device.id)
+                visibleDeviceWorkspaceCounts[device.id] = min(
+                    device.workspaces.count,
+                    visibleWorkspaceCount + 3
+                )
             } label: {
-                Text(model.localizedFormat("还有 %lld 个工作区", Int64(device.workspaces.count - 3)))
+                Text(model.localizedFormat(
+                    "还有 %lld 个工作区",
+                    Int64(device.workspaces.count - visibleWorkspaceCount)
+                ))
                     .font(.system(size: 13)).foregroundStyle(OpenBitFunTheme.muted).padding(.leading, 42).frame(height: 36, alignment: .leading)
             }.buttonStyle(.plain)
         }
@@ -705,14 +746,18 @@ struct SidebarView: View {
     private func pairedDeviceRow(name: String) -> some View {
         Button { model.openRemoteSurface() } label: {
             HStack(spacing: 10) {
-                ReferenceImage(assetName: "SidebarDeviceGlyph", width: 22, height: 18)
+                Image(systemName: "desktopcomputer")
+                    .font(.system(size: 17, weight: .regular))
+                    .frame(width: 22, height: 18)
                 Text(name)
                     .font(.system(size: 15))
                     .foregroundStyle(OpenBitFunTheme.ink)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 Circle().fill(OpenBitFunTheme.statusSuccess).frame(width: 7, height: 7)
-                ReferenceImage(assetName: "SidebarDownGlyph", width: 14, height: 14)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .regular))
+                    .frame(width: 14, height: 14)
             }
             .padding(.horizontal, 10)
             .frame(height: 46)
@@ -722,9 +767,23 @@ struct SidebarView: View {
 
     private func workspaceCreateMenu(_ workspace: MobileWorkspaceGroup) -> some View {
         VStack(spacing: 0) {
-            workspaceCreateMenuRow("Code") {
-                workspaceCreatePath = nil
-                model.createRemoteSession(in: workspace, agentType: "code")
+            if HarnessProfilePolicy.shared.supported(capabilities: model.remoteHostCapabilities) {
+                ForEach([HarnessProfile.minimal, .standard, .ultimate], id: \.name) { profile in
+                    Button {
+                        workspaceCreatePath = nil
+                        model.createRemoteSession(in: workspace, agentType: profile.agentType)
+                    } label: {
+                        HarnessProfileLabel(model: model, profile: profile)
+                            .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+                            .padding(.horizontal, 14)
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                workspaceCreateMenuRow("Code") {
+                    workspaceCreatePath = nil
+                    model.createRemoteSession(in: workspace, agentType: "code")
+                }
             }
             workspaceCreateMenuRow("Cowork") {
                 workspaceCreatePath = nil
@@ -748,7 +807,7 @@ struct SidebarView: View {
 
     private var footer: some View {
         Group {
-            if model.accountUser == nil {
+            if !showsPrimaryNavigation {
                 SignedOutConnectionActions(
                     scanTitle: model.localized("扫码连接"),
                     accountTitle: model.localized("使用 GitHub 登录"),
@@ -764,23 +823,34 @@ struct SidebarView: View {
 
     private var authenticatedFooter: some View {
         HStack(spacing: 0) {
-            Button { model.connectRemote() } label: {
-                HStack(spacing: 9) {
-                    ReferenceImage(assetName: "SidebarEditGlyph", width: 24, height: 24)
-                    Text(model.localized("连接桌面端"))
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(OpenBitFunTheme.ink)
+            Group {
+                if model.selectedRemoteWorkspaceKind.lowercased() != "assistant",
+                   HarnessProfilePolicy.shared.supported(capabilities: model.remoteHostCapabilities) {
+                    Menu {
+                        ForEach([HarnessProfile.minimal, .standard, .ultimate], id: \.name) { profile in
+                            Button { model.createRemoteSessionFromHome(agentType: profile.agentType) } label: {
+                                HarnessProfileLabel(model: model, profile: profile)
+                            }
+                        }
+                    } label: { newChatLabel }
+                } else {
+                    Button {
+                        if model.selectedRemoteWorkspaceKind.lowercased() == "assistant" {
+                            model.createRemoteAssistantSession()
+                        } else {
+                            model.createRemoteSessionFromHome()
+                        }
+                    } label: { newChatLabel }
                 }
-                .frame(width: 98, height: 44)
-                .background(OpenBitFunTheme.card)
-                .overlay(RoundedRectangle(cornerRadius: 22).stroke(OpenBitFunTheme.line, lineWidth: 0.5))
-                .clipShape(Capsule())
-                .shadow(color: OpenBitFunTheme.shadowSubtle, radius: 12, y: 4)
             }
             .buttonStyle(.plain)
+            .disabled(!model.remoteConnected || !model.remoteCreateInteraction.canSubmit || model.remoteCreateSubmitting)
+            .accessibilityIdentifier("sidebar.newChat")
             Spacer(minLength: 0)
             Button { model.settingsOpen = true; model.drawerOpen = false } label: {
-                ReferenceImage(assetName: "SidebarSettingsGlyph", width: 24, height: 24)
+                Image(systemName: "gearshape")
+                    .font(.system(size: 20, weight: .regular))
+                    .frame(width: 24, height: 24)
                     .frame(width: 44, height: 44)
                     .background(OpenBitFunTheme.card)
                     .clipShape(Circle())
@@ -791,6 +861,25 @@ struct SidebarView: View {
         }
         .frame(height: 56)
         .padding(.leading, 12)
+    }
+
+    private var newChatLabel: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 19, weight: .regular))
+                .frame(width: 24, height: 24)
+            Text(model.localized("新聊天"))
+                .font(.system(size: 15, weight: .medium))
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .foregroundStyle(OpenBitFunTheme.ink)
+        .frame(minWidth: 98, minHeight: 44)
+        .background(OpenBitFunTheme.card)
+        .overlay(Capsule().stroke(OpenBitFunTheme.line, lineWidth: 0.5))
+        .clipShape(Capsule())
+        .shadow(color: OpenBitFunTheme.shadowSubtle, radius: 12, y: 4)
+        .opacity(model.remoteConnected && model.remoteCreateInteraction.canSubmit && !model.remoteCreateSubmitting ? 1 : 0.45)
     }
 }
 
@@ -865,10 +954,11 @@ private struct SidebarWorkspaceRow: View {
     let onOpenWorkspace: () -> Void
     let onOpenSession: (ChatSession) -> Void
     let onActions: (ChatSession) -> Void
-    var sessionLimit: Int = 3
     var selectedDeviceKey: String? = nil
     var selectedWorkspacePath: String? = nil
-    var onShowMore: (() -> Void)? = nil
+    var directoryLoadStatus = "READY"
+    var onRetryDirectoryLoad: (() -> Void)? = nil
+    @State private var visibleSessionCount = 3
 
     private func isSelected(_ session: ChatSession) -> Bool {
         guard selectedSessionID == session.id,
@@ -885,11 +975,10 @@ private struct SidebarWorkspaceRow: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Button(action: onToggle) {
-                    ReferenceImage(
-                        assetName: expanded ? "SidebarDownGlyph" : "SidebarChevronGlyph",
-                        width: 14,
-                        height: 14
-                    )
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 14, height: 14)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
                     .opacity(0.62)
                     .frame(width: 24, height: 46)
                 }
@@ -900,7 +989,9 @@ private struct SidebarWorkspaceRow: View {
 
                 Button(action: onToggle) {
                     HStack(spacing: 10) {
-                        ReferenceImage(assetName: "SidebarFolderGlyph", width: 24, height: 20)
+                        Image(systemName: "folder")
+                            .font(.system(size: 18, weight: .regular))
+                            .frame(width: 24, height: 20)
                         Text(workspace.name)
                             .font(.system(size: 15, weight: workspace.selected ? .medium : .regular))
                             .foregroundStyle(OpenBitFunTheme.ink)
@@ -934,24 +1025,50 @@ private struct SidebarWorkspaceRow: View {
             .clipShape(RoundedRectangle(cornerRadius: 10))
 
             if expanded {
-                if workspace.sessions.isEmpty {
+                if directoryLoadStatus == "LOADING" {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(MobileLocalization.text("正在加载"))
+                            .font(.system(size: 13))
+                            .foregroundStyle(OpenBitFunTheme.muted)
+                    }
+                    .padding(.leading, 42)
+                    .frame(height: 40, alignment: .leading)
+                } else if directoryLoadStatus == "FAILED" {
+                    Button(action: { onRetryDirectoryLoad?() }) {
+                        HStack(spacing: 8) {
+                            Text(MobileLocalization.text("这台电脑暂时无法读取"))
+                                .foregroundStyle(OpenBitFunTheme.muted)
+                            Spacer(minLength: 0)
+                            Text(MobileLocalization.text("重试"))
+                                .foregroundStyle(OpenBitFunTheme.ink)
+                        }
+                        .font(.system(size: 13))
+                        .padding(.leading, 42)
+                        .padding(.trailing, 10)
+                        .frame(height: 40)
+                    }
+                    .buttonStyle(.plain)
+                } else if workspace.sessions.isEmpty && directoryLoadStatus == "READY" {
                     Text(MobileLocalization.text("此工作区暂无会话"))
                         .font(.system(size: 13))
                         .foregroundStyle(OpenBitFunTheme.muted)
                         .padding(.leading, 42)
                         .frame(height: 38, alignment: .leading)
                 }
-                ForEach(workspace.sessions.prefix(sessionLimit)) { session in
+                ForEach(workspace.sessions.prefix(visibleSessionCount)) { session in
                     HStack(spacing: 0) {
                         Button { onOpenSession(session) } label: {
                             HStack(spacing: 10) {
-                            if ["running", "active", "in_progress"].contains(session.status.lowercased()) {
-                                Circle().fill(OpenBitFunTheme.statusSuccess).frame(width: 7, height: 7)
-                            }
                             Image(systemName: "doc")
-                                .font(.system(size: 18, weight: .regular))
+                                .font(.system(size: 17, weight: .regular))
                                 .foregroundStyle(OpenBitFunTheme.muted)
-                                .frame(width: 22)
+                                .frame(width: 19, height: 19)
+                                .overlay(alignment: .bottomLeading) {
+                                    if ["running", "active", "in_progress"].contains(session.status.lowercased()) {
+                                        Circle().fill(OpenBitFunTheme.statusSuccess).frame(width: 7, height: 7)
+                                    }
+                                }
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(session.title)
                                     .font(.system(
@@ -987,19 +1104,21 @@ private struct SidebarWorkspaceRow: View {
                             transform: { [session.id: $0] }
                         )
                     }
-                    .padding(.leading, 32)
+                    .padding(.leading, 44)
                     .padding(.trailing, 4)
                     .frame(minHeight: metadata(session) == nil ? 44 : 56)
                     .background(isSelected(session) ? OpenBitFunTheme.soft : OpenBitFunTheme.transparent)
                     .clipShape(RoundedRectangle(cornerRadius: 9))
                 }
-                if workspace.sessions.count > sessionLimit {
-                    Button(action: { onShowMore?() }) {
+                if workspace.sessions.count > visibleSessionCount {
+                    Button {
+                        visibleSessionCount = min(workspace.sessions.count, visibleSessionCount + 3)
+                    } label: {
                         Text(
                             MobileLocalization.format(
                                 "还有 %lld 个会话",
                                 language: MobileLocalization.restoredLanguage(),
-                                Int64(workspace.sessions.count - sessionLimit)
+                                Int64(workspace.sessions.count - visibleSessionCount)
                             )
                         )
                         .font(.system(size: 13))
@@ -1011,6 +1130,7 @@ private struct SidebarWorkspaceRow: View {
                 }
             }
         }
+        .padding(.bottom, 6)
     }
 }
 

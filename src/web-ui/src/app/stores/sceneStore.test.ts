@@ -32,6 +32,26 @@ describe('sceneStore transition snapshots', () => {
     expect(state.navCursor).toBe(-1);
   });
 
+  it('only activates an existing session reference without creating or replacing its workspace tab', () => {
+    const onActivated = vi.fn();
+    useSceneStore.getState().activateSessionScene(sessionTarget, { onActivated });
+    expect(useSceneStore.getState().openTabs).toEqual([]);
+    expect(onActivated).not.toHaveBeenCalled();
+
+    useSceneStore.getState().openSessionScene(sessionTarget);
+    useSceneStore.getState().openScene('git');
+    const tabs = useSceneStore.getState().openTabs;
+    useSceneStore.getState().activateSessionScene({ ...sessionTarget, sessionId: 'different' }, { onActivated });
+    expect(useSceneStore.getState().openTabs).toEqual(tabs);
+    expect(useSceneStore.getState().activeTabId).toBe('git');
+    expect(onActivated).not.toHaveBeenCalled();
+
+    useSceneStore.getState().activateSessionScene(sessionTarget, { onActivated });
+    expect(useSceneStore.getState().activeTabId).toBe(sessionTabId);
+    expect(useSceneStore.getState().openTabs.map(tab => tab.id)).toEqual(tabs.map(tab => tab.id));
+    expect(onActivated).toHaveBeenCalledOnce();
+  });
+
   it('uses the same resource activator for history and closing the active tab', async () => {
     const a = { ...sessionTarget, workspaceKey: 'a', sessionId: 'a' };
     const b = { ...sessionTarget, workspaceKey: 'b', sessionId: 'b' };

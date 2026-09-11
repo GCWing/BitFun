@@ -12,7 +12,8 @@ enum MobileLaunchConfiguration {
             messages: [
                 ChatMessage(id: UUID(), role: .user, text: "你好"),
                 ChatMessage(id: UUID(), role: .assistant, text: "这是 OpenBitFun 的移动端会话界面。你可以从手机连接桌面端，查看工作区、会话和 Agent 的执行状态。")
-            ]
+            ],
+            connectCore: !ProcessInfo.processInfo.arguments.contains("--harness-preview") && designPreviewScenario() == nil
         )
         return configure(model)
     }
@@ -26,6 +27,10 @@ enum MobileLaunchConfiguration {
         }
         if arguments.contains("--remote") {
             model.surface = .remote
+        }
+        if arguments.contains("--harness-preview") {
+            model.configureConnectedPreview()
+            model.remoteHostCapabilities = ["harness_profiles_v1"]
         }
         if arguments.contains("--connected") {
             model.configureConnectedPreview()

@@ -431,7 +431,7 @@
     }
   },
   "session": {
-    "new": "新建会话",
+    "new": "新会话",
     "newCode": "新建 Code 会话",
     "newCowork": "新建 Cowork 会话",
     "newClaw": "新建 Claw 会话",
@@ -2464,15 +2464,14 @@
     }
   },
   "welcome": {
+    "openingMorning": "早安，今天由你开场。",
+    "openingAfternoon": "下午好，给今天加点意思。",
+    "openingEvening": "晚上好，按你的节奏来。",
+    "openingNight": "夜深了，想法可以慢慢说。",
     "greetingMorning": "早安",
-    "subtitleMorning": "新的一天，新的可能，让我们一起创造些什么",
     "greetingAfternoon": "下午好",
-    "subtitleAfternoon": "新的一天，新的可能，让我们一起创造些什么",
     "greetingEvening": "晚上好",
-    "subtitleEvening": "夜晚安静，最适合沉浸式编码",
     "greetingNight": "夜深了",
-    "subtitleNight": "灵感不眠，让我们继续",
-    "aiPartner": "编程搭档",
     "subtitleMorningCowork": "清晨头脑最清醒，把今天的想法和任务整理一下吧",
     "subtitleAfternoonCowork": "下午好，有什么要推进或整理的，一起来",
     "subtitleEveningCowork": "收尾、复盘、或是为明天做准备——都行",

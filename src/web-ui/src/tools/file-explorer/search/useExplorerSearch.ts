@@ -34,6 +34,7 @@ export interface ExplorerSearchPhase {
 
 export interface UseExplorerSearchOptions {
   workspacePath?: string;
+  remoteConnectionId?: string;
   /** Optional host/workspace-scoped presentation key. Results are always fetched fresh. */
   stateKey?: string;
   initialMode?: ExplorerSearchMode;
@@ -168,6 +169,7 @@ export function useExplorerSearch(
 ): UseExplorerSearchResult {
   const {
     workspacePath,
+    remoteConnectionId,
     stateKey,
     initialMode = 'filenames',
     filenameSearchDebounce = 300,
@@ -278,7 +280,8 @@ export function useExplorerSearch(
               setFilenameGroups((prev) => mergeSearchGroups(prev, event.results));
             },
           },
-          controller.signal
+          controller.signal,
+          remoteConnectionId,
         );
 
         if (runId !== searchRunIdRef.current) {
@@ -315,6 +318,7 @@ export function useExplorerSearch(
       searchOptions.wholeWord,
       nextSearchId,
       filenameMaxResults,
+      remoteConnectionId,
     ]
   );
 

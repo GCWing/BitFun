@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.graphics.asImageBitmap
 import com.openbitfun.mobile.app.R
 import com.openbitfun.mobile.app.platform.deviceIdentity
 import com.openbitfun.mobile.app.viewmodel.AccountViewModel
@@ -154,7 +155,7 @@ private fun AccountProfilePage(
         Spacer(Modifier.height(30.dp))
         Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(28.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
             Column(Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                AccountAvatar(70)
+                AccountAvatar(70, state.avatarUrl)
                 Text(state.username, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(state.userId, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(0.88f), textAlign = TextAlign.Center)
             }
@@ -237,9 +238,17 @@ private fun AccountDetailRow(label: String, value: String) {
 }
 
 @Composable
-private fun AccountAvatar(size: Int) {
+private fun AccountAvatar(size: Int, url: String? = null) {
+    val bitmap by androidx.compose.runtime.produceState<android.graphics.Bitmap?>(null, url) {
+        value = null
+        value = com.openbitfun.mobile.app.platform.loadAccountAvatar(url)
+    }
     Box(Modifier.size(size.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant), contentAlignment = Alignment.Center) {
-        Icon(painterResource(R.drawable.ic_symbol_person), contentDescription = null, modifier = Modifier.size((size * 0.52f).dp))
+        val loaded = bitmap
+        if (loaded != null) androidx.compose.foundation.Image(
+            bitmap = loaded.asImageBitmap(), contentDescription = null,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.size(size.dp),
+        ) else Icon(painterResource(R.drawable.ic_symbol_person), contentDescription = null, modifier = Modifier.size((size * 0.52f).dp))
     }
 }
 

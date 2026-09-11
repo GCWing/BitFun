@@ -146,6 +146,10 @@ pub struct BotChatState {
     #[serde(skip)]
     pub pending_action: Option<PendingAction>,
     #[serde(skip)]
+    pub pending_remote_target: Option<RemoteBotTarget>,
+    #[serde(skip)]
+    pub pending_interactions: std::collections::VecDeque<BotInteractiveRequest>,
+    #[serde(skip)]
     pub pending_expires_at: i64,
     #[serde(skip)]
     pub pending_invalid_count: u8,
@@ -186,6 +190,16 @@ pub struct RemoteDeviceTarget {
     pub device_name: String,
 }
 
+/// Immutable route for one submitted turn and its interactions. Never persisted.
+#[derive(Debug, Clone)]
+pub struct RemoteBotTarget {
+    pub relay_url: String,
+    pub device_id: String,
+    pub device_name: String,
+    pub session_id: String,
+    pub account: crate::remote_connect::account::AccountSession,
+}
+
 impl BotChatState {
     pub fn new(chat_id: String) -> Self {
         Self {
@@ -197,6 +211,8 @@ impl BotChatState {
             current_session_id: None,
             display_mode: BotDisplayMode::Assistant,
             pending_action: None,
+            pending_remote_target: None,
+            pending_interactions: Default::default(),
             pending_expires_at: 0,
             pending_invalid_count: 0,
             last_menu_commands: Vec::new(),
@@ -239,6 +255,8 @@ impl BotChatState {
 
     pub fn clear_pending(&mut self) {
         self.pending_action = None;
+        self.pending_remote_target = None;
+        self.pending_interactions.clear();
         self.pending_expires_at = 0;
         self.pending_invalid_count = 0;
     }
@@ -299,6 +317,11 @@ impl BotChatState {
 
         let was_remote = self.active_remote_device.take().is_some() || self.account_remote_context;
         self.account_remote_context = false;
+        let had_remote_interaction = self.pending_remote_target.is_some()
+            || self
+                .pending_interactions
+                .iter()
+                .any(|request| request.remote_target.is_some());
         let was_selecting_device = matches!(
             self.pending_action,
             Some(PendingAction::SelectDevice { .. })
@@ -309,7 +332,7 @@ impl BotChatState {
             // local execution after the remote target is cleared.
             self.clear_device_scoped_context();
         }
-        if was_remote || was_selecting_device {
+        if was_remote || was_selecting_device || had_remote_interaction {
             self.clear_pending();
             self.last_menu_commands.clear();
         }
@@ -336,6 +359,11 @@ fn now_secs() -> i64 {
 
 #[derive(Debug, Clone)]
 pub enum PendingAction {
+    ConfirmRemoteTool {
+        tool_id: String,
+        action_token: String,
+        description: String,
+    },
     SelectWorkspace {
         options: Vec<BotWorkspaceChoice>,
     },
@@ -435,6 +463,7 @@ impl From<MenuItem> for BotAction {
 
 #[derive(Debug, Clone)]
 pub struct BotInteractiveRequest {
+    pub remote_target: Option<RemoteBotTarget>,
     pub reply: String,
     pub actions: Vec<BotAction>,
     pub menu: MenuView,

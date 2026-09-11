@@ -158,6 +158,9 @@ async fn probe(request: DispatchProbeRequest) -> Result<DispatchProbeResponse> {
     capabilities.push(
         openbitfun_services_core::dispatch_contract::DISPATCH_READ_FILE_CAPABILITY.to_string(),
     );
+    capabilities.push(
+        openbitfun_services_core::dispatch_contract::DISPATCH_FILE_CHUNKS_CAPABILITY.to_string(),
+    );
     if runner::is_supported() {
         capabilities.push(
             openbitfun_services_core::dispatch_contract::DISPATCH_DETACHED_WORKER_CAPABILITY
@@ -323,9 +326,47 @@ async fn continue_job(request: DispatchContinueRequest) -> Result<DispatchContin
 /// the live session without contending for anything.
 async fn query(request: DispatchQueryRequest) -> Result<serde_json::Value> {
     let store = DispatchStore::open_default()?;
+    query_in_store(&store, request).await
+}
+
+async fn query_in_store(
+    store: &DispatchStore,
+    request: DispatchQueryRequest,
+) -> Result<serde_json::Value> {
     let job = store.load_job(&request.job_id)?;
     match request.kind {
+        DispatchQueryKind::ReadFileChunk => {
+            let reference = request
+                .file_path
+                .as_deref()
+                .filter(|path| !path.trim().is_empty())
+                .context("Dispatch file query requires a filePath")?;
+            let chunk_request = request
+                .file_chunk
+                .as_ref()
+                .context("Dispatch chunk query requires fileChunk")?;
+            let chunk = openbitfun_core::service::output_files::read_dispatch_output_chunk(
+                Path::new(&job.request.workspace_path),
+                &job.request.session_id,
+                reference,
+                chunk_request,
+            )
+            .await
+            .map_err(anyhow::Error::msg)?;
+            let mut response = serde_json::to_value(chunk)?;
+            let fields = response.as_object_mut().expect("chunk is an object");
+            fields.insert("kind".into(), serde_json::json!("readFileChunk"));
+            fields.insert("jobId".into(), serde_json::json!(request.job_id));
+            fields.insert(
+                "sessionId".into(),
+                serde_json::json!(job.request.session_id),
+            );
+            Ok(response)
+        }
         DispatchQueryKind::ReadFile => {
+            if request.file_chunk.is_some() {
+                bail!("Text queries do not accept fileChunk");
+            }
             let file_path = request
                 .file_path
                 .as_deref()
@@ -342,7 +383,7 @@ async fn query(request: DispatchQueryRequest) -> Result<serde_json::Value> {
             }))
         }
         DispatchQueryKind::UsageReport => {
-            if request.file_path.is_some() {
+            if request.file_path.is_some() || request.file_chunk.is_some() {
                 bail!("usageReport does not accept a filePath");
             }
             let path_manager = openbitfun_core::infrastructure::PathManager::new()
@@ -1082,6 +1123,36 @@ mod tests {
             attachments: Vec::new(),
             setup_audit: Vec::new(),
         }
+    }
+
+    #[tokio::test]
+    async fn binary_query_uses_durable_job_origin_and_validates_continuations() {
+        let dir = tempfile::tempdir().unwrap();
+        let workspace = dir.path().join("workspace");
+        std::fs::create_dir(&workspace).unwrap();
+        std::fs::write(workspace.join("image.png"), [0u8, 255, 1, 2]).unwrap();
+        let store = DispatchStore::open(dir.path().join("dispatch")).unwrap();
+        let mut job = test_request("binary-query");
+        job.workspace_path = workspace.to_string_lossy().into_owned();
+        store.create_job(job, "Binary output".into()).unwrap();
+        let request: DispatchQueryRequest=parse(serde_json::json!({"jobId":"binary-query","kind":"readFileChunk","filePath":"image.png","fileChunk":{"offset":0,"limit":2}})).unwrap();
+        let first = query_in_store(&store, request).await.unwrap();
+        assert_eq!(first["kind"], "readFileChunk");
+        assert_eq!(first["sessionId"], "session-binary-query");
+        assert_eq!(first["contentBase64"], "AP8=");
+        let resumed = serde_json::json!({"jobId":"binary-query","kind":"readFileChunk","filePath":"image.png","fileChunk":{"offset":2,"limit":2,"expectedRevision":first["revision"]}});
+        let second = query_in_store(&store, parse(resumed.clone()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(second["contentBase64"], "AQI=");
+        std::fs::write(workspace.join("image.png"), [3u8, 4, 5, 6, 7]).unwrap();
+        assert!(query_in_store(&store, parse(resumed).unwrap())
+            .await
+            .is_err());
+        let escape = serde_json::json!({"jobId":"binary-query","kind":"readFileChunk","filePath":"../outside.png","fileChunk":{"offset":0,"limit":2}});
+        assert!(query_in_store(&store, parse(escape).unwrap())
+            .await
+            .is_err());
     }
 
     #[test]

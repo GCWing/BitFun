@@ -16,6 +16,7 @@ hexagonal application mark. Application, window, taskbar, Dock, tray, browser,
 installer, and mobile launcher icons use this artwork on the black rounded-square
 background with transparent corners. It is intentionally independent from the
 current startup Logo, so regenerating either family cannot replace the other.
+The iOS App Store icon uses an opaque black square; iOS applies the corner mask.
 
 `exports/` contains the SVG, ICO, ICNS, and PNGs at 16, 24, 32, 48, 64, 96,
 128, 192, 256, 512, 1024, and 2048 px. Each PNG size includes a dark transparent

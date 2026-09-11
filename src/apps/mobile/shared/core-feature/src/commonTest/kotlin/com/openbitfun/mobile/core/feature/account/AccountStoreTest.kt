@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.DeserializationStrategy
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -19,6 +20,45 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AccountStoreTest {
+    @Test
+    fun enrichesExistingAccountAndRetainsIdentityAndCacheOffline() = runTest {
+        val secure = MemorySecureStore()
+        val backend = FakeAccountBackend().apply {
+            userId = "42"
+            profileResult = com.openbitfun.mobile.core.transport.GitHubProfile(42, "octocat", "https://avatars.githubusercontent.com/u/42")
+        }
+        val store = AccountStore.create(this, backend, secure, "phone-1", "Android")
+        store.dispatch(AccountIntent.Login)
+        advanceUntilIdle()
+        val ready = assertIs<AccountUiState.Ready>(store.state.value)
+        assertEquals("42", ready.userId)
+        assertEquals("octocat", ready.username)
+        assertEquals("https://avatars.githubusercontent.com/u/42", ready.avatarUrl)
+        val credentials = secure.read("github_device_session_v1")!!
+        backend.profileResult = null
+        val restored = AccountStore.create(this, backend, secure, "phone-1", "iOS")
+        restored.dispatch(AccountIntent.Restore)
+        advanceUntilIdle()
+        assertEquals("octocat", assertIs<AccountUiState.Ready>(restored.state.value).username)
+        assertContentEquals(credentials, secure.read("github_device_session_v1"))
+        assertEquals(1, backend.profileLoads)
+    }
+
+    @Test
+    fun metadataForAnotherAccountCannotReplaceDisplayOrAuthority() = runTest {
+        val backend = FakeAccountBackend().apply {
+            userId = "42"
+            profileResult = com.openbitfun.mobile.core.transport.GitHubProfile(99, "other", null)
+        }
+        val store = AccountStore.create(this, backend, MemorySecureStore(), "phone-1", "Android")
+        store.dispatch(AccountIntent.Login)
+        advanceUntilIdle()
+        val ready = assertIs<AccountUiState.Ready>(store.state.value)
+        assertEquals("42", ready.userId)
+        assertEquals("user", ready.username)
+        assertNull(ready.avatarUrl)
+    }
+
     @Test
     fun loginSelectsOnlineDesktopAndPersistsRestorableSession() = runTest {
         val secure = MemorySecureStore()
@@ -472,6 +512,14 @@ private fun CloudAccountFailure.toExpectedReason(): AccountFailureReason = when 
 }
 
 private class FakeAccountBackend : AccountBackend {
+    var userId = "user-id"
+    var profileResult: com.openbitfun.mobile.core.transport.GitHubProfile? = null
+    var profileLoads = 0
+    override suspend fun profile(userId: String): com.openbitfun.mobile.core.transport.GitHubProfile? {
+        profileLoads++
+        return profileResult
+    }
+
     var failure: CloudAccountFailure? = null
     var loginThrowable: Throwable? = null
     var listFailure: CloudAccountFailure? = null
@@ -493,7 +541,7 @@ private class FakeAccountBackend : AccountBackend {
             "https://remote.openbitfun.com/v/1.0.0",
             "user",
             "token",
-            "user-id",
+            userId,
             ByteArray(32) { it.toByte() },
             null,
             null,

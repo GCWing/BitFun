@@ -86,7 +86,7 @@ internal fun AppSidebar(
     onRetryRemoteDevice: () -> Unit,
     onSelectRemoteDevice: (String) -> Unit,
     onOpenRemoteSession: (String) -> Unit,
-    onCreateRemoteInWorkspace: (String) -> Unit,
+    onCreateRemoteInWorkspace: (String, String) -> Unit,
     onOpenRemoteWorkspace: (String) -> Unit,
     onDeleteRemoteSession: (String) -> Unit,
     onOpenSettings: () -> Unit,

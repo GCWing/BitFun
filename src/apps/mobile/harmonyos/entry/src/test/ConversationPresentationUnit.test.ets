@@ -607,6 +607,7 @@ export default function conversationPresentationUnitTest() {
       // local/remote pair the switcher needed is gone.
       expect(RemoteI18n.t('sidebar.conversations')).assertEqual('最近对话');
       expect(RemoteI18n.t('sidebar.devices')).assertEqual('设备');
+      expect(RemoteI18n.t('sidebar.newChat')).assertEqual('聊天');
       expect(RemoteI18n.t('sidebar.connectDesktop')).assertEqual('连接电脑');
       expect(RemoteI18n.t('sidebar.scanToConnect')).assertEqual('扫码连接电脑');
       expect(RemoteI18n.t('sidebar.signInOpenBitFunAccount')).assertEqual('使用 GitHub 登录');
@@ -624,6 +625,15 @@ export default function conversationPresentationUnitTest() {
     });
 
     it('hides the redundant scan action after a QR connection succeeds', 0, () => {
+      expect(SidebarConnectionActionPolicy.chatAction('normal', true)).assertEqual('choose-harness');
+      expect(SidebarConnectionActionPolicy.chatAction('remote', true)).assertEqual('choose-harness');
+      expect(SidebarConnectionActionPolicy.chatAction('normal', false)).assertEqual('code');
+      expect(SidebarConnectionActionPolicy.chatAction('assistant', true)).assertEqual('assistant');
+      expect(SidebarConnectionActionPolicy.chatAction('assistant', false)).assertEqual('assistant');
+      expect(SidebarConnectionActionPolicy.canCreateSession('connected', false)).assertTrue();
+      expect(SidebarConnectionActionPolicy.canCreateSession('connected', true)).assertFalse();
+      expect(SidebarConnectionActionPolicy.canCreateSession('reconnecting', false)).assertFalse();
+      expect(SidebarConnectionActionPolicy.canCreateSession('idle', false)).assertFalse();
       expect(SidebarConnectionActionPolicy.shouldShowScan('disconnected')).assertTrue();
       expect(SidebarConnectionActionPolicy.shouldShowScan('connected')).assertFalse();
     });

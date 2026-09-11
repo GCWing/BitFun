@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FlowChatManager } from './FlowChatManager';
 import {
@@ -10,6 +12,9 @@ const storeMocks = vi.hoisted(() => ({
   store: { registerPersistUnreadCompletionCallback: vi.fn() } as any,
   initializeEventListeners: vi.fn(),
   switchChatSession: vi.fn(),
+  createAcpSession: vi.fn(),
+  loadSessionMetadata: vi.fn(),
+  saveSessionMetadata: vi.fn(),
   eventBatchers: [] as Array<{
     flushNow: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
@@ -47,7 +52,11 @@ vi.mock('../store/FlowChatStore', () => ({
 }));
 
 vi.mock('@/infrastructure/api/service-api/ACPClientAPI', () => ({
-  ACPClientAPI: {},
+  ACPClientAPI: { createFlowSession: storeMocks.createAcpSession },
+}));
+
+vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
+  sessionAPI: { loadSessionMetadata: storeMocks.loadSessionMetadata, saveSessionMetadata: storeMocks.saveSessionMetadata },
 }));
 
 vi.mock('../state-machine', () => ({
@@ -166,6 +175,30 @@ describe('FlowChatManager initialization', () => {
     expect(batcher.flushNow.mock.invocationCallOrder[0]).toBeLessThan(
       batcher.destroy.mock.invocationCallOrder[0],
     );
+  });
+
+  it('creates an ACP session with the shared default title and its host-owned number', async () => {
+    storeMocks.store = { registerPersistUnreadCompletionCallback: vi.fn(), createSession: vi.fn() };
+    storeMocks.createAcpSession.mockImplementation(async ({ sessionName }) => ({
+      sessionId: 'acp-created', sessionName, agentType: 'acp:test-client',
+    }));
+    storeMocks.loadSessionMetadata.mockResolvedValue({
+      sessionId: 'acp-created', customMetadata: { workspaceSessionNumber: 6 },
+    });
+    storeMocks.saveSessionMetadata.mockResolvedValue(undefined);
+    const manager = FlowChatManager.getInstance();
+    try {
+      await expect(manager.createAcpChatSession('test-client', { workspacePath: '/repo' })).resolves.toBe('acp-created');
+      expect(storeMocks.createAcpSession).toHaveBeenCalledTimes(1);
+      const name = storeMocks.createAcpSession.mock.calls[0][0].sessionName;
+      expect(storeMocks.store.createSession).toHaveBeenCalledWith(
+        'acp-created', expect.objectContaining({ agentType: 'acp:test-client', workspacePath: '/repo' }),
+        undefined, name, 128128, 'acp:test-client', '/repo', undefined, undefined,
+        expect.objectContaining({ source: 'i18n', text: name, key: 'flow-chat:session.new', workspaceSessionNumber: 6 }),
+      );
+    } finally {
+      manager.destroy();
+    }
   });
 
   it('creates one empty Claw session when reinitializing a reset workspace', async () => {

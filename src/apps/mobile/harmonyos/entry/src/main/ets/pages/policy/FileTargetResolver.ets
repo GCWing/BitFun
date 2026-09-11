@@ -110,6 +110,7 @@ export class FileTargetResolver {
       return false;
     }
     const lower = scheme[1].toLowerCase();
+    if (reference.startsWith('openbitfun://runtime/') || reference.startsWith('openbitfun://current-session/')) return false;
     return lower !== 'computer' && lower !== 'file';
   }
 

@@ -456,3 +456,20 @@
     accent-color: var(--openbitfun-color-accent-default);
   }
 }
+
+// Output bytes can be larger than the viewport. Keep their aspect ratio in
+// compact, foldable and wide transcript hosts.
+.markdown-output-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.remote-artifact-image {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5em;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}

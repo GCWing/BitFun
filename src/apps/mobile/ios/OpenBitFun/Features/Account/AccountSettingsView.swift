@@ -26,7 +26,7 @@ struct AccountSettingsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
                     Text(model.localized("使用 GitHub 登录"))
-                        .font(MobileDesignTypography.displayMedium.font)
+                        .font(MobileDesignTypography.headlineMedium.font)
                         .foregroundStyle(OpenBitFunTheme.ink)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
@@ -37,12 +37,7 @@ struct AccountSettingsView: View {
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 8)
-                        .padding(.bottom, 24)
-
-                    if let url = model.accountAuthorizationURL {
-                        Link(model.localized("打开 GitHub 授权"), destination: url)
-                            .padding(.vertical, 24)
-                    }
+                        .padding(.bottom, 12)
 
                     if let error = model.coreErrorMessage, !error.isEmpty {
                         Text(error)
@@ -55,7 +50,7 @@ struct AccountSettingsView: View {
                 }
                 .frame(maxWidth: 520)
                 .padding(.horizontal, MobileDesignGeometry.sheetHorizontalPadding)
-                .padding(.bottom, 34)
+                .padding(.bottom, 12)
                 .frame(maxWidth: .infinity)
             }
 
@@ -64,7 +59,9 @@ struct AccountSettingsView: View {
             } label: {
                 HStack(spacing: 8) {
                     if model.accountBusy { ProgressView().tint(OpenBitFunTheme.contentOnAction) }
-                    Text(model.localized(model.accountBusy ? "正在登录" : "通过 GitHub 登录"))
+                    Text(model.localized(model.accountAuthorizationURL != nil
+                        ? "打开 GitHub 授权"
+                        : model.accountBusy ? "正在登录" : "通过 GitHub 登录"))
                 }
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(OpenBitFunTheme.contentOnAction)
@@ -74,6 +71,7 @@ struct AccountSettingsView: View {
             }
             .buttonStyle(.plain)
             .disabled(!canLogin)
+            .accessibilityIdentifier("account.login")
             .padding(.horizontal, MobileDesignGeometry.sheetHorizontalPadding)
             .padding(.top, 10)
             .padding(.bottom, 24)
@@ -147,13 +145,8 @@ struct AccountSettingsView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     VStack(spacing: 10) {
-                        ZStack {
-                            Circle().fill(OpenBitFunTheme.soft)
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 34, weight: .medium))
-                                .foregroundStyle(OpenBitFunTheme.ink)
-                        }
-                        .frame(width: 70, height: 70)
+                        AccountAvatar(url: model.accountAvatarURL)
+                            .frame(width: 70, height: 70)
                         Text(model.accountUser ?? "")
                             .font(.system(size: 22, weight: .bold))
                             .foregroundStyle(OpenBitFunTheme.ink)
@@ -305,7 +298,7 @@ struct AccountSettingsView: View {
     }
 
     private var canLogin: Bool {
-        !model.accountBusy
+        !model.accountBusy || model.accountAuthorizationURL != nil
     }
 
     private func close() {
@@ -355,5 +348,23 @@ struct SettingsDeviceRow: View {
     private var deviceStatus: String {
         let presence = MobileLocalization.text(device.online ? "在线" : "离线")
         return connected ? "\(MobileLocalization.text("当前控制")) · \(presence)" : presence
+    }
+}
+
+struct AccountAvatar: View {
+    let url: String?
+    var body: some View {
+        AsyncImage(url: url.flatMap { value in
+            guard let candidate = URL(string: value), candidate.scheme == "https",
+                  candidate.host == "avatars.githubusercontent.com" else { return nil }
+            return candidate
+        }) { image in
+            image.resizable().scaledToFill()
+        } placeholder: {
+            ZStack {
+                Circle().fill(OpenBitFunTheme.soft)
+                Image(systemName: "person.fill").foregroundStyle(OpenBitFunTheme.ink)
+            }
+        }.clipShape(Circle()).accessibilityHidden(true)
     }
 }

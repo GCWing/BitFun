@@ -112,16 +112,15 @@ export class ImagePickerService {
   }
 
   private async encodeImage(uri: string, originalSize: number): Promise<EncodedImage> {
-    if (originalSize <= this.transportImageBudgetBytes) {
+    // Photo picker URIs do not reliably carry a file extension or MIME type.
+    // Decode on the device so HEIC and other camera formats become actual JPEG.
+    if (originalSize <= this.transportImageBudgetBytes && /\.(png|jpe?g|gif|webp)(\?|$)/i.test(uri)) {
       return this.readOriginalImage(uri, originalSize);
     }
 
     try {
       return await this.compressImage(uri, originalSize);
     } catch (_err) {
-      if (originalSize <= this.maxImageBytes) {
-        return this.readOriginalImage(uri, originalSize);
-      }
       throw new Error(RemoteI18n.t('errors.imageCompressionFailed'));
     }
   }
@@ -166,7 +165,6 @@ export class ImagePickerService {
       pixelMap = await source.createPixelMap({ desiredSize: targetSize });
 
       packer = image.createImagePacker();
-      let bestBytes: Uint8Array | undefined = undefined;
       for (let index = 0; index < this.compressionQualities.length; index += 1) {
         const packed = await packer.packToData(pixelMap, {
           format: 'image/jpeg',
@@ -174,7 +172,6 @@ export class ImagePickerService {
           bufferSize: this.maxImageBytes + 1024 * 1024
         });
         const bytes = new Uint8Array(packed);
-        bestBytes = bytes;
         if (bytes.length <= this.transportImageBudgetBytes) {
           return {
             bytes,
@@ -184,11 +181,7 @@ export class ImagePickerService {
         }
       }
 
-      return {
-        bytes: bestBytes || new Uint8Array(0),
-        mimeType: 'image/jpeg',
-        compressed: true
-      };
+      throw new Error(RemoteI18n.t('errors.imageCompressionFailed'));
     } catch (err) {
       throw OhosError.wrap('image compress', err);
     } finally {

@@ -1,8 +1,8 @@
 # OpenBitFun iOS
 
-Native SwiftUI client for the mobile conversation surface. The initial iOS
-entrypoint is intentionally small, but it is a real Xcode application and uses
-the same geometry as the HarmonyOS reference: 76pt conversation header, 44pt
+Native SwiftUI client for local and remote conversations, account pairing,
+workspace and session management, approvals, attachments, and file previews.
+It follows the HarmonyOS reference geometry: 76pt conversation header, 44pt
 circle controls, 16pt content margins, the 48pt connection strip, and the
 floating composer with 52pt collapsed height.
 
@@ -56,7 +56,8 @@ toolchain before opening the Xcode project:
 export JAVA_HOME="/Applications/DevEco-Studio.app/Contents/jbr/Contents/Home"
 export PATH="$JAVA_HOME/bin:$PATH"
 export DEVELOPER_DIR="$HOME/Downloads/Xcode.app/Contents/Developer"
-../../../../gradlew :core-feature:assembleOpenBitFunMobileCoreDebugXCFramework
+cd ../shared
+./gradlew :core-feature:assembleOpenBitFunMobileCoreDebugXCFramework
 ```
 
 The shell includes both product surfaces already: Local opens the HarmonyOS
@@ -72,3 +73,27 @@ actions flag can be combined with the session-actions flag; the account-login
 flag opens a deterministic signed-out surface without storing credentials. These launch flags
 select deterministic inspection states; normal launches use the live KMP
 pairing/session stores.
+
+Hosts advertising `harness_profiles_v1` expose Minimal, Standard, and Ultimate
+execution modes; older hosts retain Code and Cowork. Use `--connected --drawer
+--harness-preview --project-create-menu` to inspect the supported-host menu.
+Task completion notifications use a bounded iOS background task; they do not
+guarantee delivery after process termination. See the mobile README parity table.
+
+To verify that skipping notification onboarding survives restart, run this on a
+fresh simulator installation with undecided notification authorization:
+
+```bash
+xcodebuild -project OpenBitFun.xcodeproj -scheme OpenBitFun \
+  -destination 'platform=iOS Simulator,name=Notification Onboarding QA' \
+  -only-testing:OpenBitFunUITests/NotificationOnboardingUITests test
+```
+
+For the sidebar's New Chat menu and compact/wide scrolling checks, use the same
+command with `-only-testing:OpenBitFunUITests/SidebarNavigationUITests` instead.
+This suite uses deterministic remote preview data and does not create host sessions.
+
+Use `-only-testing:OpenBitFunUITests/GitHubLoginPresentationUITests` on a signed-out
+simulator to check the compact login sheet and automatic authorization-browser
+handoff. This check needs the configured relay's login endpoint and opens Safari;
+it does not submit GitHub credentials or approve account access.

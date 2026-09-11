@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from "react";
 import {
+  ActivityItem,
   Button,
   Card,
   CardFooter,
@@ -37,6 +38,27 @@ import {
   DialogTitle,
 } from "@openbitfun/ui";
 import { useI18n } from "../i18n";
+
+export function FileActivityPattern() {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const files = ["README.md", "src/features/workspace/remote/connection-profile-with-a-long-name.ts", "packages/ui/src/components/ActivityItem/ActivityItem.module.css"];
+  return <Card appearance="subtle" padding="md" data-openbitfun-pattern="file-activity">
+    <FormSection title="ActivityItem">
+      {files.map((path, index) => <ActivityItem
+        key={path}
+        appearance="surface"
+        leading={<Icon name="files" />}
+        label={t("components.preview.activityAction")}
+        metadata={<ChangeCount additions={index === 1 ? 1234 : 6} deletions={index === 1 ? 247 : 0} />}
+        onActivate={() => setExpanded(expanded === path ? null : path)}
+        actions={[{ id: "detail", icon: <Icon name="chevron-down" />, label: t("components.preview.activityOpen"), onClick: () => setExpanded(expanded === path ? null : path) }]}
+        detail={expanded === path ? <code>{path}</code> : undefined}
+        disabled={index === 2}
+      >{path}</ActivityItem>)}
+    </FormSection>
+  </Card>;
+}
 
 export function IndicatorsPattern() {
   const { t } = useI18n();

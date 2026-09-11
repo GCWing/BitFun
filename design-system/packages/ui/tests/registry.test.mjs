@@ -103,6 +103,8 @@ test("registry exposes only the formal stable components", () => {
       "TodoToolCard",
       "Toolbar",
       "Tooltip",
+      "VoiceCallPanel",
+      "VoiceParticleLogo",
       "ViewImageToolCard",
       "WebFetchToolCard",
       "WebSearchToolCard",

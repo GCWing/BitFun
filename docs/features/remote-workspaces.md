@@ -194,6 +194,45 @@ grants trust implicitly as a fallback of a failed read. The same rule applies
 in Peer Device Mode: the read-only probe answers for a controller, granting is
 refused on the peer host.
 
+## Output files through remote control
+
+Output links and images belong to the session that produced them. Remote Connect
+resolves relative paths, `computer://`, and `file:` references against that
+session's execution root, including its worktree. SSH workspace files are read
+through the workspace filesystem provider. Runtime artifact references remain
+scoped to the executing host and session, even when the SSH workspace is offline.
+An unavailable session or provider returns an error; it never borrows the
+controller's current workspace or a same-named local file.
+
+Mobile web displays supported output images in the message and offers retry or
+download when a preview cannot load. Native mobile surfaces expose output file
+cards with image preview and download. Multi-chunk reads reject incomplete or
+inconsistent transfers, and switching devices invalidates pending reads. Desktop
+image caches are isolated by the active device surface.
+
+Feishu, Telegram, and WeChat bots deliver files from the originating session
+after its reply. Images use the provider's supported native image representation;
+other outputs are sent as files. Duplicate image/link references are delivered
+once, and Markdown code examples are not treated as delivery requests. Missing
+files and upload failures produce an explicit reply.
+
+Account-device bot submissions retain the original device, session, and account
+identity for result polling, interactions, and attachment reads. Attachments use
+bounded chunks so encrypted relay payloads stay within the transport limit.
+New hosts include an optional file revision; supported readers reject a changed
+revision, while legacy replies without this field remain readable. A temporary
+connection failure replays the same turn query instead of resubmitting the prompt.
+Questions and tool approvals return to that captured target even after menu
+selection changes. Account replacement retires the observer's authority.
+
+Detached Dispatch negotiates the optional `query_file_chunks_v1` capability for
+binary images and downloads, alongside `query_file_content` for text previews.
+Chunk reads carry an offset and file revision; the controller rejects inconsistent
+transfers and drops responses after a device-surface switch. Older targets retain
+working execution and text-query paths and receive an explicit upgrade instruction
+for a missing binary capability. Existing Remote Connect file commands and
+persisted session records remain compatible; the file-chunk revision is additive.
+
 ## Upgrade compatibility
 
 Existing SSH profiles remain plain SSH targets because the new `proxyJump` and

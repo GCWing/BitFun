@@ -1,4 +1,34 @@
-import type { RecentWorkspaceEntry, SessionInfo } from './RemoteSessionManager';
+import type { AssistantEntry, RecentWorkspaceEntry, SessionInfo } from './RemoteSessionManager';
+
+export interface WorkspaceCatalog {
+  workspaces: RecentWorkspaceEntry[];
+  /** Absent opened_workspaces on the wire means a legacy host, not an empty catalog. */
+  source: 'opened' | 'recent';
+}
+
+export function projectWorkspaceCatalog(
+  response: { workspaces: RecentWorkspaceEntry[]; opened_workspaces?: RecentWorkspaceEntry[] | null },
+  assistants: AssistantEntry[] = [],
+): WorkspaceCatalog {
+  const source = Array.isArray(response.opened_workspaces) ? 'opened' : 'recent';
+  const rows = source === 'opened' ? response.opened_workspaces! : [
+    ...assistants.map((assistant): RecentWorkspaceEntry => ({
+      path: assistant.path, name: assistant.name, last_opened: '', workspace_kind: 'assistant',
+    })),
+    ...response.workspaces,
+  ];
+  const seen = new Set<string>();
+  return {
+    source,
+    workspaces: rows.filter((workspace) => {
+      if (!workspace.path) return false;
+      const key = workspaceIdentityKey(workspace);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }),
+  };
+}
 
 export type WorkspaceIdentity = Pick<
   RecentWorkspaceEntry,

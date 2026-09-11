@@ -368,6 +368,25 @@ pub fn apply_session_unread_completion(current: &mut SessionMetadata, incoming: 
     }
 }
 
+/// Apply the UI-owned title descriptor without changing host-owned metadata,
+/// including the workspace session display slot.
+pub fn apply_session_title_metadata(current: &mut SessionMetadata, incoming: &SessionMetadata) {
+    let mut custom = current
+        .custom_metadata
+        .as_ref()
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let incoming_custom = incoming.custom_metadata.as_ref().and_then(Value::as_object);
+    for key in ["titleSource", "titleKey", "titleParams"] {
+        custom.remove(key);
+        if let Some(value) = incoming_custom.and_then(|metadata| metadata.get(key)) {
+            custom.insert(key.to_string(), value.clone());
+        }
+    }
+    current.custom_metadata = (!custom.is_empty()).then_some(Value::Object(custom));
+}
+
 pub fn build_session_index_snapshot(
     metadata_list: Vec<SessionMetadata>,
     updated_at: u64,
@@ -505,6 +524,42 @@ mod tests {
             "Standard".to_string(),
             "model".to_string(),
         )
+    }
+
+    #[test]
+    fn title_updates_preserve_host_metadata_and_can_clear_the_default_descriptor() {
+        let mut current = metadata();
+        current.custom_metadata = Some(json!({
+            "workspaceSessionNumber": 12, "runtimeOwned": true,
+            "titleSource": "i18n", "titleKey": "flow-chat:session.new",
+            "titleParams": { "defaultTitleText": "New Session" }
+        }));
+        let mut incoming = metadata();
+        incoming.custom_metadata = Some(json!({
+            "workspaceSessionNumber": 99, "runtimeOwned": false,
+            "titleSource": "i18n", "titleKey": "flow-chat:session.new",
+            "titleParams": { "defaultTitleText": "New Session" }
+        }));
+        apply_session_title_metadata(&mut current, &incoming);
+        assert_eq!(
+            current.custom_metadata.as_ref().unwrap()["workspaceSessionNumber"],
+            12
+        );
+        assert_eq!(
+            current.custom_metadata.as_ref().unwrap()["runtimeOwned"],
+            true
+        );
+        assert_eq!(
+            current.custom_metadata.as_ref().unwrap()["titleParams"],
+            incoming.custom_metadata.as_ref().unwrap()["titleParams"]
+        );
+
+        incoming.custom_metadata = None;
+        apply_session_title_metadata(&mut current, &incoming);
+        assert_eq!(
+            current.custom_metadata,
+            Some(json!({ "workspaceSessionNumber": 12, "runtimeOwned": true }))
+        );
     }
 
     #[test]
