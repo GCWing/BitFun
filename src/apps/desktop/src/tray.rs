@@ -267,12 +267,14 @@ pub fn setup_tray(
 
 pub fn show_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        // Restore before showing: Win+D can leave a visible window minimized.
+        if let Err(error) = window.unminimize() {
+            log::warn!("Failed to unminimize main window via tray: {}", error);
+            return;
+        }
         if let Err(error) = window.show() {
             log::warn!("Failed to show main window via tray: {}", error);
             return;
-        }
-        if let Err(error) = window.unminimize() {
-            log::warn!("Failed to unminimize main window via tray: {}", error);
         }
         if let Err(error) = window.set_focus() {
             log::warn!("Failed to focus main window via tray: {}", error);
@@ -285,6 +287,22 @@ pub fn show_main_window(app: &tauri::AppHandle) {
 
 fn toggle_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
+        // Minimized windows may still be visible according to the OS. Never
+        // hide them here: restore them while their normal placement is intact.
+        match window.is_minimized() {
+            Ok(true) => {
+                show_main_window(app);
+                return;
+            }
+            Ok(false) => {}
+            Err(error) => {
+                log::warn!(
+                    "Failed to query main window minimized state via tray: {}",
+                    error
+                );
+                return;
+            }
+        }
         let visible = match window.is_visible() {
             Ok(visible) => visible,
             Err(error) => {
