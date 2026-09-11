@@ -101,7 +101,7 @@ export struct SidebarGlyph {
 
   @Builder
   private AppDot() {
-    Text('').width(8).height(8).borderRadius(4).backgroundColor(INK)
+    Text('').width(8).height(8).borderRadius(4).border({ width: 1.6, color: this.tint })
   }
 
   @Builder

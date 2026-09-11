@@ -1,4 +1,7 @@
 export const EN_US_MESSAGES: [string, string][] = [
+  ['miniapp.allApps', 'All apps'],
+  ['miniapp.availableOffline', 'Available offline'],
+
   ['miniapp.timeout', 'The local operation timed out. It may still finish; it was not retried.'],
   ['miniapp.title', 'MiniApps'],
   ['miniapp.refresh', 'Refresh'],
