@@ -1,3 +1,6 @@
+import { MiniAppActions, emptyMiniAppActions } from '../../model/MiniAppModels';
+import { MiniAppState } from '../state/MiniAppState';
+import { MiniAppSurface } from './MiniAppSurface';
 import display from '@ohos.display';
 import mediaQuery from '@ohos.mediaquery';
 import { RemoteUiState } from '../../services/RemoteUiState';
@@ -60,6 +63,8 @@ enum WideWorkspacePresentationMode {
 
 @ComponentV2
 export struct AppRootPresentation {
+  @Param miniAppState: MiniAppState = new MiniAppState();
+  @Param miniAppActions: MiniAppActions = emptyMiniAppActions();
   @Param shellState: AppShellState = new AppShellState();
   @Param navigationStack: NavPathStack = new NavPathStack();
   @Param remotePageState: RemotePageState = new RemotePageState();
@@ -184,6 +189,12 @@ export struct AppRootPresentation {
       if (this.isWideLayout()) {
         Column() { this.WideRouteContent() }
           .width('100%').height('100%').backgroundColor(PAGE_BG)
+      }
+
+      // Sidebar destinations belong to the moving content pane. A root-level
+      // overlay would cover the drawer before its closing animation can run.
+      if (this.miniAppState.visible) {
+        MiniAppSurface({ state: this.miniAppState, actions: this.miniAppActions })
       }
     }
     .width('100%')
