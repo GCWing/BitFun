@@ -2,19 +2,19 @@
   "schema_version": 1,
   "artifact": {
     "path": "src/crates/services/services-integrations/assets/models-dev.json",
-    "sha256": "36d8ee5eb142b3d108d4f82b775b7232413ab8f8b7cd85c9a6c5538525cee571",
-    "bytes": 647504
+    "sha256": "18431df8895150d1544cb556f14ca555c34f6ec8c9a51b5daa633305b9668ebb",
+    "bytes": 716891
   },
   "source": {
     "project": "models.dev",
     "api_url": "https://models.dev/api.json",
-    "api_sha256": "a51a929503f14aed3d646ec71a497de265bac673690224ca7ed320d110545f1b",
-    "api_bytes": 3504153,
-    "api_etag": null,
-    "retrieved_at": "2026-08-05T02:02:14.800Z",
+    "api_sha256": "2d33771631c0d3876b370d559399455cc8597db26a9f8283f77f72c204f63234",
+    "api_bytes": 4619527,
+    "api_etag": "W/\"2d33771631c0d3876b370d559399455c\"",
+    "retrieved_at": "2026-09-12T09:38:27.103Z",
     "repository": "https://github.com/anomalyco/models.dev",
     "repository_branch": "dev",
-    "repository_revision": "582eaaa208e55231d8482a20cac17f500118f9c6",
+    "repository_revision": "35d26af2a0df90146c1535a6b51caa8dc291543b",
     "revision_role": "Upstream dev revision observed when the API document was retrieved; api_sha256 is authoritative for the retrieved source bytes."
   },
   "license": {
@@ -78,27 +78,29 @@
       "moonshotai-cn",
       "nvidia",
       "openai",
+      "opencode-go",
       "openrouter",
       "siliconflow",
       "zhipuai"
     ],
     "included_provider_model_counts": {
-      "alibaba": 52,
-      "anthropic": 15,
+      "alibaba": 55,
+      "anthropic": 14,
       "deepseek": 4,
-      "google": 41,
+      "google": 39,
       "kimi-for-coding": 4,
       "minimax": 7,
       "minimax-cn": 7,
       "minimax-cn-coding-plan": 7,
       "minimax-coding-plan": 7,
-      "moonshotai": 10,
-      "moonshotai-cn": 10,
-      "nvidia": 98,
-      "openai": 47,
-      "openrouter": 337,
+      "moonshotai": 4,
+      "moonshotai-cn": 4,
+      "nvidia": 103,
+      "openai": 48,
+      "opencode-go": 36,
+      "openrouter": 367,
       "siliconflow": 49,
-      "zhipuai": 13
+      "zhipuai": 15
     }
   },
   "maintenance": {

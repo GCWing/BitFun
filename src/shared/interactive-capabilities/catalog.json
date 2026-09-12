@@ -6448,8 +6448,8 @@
         },
         {
           "id": "subscription-auth",
-          "titleZh": "登录、刷新和退出 Codex、Antigravity、Grok、OpenCode、Hermes 等订阅账户",
-          "titleEn": "Sign in, refresh, and sign out of Codex, Antigravity, Grok, OpenCode, Hermes, and other subscription accounts",
+          "titleZh": "登录、刷新和退出 Codex、Antigravity、OpenCode Console（Zen）、Grok、Hermes 等账户",
+          "titleEn": "Sign in, refresh, and sign out of Codex, Antigravity, OpenCode Console (Zen), Grok, Hermes, and other accounts",
           "control": {
             "kind": "open",
             "reasonCode": "externalAuth",

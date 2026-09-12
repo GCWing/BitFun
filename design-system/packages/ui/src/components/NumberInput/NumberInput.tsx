@@ -19,6 +19,8 @@ export interface NumberInputProps extends Pick<InputHTMLAttributes<HTMLInputElem
   disabled?: boolean;
   disableWheel?: boolean;
   draggable?: boolean;
+  /** Formats the unfocused value; editing and callbacks remain numeric. */
+  formatValue?: (value: number) => string;
   incrementLabel?: string;
   label?: string;
   max?: number;
@@ -41,6 +43,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
   decrementLabel = "Decrease value",
   disabled = false,
   disableWheel = false,
+  formatValue,
   incrementLabel = "Increase value",
   label,
   max = Number.POSITIVE_INFINITY,
@@ -119,6 +122,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
             compositionActiveRef.current = true;
           }}
           onFocus={(event) => {
+            if (formatValue) setDraft(format(value));
             setEditing(true);
             onFocus?.(event);
           }}
@@ -133,7 +137,7 @@ export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(functi
           }}
           ref={ref}
           type="text"
-          value={draft}
+          value={!editing && formatValue ? formatValue(value) : draft}
         />
         {unit && <span className={styles.unit} data-openbitfun-part="unit">{unit}</span>}
         {showButtons && variant !== "compact" && (

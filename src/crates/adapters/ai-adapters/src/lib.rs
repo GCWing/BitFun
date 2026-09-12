@@ -27,3 +27,5 @@ pub use types::{
     GeminiUsage, Message, ModelRequestContext, ProxyConfig, ReasoningPresetAction,
     ReasoningPresetDescriptor, RemoteModelInfo, ToolCall, ToolDefinition, ToolImageAttachment,
 };
+
+pub(crate) mod opencode_catalog;

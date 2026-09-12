@@ -14,12 +14,11 @@ use crate::infrastructure::ai::reasoning_catalog::{
 use crate::infrastructure::ai::{build_stream_options_for_model, AIClient};
 #[cfg(feature = "subscription-auth")]
 use crate::infrastructure::subscription_auth::{
-    self, OpenCodePlan as AdapterOpenCodePlan, SubscriptionHttpOptions,
-    SubscriptionProvider as AdapterProvider,
+    self, SubscriptionHttpOptions, SubscriptionProvider as AdapterProvider,
 };
-use crate::service::config::types::{model_runtime_binding_fingerprint, AuthConfig};
 #[cfg(feature = "subscription-auth")]
-use crate::service::config::types::{OpenCodePlan, SubscriptionProvider};
+use crate::service::config::types::SubscriptionProvider;
+use crate::service::config::types::{model_runtime_binding_fingerprint, AuthConfig};
 use crate::service::config::{get_global_config_service, ConfigService};
 use crate::util::errors::{OpenBitFunError, OpenBitFunResult};
 use crate::util::types::AIConfig;
@@ -464,14 +463,6 @@ fn to_adapter_provider(provider: SubscriptionProvider) -> AdapterProvider {
     }
 }
 
-#[cfg(feature = "subscription-auth")]
-fn to_adapter_opencode_plan(plan: OpenCodePlan) -> AdapterOpenCodePlan {
-    match plan {
-        OpenCodePlan::Zen => AdapterOpenCodePlan::Zen,
-        OpenCodePlan::Go => AdapterOpenCodePlan::Go,
-    }
-}
-
 /// Attach request policy from explicit auth identity after credential resolution.
 pub fn apply_subscription_request_profile(auth: &AuthConfig, client: AIClient) -> AIClient {
     #[cfg(feature = "subscription-auth")]
@@ -550,8 +541,17 @@ pub async fn apply_subscription_auth_with_options(
             }
             let resolved = match (*provider, *plan) {
                 (SubscriptionProvider::Opencode, plan) => {
+                    if plan == Some(crate::service::config::types::OpenCodePlan::Go)
+                        || ai_config.base_url.trim_end_matches('/')
+                            == "https://opencode.ai/zen/go/v1"
+                        || ai_config
+                            .request_url
+                            .starts_with("https://opencode.ai/zen/go/")
+                    {
+                        return Err(anyhow!(subscription_auth::OPENCODE_GO_REQUIRES_API_KEY));
+                    }
                     subscription_auth::resolve_opencode_model_with_options(
-                        plan.map(to_adapter_opencode_plan),
+                        Some(subscription_auth::OpenCodePlan::Zen),
                         &ai_config.format,
                         &ai_config.model,
                         options,
@@ -584,7 +584,7 @@ pub async fn apply_subscription_auth_with_options(
     Ok(resolved.apply_to(ai_config))
 }
 
-/// List subscription accounts (Codex / Antigravity / OpenCode / xAI / Hermes).
+/// List subscription accounts (Codex / Antigravity / xAI / Hermes).
 #[cfg(feature = "subscription-auth")]
 pub async fn list_subscription_accounts() -> Vec<subscription_auth::SubscriptionAccount> {
     subscription_auth::list_accounts().await
@@ -640,6 +640,31 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "subscription-auth")]
+    async fn legacy_go_oauth_round_trips_and_returns_api_key_error() {
+        for payload in [
+            serde_json::json!({"type": "subscription", "provider": "opencode", "plan": "go"}),
+            serde_json::json!({"type": "subscription", "provider": "opencode"}),
+        ] {
+            let auth: AuthConfig = serde_json::from_value(payload).unwrap();
+            let round_trip: AuthConfig =
+                serde_json::from_value(serde_json::to_value(&auth).unwrap()).unwrap();
+            assert_eq!(auth, round_trip);
+            let mut config = test_runtime_ai_config();
+            config.base_url = "https://opencode.ai/zen/go/v1".to_string();
+            let error = apply_subscription_auth(&auth, &mut config)
+                .await
+                .unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                super::subscription_auth::OPENCODE_GO_REQUIRES_API_KEY
+            );
+            assert_eq!(config.api_key, "unchanged");
+            assert_eq!(config.base_url, "https://opencode.ai/zen/go/v1");
+        }
+    }
+
+    #[tokio::test]
     async fn runtime_model_is_available_to_ai_client_factory() {
         let dir = tempfile::tempdir().expect("temporary config directory");
         let config = Arc::new(
@@ -682,19 +707,22 @@ mod tests {
             .await
             .unwrap(),
         );
-        let mut model = build_model("subscription:fixture", "OpenCode", "fixture-model");
+        let mut model = build_model("subscription:fixture", "Codex", "fixture-model");
         model.provider = "openai".into();
-        model.base_url = "https://opencode.ai/zen/v1".into();
+        model.base_url = "https://chatgpt.com/backend-api/codex".into();
         model.auth = AuthConfig::Subscription {
-            provider: super::SubscriptionProvider::Opencode,
+            provider: super::SubscriptionProvider::Codex,
             plan: None,
         };
         config.install_runtime_ai_model(model).await.unwrap();
         let factory = AIClientFactory::new(config);
         store::upsert(
-            "opencode",
-            StoredCredential::Api {
-                key: "first-synthetic-key".into(),
+            "codex",
+            StoredCredential::Oauth {
+                access: "first-synthetic-key".into(),
+                refresh: "synthetic-refresh".into(),
+                expires: chrono::Utc::now().timestamp_millis() + 3_600_000,
+                account_id: Some("synthetic-account".into()),
                 metadata: None,
             },
         )
@@ -704,7 +732,7 @@ mod tests {
             .get_client_by_id("subscription:fixture")
             .await
             .unwrap();
-        assert_eq!(first.subscription_provider_key(), Some("opencode"));
+        assert_eq!(first.subscription_provider_key(), Some("codex"));
         assert!(Arc::ptr_eq(
             &first,
             &factory
@@ -714,9 +742,12 @@ mod tests {
         ));
         // A different process would advance the same on-disk provider epoch.
         store::upsert(
-            "opencode",
-            StoredCredential::Api {
-                key: "replacement-synthetic-key".into(),
+            "codex",
+            StoredCredential::Oauth {
+                access: "replacement-synthetic-key".into(),
+                refresh: "synthetic-refresh".into(),
+                expires: chrono::Utc::now().timestamp_millis() + 3_600_000,
+                account_id: Some("synthetic-account".into()),
                 metadata: None,
             },
         )
@@ -728,7 +759,7 @@ mod tests {
             .unwrap();
         assert!(!Arc::ptr_eq(&first, &replacement));
         assert_eq!(replacement.config.api_key, "replacement-synthetic-key");
-        subscription_auth::logout(subscription_auth::SubscriptionProvider::Opencode)
+        subscription_auth::logout(subscription_auth::SubscriptionProvider::Codex)
             .await
             .unwrap();
         assert!(factory

@@ -865,4 +865,25 @@ pub struct RemoteModelInfo {
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    /// Optional provider-owned route; older hosts may omit it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routing: Option<RemoteModelRouting>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemoteModelRouting {
+    pub format: String,
+    pub base_url: String,
+    pub request_url: String,
+}
+
+#[cfg(test)]
+mod remote_model_routing_compatibility {
+    #[test]
+    fn old_discovery_payload_round_trips_without_route_fields() {
+        let old = serde_json::json!({"id":"legacy-model", "display_name":"Legacy"});
+        let model: super::RemoteModelInfo = serde_json::from_value(old.clone()).unwrap();
+        assert!(model.routing.is_none());
+        assert_eq!(serde_json::to_value(model).unwrap(), old);
+    }
 }

@@ -50,6 +50,34 @@ pub(crate) fn is_https_endpoint(raw: &str, host: &str, path: &str) -> bool {
     })
 }
 
+/// Session affinity is a protocol requirement, independent of OAuth. API-key
+/// clients opt into this header alone at the official Zen/Go inference routes.
+fn uses_opencode_affinity(client: &AIClient, url: &str) -> bool {
+    if client.subscription_provider_key() == Some("opencode")
+        && is_https_endpoint(url, "opencode.ai", "/inference")
+    {
+        return true;
+    }
+    if !is_https_endpoint(url, "opencode.ai", "/zen") {
+        return false;
+    }
+    match client.subscription_provider_key() {
+        Some("opencode") => true,
+        Some(_) => false,
+        None => reqwest::Url::parse(url).ok().is_some_and(|url| {
+            matches!(
+                url.path(),
+                "/zen/v1/chat/completions"
+                    | "/zen/v1/responses"
+                    | "/zen/v1/messages"
+                    | "/zen/go/v1/chat/completions"
+                    | "/zen/go/v1/responses"
+                    | "/zen/go/v1/messages"
+            )
+        }),
+    }
+}
+
 /// OpenCode requires an affinity header even for standalone calls such as
 /// connection tests and auxiliary summaries. Allocate their identity once per
 /// logical call, before retries; never share a fallback across a cached client.
@@ -57,8 +85,7 @@ pub(crate) fn prepare_request_context(
     client: &AIClient,
     context: Option<crate::types::ModelRequestContext>,
 ) -> Option<crate::types::ModelRequestContext> {
-    if client.subscription_provider_key() != Some("opencode")
-        || !is_https_endpoint(&client.config.request_url, "opencode.ai", "/zen")
+    if !uses_opencode_affinity(client, &client.config.request_url)
         || context
             .as_ref()
             .and_then(|context| context.prompt_cache_route_key.as_deref())
@@ -108,9 +135,7 @@ pub(crate) fn apply_affinity_headers(
         && is_https_endpoint(url, "chatgpt.com", "/backend-api/codex")
     {
         &["session_id", "x-client-request-id"]
-    } else if client.subscription_provider_key() == Some("opencode")
-        && is_https_endpoint(url, "opencode.ai", "/zen")
-    {
+    } else if uses_opencode_affinity(client, url) {
         &["x-opencode-session"]
     } else if client.subscription_provider_key() == Some("grok")
         && is_https_endpoint(url, "api.x.ai", "/v1/responses")
@@ -583,12 +608,11 @@ mod tests {
     }
 
     #[test]
-    fn ordinary_api_requests_keep_headers_and_context_even_at_subscription_origins() {
+    fn unrelated_api_requests_keep_headers_and_context_even_at_subscription_origins() {
         use crate::types::ModelRequestContext;
         for url in [
-            "https://opencode.ai/zen/v1/chat/completions",
-            "https://opencode.ai/zen/go/v1/responses",
-            "https://opencode.ai/zen/go/v1/messages",
+            "https://opencode.ai/zen/v1/models",
+            "https://opencode.ai/zen/go/v1/models",
             "https://chatgpt.com/backend-api/codex/responses",
             "https://api.x.ai/v1/responses",
             "https://inference-api.nousresearch.com/v1/chat/completions",
@@ -641,6 +665,121 @@ mod tests {
         }
     }
 
+    #[test]
+    fn api_key_opencode_calls_keep_auth_and_send_per_call_affinity_on_every_wire() {
+        use super::{apply_affinity_headers, apply_header_policy, prepare_request_context};
+        use crate::types::ModelRequestContext;
+        let mut generated = std::collections::HashSet::new();
+        for plan in ["zen", "zen/go"] {
+            for wire in ["chat/completions", "responses", "messages"] {
+                let url = format!("https://opencode.ai/{plan}/v1/{wire}");
+                let mut client = request_client(&url);
+                assert!(client.subscription_provider_key().is_none());
+                for mode in ["merge", "replace"] {
+                    client.config.custom_headers_mode = Some(mode.into());
+                    client.config.custom_headers = Some(std::collections::HashMap::from([
+                        ("X-OpenCode-Session".into(), "stale".into()),
+                        ("Authorization".into(), "Bearer user-key".into()),
+                    ]));
+                    for initial in [
+                        None,
+                        Some(ModelRequestContext::default()),
+                        Some(ModelRequestContext {
+                            prompt_cache_route_key: Some(" ".into()),
+                            output_schema: Some(serde_json::json!({"type":"object"})),
+                        }),
+                        Some(ModelRequestContext {
+                            prompt_cache_route_key: Some("conversation-a".into()),
+                            ..Default::default()
+                        }),
+                        Some(ModelRequestContext {
+                            prompt_cache_route_key: Some("conversation-b".into()),
+                            ..Default::default()
+                        }),
+                    ] {
+                        let schema = initial
+                            .as_ref()
+                            .and_then(|value| value.output_schema.clone());
+                        let existing = initial
+                            .as_ref()
+                            .and_then(|value| value.prompt_cache_route_key.clone())
+                            .filter(|value| !value.trim().is_empty());
+                        let context = prepare_request_context(&client, initial).unwrap();
+                        assert_eq!(context.output_schema, schema);
+                        let key = context.prompt_cache_route_key.as_ref().unwrap();
+                        if let Some(existing) = existing {
+                            assert_eq!(*key, existing);
+                        } else {
+                            assert!(generated.insert(key.clone()));
+                        }
+                        for _ in 0..3 {
+                            let retry = prepare_request_context(&client, Some(context.clone()));
+                            let builder =
+                                apply_header_policy(&client, client.client.post(&url), |builder| {
+                                    builder.bearer_auth("synthetic")
+                                });
+                            let before = builder.try_clone().unwrap().build().unwrap();
+                            let request =
+                                apply_affinity_headers(&client, builder, &url, retry.as_ref())
+                                    .build()
+                                    .unwrap();
+                            assert_eq!(request.headers()["x-opencode-session"], key.as_str());
+                            assert_eq!(
+                                request
+                                    .headers()
+                                    .get_all("x-opencode-session")
+                                    .iter()
+                                    .count(),
+                                1
+                            );
+                            assert_eq!(
+                                request.headers()["authorization"],
+                                before.headers()["authorization"]
+                            );
+                            assert!(!request.headers().contains_key("x-org-id"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn api_key_opencode_affinity_is_limited_to_official_inference_endpoints() {
+        for url in [
+            "http://opencode.ai/zen/go/v1/messages",
+            "https://opencode.ai:444/zen/go/v1/messages",
+            "https://opencode.ai.evil.test/zen/go/v1/messages",
+            "https://user:password@opencode.ai/zen/go/v1/messages",
+            "https://opencode.ai/zen-other/v1/messages",
+            "https://opencode.ai/zen/go/v1/messages/other",
+            "https://opencode.ai/zen/go/v1/models",
+            "https://opencode.ai/console/api/config",
+        ] {
+            let client = request_client(url);
+            assert!(
+                super::prepare_request_context(&client, None).is_none(),
+                "{url}"
+            );
+            let context = crate::types::ModelRequestContext {
+                prompt_cache_route_key: Some("private-scope".into()),
+                ..Default::default()
+            };
+            let request = super::apply_affinity_headers(
+                &client,
+                client.client.post(url),
+                url,
+                Some(&context),
+            )
+            .build()
+            .unwrap();
+            assert!(
+                !request.headers().contains_key("x-opencode-session"),
+                "{url}"
+            );
+        }
+    }
+
     #[cfg(feature = "subscription-auth")]
     mod subscription {
         use super::request_client;
@@ -649,9 +788,59 @@ mod tests {
         use crate::types::ModelRequestContext;
 
         #[test]
+        fn console_credentials_and_affinity_survive_saved_header_replacement() {
+            use crate::providers::shared::apply_header_policy;
+            use crate::subscription_auth::ResolvedCredential;
+            use std::collections::HashMap;
+            let url = "https://opencode.ai/inference/openai/v1/chat/completions";
+            let mut client =
+                request_client(url).with_subscription_provider(SubscriptionProvider::Opencode);
+            client.config.custom_headers_mode = Some("replace".into());
+            client.config.custom_headers = Some(HashMap::from([
+                ("Authorization".into(), "stale".into()),
+                ("X-OpenCode-Org-Id".into(), "stale".into()),
+                ("x-org-id".into(), "legacy".into()),
+                ("X-OpenCode-Session".into(), "stale".into()),
+            ]));
+            ResolvedCredential {
+                api_key: "synthetic-access".into(),
+                base_url: None,
+                request_url: None,
+                format: None,
+                expires_at: None,
+                extra_headers: HashMap::from([("x-opencode-org-id".into(), "account-org".into())]),
+            }
+            .apply_to(&mut client.config);
+            let context = prepare_request_context(&client, None);
+            let builder = apply_header_policy(&client, client.client.post(url), |builder| {
+                builder.bearer_auth(&client.config.api_key)
+            });
+            let request = apply_affinity_headers(&client, builder, url, context.as_ref())
+                .build()
+                .unwrap();
+            assert_eq!(
+                request.headers()["authorization"],
+                "Bearer synthetic-access"
+            );
+            assert_eq!(request.headers()["x-opencode-org-id"], "account-org");
+            assert!(!request.headers().contains_key("x-org-id"));
+            assert_ne!(request.headers()["x-opencode-session"], "stale");
+            assert_eq!(
+                request
+                    .headers()
+                    .get_all("x-opencode-org-id")
+                    .iter()
+                    .count(),
+                1
+            );
+            let public_client = request_client(url);
+            assert!(prepare_request_context(&public_client, None).is_none());
+        }
+
+        #[test]
         fn standalone_opencode_calls_send_affinity_on_every_wire_and_retry() {
             let mut call_keys = std::collections::HashSet::new();
-            for plan in ["zen", "zen/go"] {
+            for plan in ["zen", "zen/go", "inference/openai", "inference/anthropic"] {
                 for wire in ["chat/completions", "responses", "messages"] {
                     let url = format!("https://opencode.ai/{plan}/v1/{wire}");
                     let client = request_client(&url)

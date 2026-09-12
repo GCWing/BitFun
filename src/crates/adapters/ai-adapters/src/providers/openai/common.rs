@@ -172,6 +172,7 @@ pub(crate) async fn list_models(client: &AIClient) -> Result<Vec<RemoteModelInfo
             .data
             .into_iter()
             .map(|model| RemoteModelInfo {
+                routing: None,
                 id: model.id,
                 display_name: None,
             })
@@ -252,6 +253,7 @@ fn codex_models_from_entries(mut entries: Vec<CodexBackendModelEntry>) -> Vec<Re
         entries
             .into_iter()
             .map(|model| RemoteModelInfo {
+                routing: None,
                 id: model.slug,
                 display_name: model.display_name,
             })

@@ -21,7 +21,8 @@ describe('ModelSettingsPage presentation', () => {
     expect(source).not.toMatch(/label=\{`[^`]*\*[^`]*`\}/);
     expect(source.match(/<ConfigPageRow label=\{t\('form\.configName'\)\} required/g)).toHaveLength(2);
     expect(source.match(/<ConfigPageRow label=\{t\('form\.modelSelection'\)\} required/g)).toHaveLength(2);
-    expect(source.match(/<ConfigPageRow label=\{t\('form\.baseUrl'\)\} required/g)).toHaveLength(1);
+    // Template and custom-provider editors both require an API URL.
+    expect(source.match(/<ConfigPageRow label=\{t\('form\.baseUrl'\)\} required/g)).toHaveLength(2);
     expect(source).toContain('<ConfigPageRow label={label} required align="center" wide>');
   });
 

@@ -44,6 +44,7 @@ export interface ConnectionTestResult {
 export interface RemoteModelInfo {
   id: string;
   display_name?: string;
+  routing?: { format: string; base_url: string; request_url: string };
 }
 
 export interface AIModelCatalogEntry {

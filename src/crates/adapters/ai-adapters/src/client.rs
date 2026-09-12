@@ -546,6 +546,9 @@ impl AIClient {
     }
 
     pub async fn list_models(&self) -> Result<Vec<RemoteModelInfo>> {
+        if let Some(plan) = crate::opencode_catalog::api_key_plan(&self.config.base_url) {
+            return crate::opencode_catalog::api_key_models(&self.client, plan).await;
+        }
         match ApiFormat::parse(&self.config.format)? {
             ApiFormat::OpenAIChat | ApiFormat::OpenAIResponses => {
                 openai::common::list_models(self).await

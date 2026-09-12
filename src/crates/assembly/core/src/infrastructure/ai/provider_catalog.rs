@@ -543,7 +543,22 @@ mod tests {
     #[test]
     fn overlay_is_valid_and_keeps_product_endpoint_decisions() {
         let overlay = parse_overlay().expect("valid overlay");
-        assert_eq!(overlay.providers.len(), 13);
+        assert_eq!(overlay.providers.len(), 14);
+        let go = overlay
+            .providers
+            .iter()
+            .find(|provider| provider.id == "opencode-go")
+            .expect("Go API-key preset");
+        assert!(go.requires_api_key);
+        assert_eq!(go.catalog_provider_ids, ["opencode-go"]);
+        assert_eq!(go.model_policy.mode, super::ModelPolicyMode::Catalog);
+        assert_eq!(go.endpoints.len(), 1);
+        assert_eq!(go.endpoints[0].base_url, "https://opencode.ai/zen/go/v1");
+        assert!(go.endpoints[0].is_default);
+        assert!(!overlay
+            .providers
+            .iter()
+            .any(|provider| provider.id == "opencode-zen" || provider.id == "opencode"));
         let openbitfun = overlay
             .providers
             .iter()
@@ -765,7 +780,20 @@ mod tests {
             "bundle".to_string(),
             ProviderCatalogSource::Bundle,
         );
-        assert_eq!(resolved.providers.len(), 13);
+        assert_eq!(resolved.providers.len(), 14);
+        let go = resolved
+            .providers
+            .iter()
+            .find(|provider| provider.id == "opencode-go")
+            .expect("bundled Go provider");
+        assert!(
+            !go.models.is_empty(),
+            "Go must have an offline model catalog"
+        );
+        assert!(!resolved
+            .providers
+            .iter()
+            .any(|provider| provider.id == "opencode-zen" || provider.id == "opencode"));
         assert!(resolved
             .providers
             .iter()

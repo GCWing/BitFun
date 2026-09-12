@@ -47,7 +47,7 @@
     },
     {
       "id": "zhipu",
-      "display_order": 10,
+      "display_order": 20,
       "region": "cn",
       "name": "Zhipu AI",
       "description": "Zhipu GLM series",
@@ -70,7 +70,7 @@
     },
     {
       "id": "qwen",
-      "display_order": 20,
+      "display_order": 50,
       "region": "cn",
       "name": "Qwen (Alibaba)",
       "description": "Alibaba Qwen series",
@@ -92,7 +92,7 @@
     },
     {
       "id": "deepseek",
-      "display_order": 30,
+      "display_order": 10,
       "region": "cn",
       "name": "DeepSeek",
       "description": "DeepSeek AI models",
@@ -111,7 +111,7 @@
     },
     {
       "id": "volcengine",
-      "display_order": 40,
+      "display_order": 60,
       "region": "cn",
       "name": "Volcengine",
       "description": "ByteDance Volcengine",
@@ -131,7 +131,7 @@
     },
     {
       "id": "minimax",
-      "display_order": 50,
+      "display_order": 40,
       "region": "cn",
       "name": "MiniMax",
       "description": "MiniMax AI models",
@@ -152,7 +152,7 @@
     },
     {
       "id": "moonshot",
-      "display_order": 60,
+      "display_order": 30,
       "region": "cn",
       "name": "Moonshot (Kimi)",
       "description": "Moonshot Kimi series",
@@ -294,6 +294,36 @@
         "curated_models": ["glm-5.2", "deepseek-v4-flash", "deepseek-v4-pro"],
         "additional_models": []
       }
+    },
+    {
+      "region": "any",
+      "requires_api_key": true,
+      "display_order": 140,
+      "endpoints": [
+        {
+          "catalog_provider_ids": [
+            "opencode-go"
+          ],
+          "label": "default",
+          "id": "default",
+          "api_format": "openai",
+          "base_url": "https://opencode.ai/zen/go/v1",
+          "trusted_for_auto_detection": true,
+          "is_default": true
+        }
+      ],
+      "catalog_provider_ids": [
+        "opencode-go"
+      ],
+      "id": "opencode-go",
+      "model_policy": {
+        "additional_models": [],
+        "mode": "catalog",
+        "curated_models": []
+      },
+      "help_url": "https://opencode.ai/console",
+      "description": "A model subscription plan from OpenCode.",
+      "name": "OpenCode Go"
     }
   ]
 }

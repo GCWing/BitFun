@@ -54,6 +54,7 @@ pub(crate) async fn list_models(client: &AIClient) -> Result<Vec<RemoteModelInfo
             .data
             .into_iter()
             .map(|model| RemoteModelInfo {
+                routing: None,
                 id: model.id,
                 display_name: model.display_name,
             })

@@ -1,3 +1,4 @@
+import { isOpenCodeApiKeyConfig, isOpenCodeZenOAuth, openCodeZenModels, resolveOpenCodeModelRoute, savedOpenCodeApiKeyRoute } from './openCodeApiKeyRouting';
 import { OverflowText,
   Button,
   Field,
@@ -62,7 +63,7 @@ import type {
   SubscriptionLoginMethod,
 } from '@/infrastructure/api/service-api/AIApi';
 import type { ProviderRegion } from '@/shared/types';
-import type { OpenCodePlan, SubscriptionProvider } from '../types';
+import type { SubscriptionProvider } from '../types';
 import { useNotification } from '@/shared/notification-system';
 import {
   ConfigActionBar,
@@ -100,7 +101,7 @@ import {
   SubscriptionLoginCoordinator,
   type SubscriptionLoginOperation,
 } from './subscriptionLoginCoordinator';
-import { ModelDiscoveryCoordinator, openCodeOfferingModels, openCodeModelOffering } from './modelDiscoveryCoordinator';
+import { ModelDiscoveryCoordinator } from './modelDiscoveryCoordinator';
 import './ModelSettingsPage.scss';
 
 const log = createLogger('ModelSettings');
@@ -112,12 +113,14 @@ const COLLAPSED_PROVIDER_COUNT = 6;
 interface RemoteModelOption {
   id: string;
   display_name?: string;
+  routing?: { format: string; base_url: string; request_url: string };
 }
 
 interface SelectedModelDraft {
   key: string;
   configId?: string;
   modelName: string;
+  manualRequestFormat?: string;
   category: ModelCategory;
   contextWindow: number;
   maxTokens?: number;
@@ -203,6 +206,7 @@ function createModelDraft(
     key: overrides?.key ?? overrides?.configId ?? baseConfig?.id ?? trimmedModelName,
     configId: overrides?.configId ?? baseConfig?.id,
     modelName: trimmedModelName,
+    manualRequestFormat: overrides?.manualRequestFormat ?? baseConfig?.provider,
     category: overrides?.category ?? baseConfig?.category ?? 'general_chat',
     contextWindow: overrides?.contextWindow ?? baseConfig?.context_window ?? 200000,
     maxTokens: overrides?.maxTokens ?? baseConfig?.max_tokens,
@@ -373,6 +377,7 @@ function modelDraftHasUnsavedChanges(
 
   return (
     normalizeComparableString(draft.modelName) !== normalizeComparableString(persisted.model_name) ||
+    (isOpenCodeApiKeyConfig(persisted) && draft.manualRequestFormat !== persisted.provider) ||
     draft.category !== (persisted.category ?? 'general_chat') ||
     draft.contextWindow !== (persisted.context_window || 200000) ||
     draft.maxTokens !== persisted.max_tokens ||
@@ -441,6 +446,15 @@ const ModelSettingsPage: React.FC = () => {
   const [remoteModelsError, setRemoteModelsError] = useState<string | null>(null);
   const [hasAttemptedRemoteFetch, setHasAttemptedRemoteFetch] = useState(false);
   const [selectedModelDrafts, setSelectedModelDrafts] = useState<SelectedModelDraft[]>([]);
+  const [showModelValidation, setShowModelValidation] = useState(false);
+  useEffect(() => { setShowModelValidation(false); }, [editingTargetKey, isEditing]);
+  const missingModelFields = {
+    name: !editingConfig?.name?.trim(),
+    baseUrl: !editingConfig?.base_url?.trim(),
+    apiKey: editingConfig?.auth?.type !== 'subscription' && !editingConfig?.api_key?.trim(),
+    model: selectedModelDrafts.length === 0 || selectedModelDrafts.some(draft => !draft.modelName.trim()),
+  };
+
   const [editingProviderModelIds, setEditingProviderModelIds] = useState<Set<string>>(new Set());
   const [manualModelInput, setManualModelInput] = useState('');
   const [expandedModelCards, setExpandedModelCards] = useState<Set<string>>(new Set());
@@ -450,6 +464,8 @@ const ModelSettingsPage: React.FC = () => {
     'key' | 'reasoning' | 'reasoningProjectionCatalog' | 'reasoningProjectionSnapshot'
   > | null>(null);
   const [subscriptionAccounts, setSubscriptionAccounts] = useState<SubscriptionAccount[]>([]);
+  const subscriptionRefreshesRef = React.useRef(new Set<SubscriptionProvider>());
+  const [refreshingSubscriptionProviders, setRefreshingSubscriptionProviders] = useState<ReadonlySet<SubscriptionProvider>>(new Set());
   const [isLoadingSubscriptions, setIsLoadingSubscriptions] = useState(false);
   const [loggingInProvider, setLoggingInProvider] = useState<SubscriptionProvider | null>(null);
   const [subscriptionLoginPanel, setSubscriptionLoginPanel] = useState<SubscriptionLoginPanelState | null>(null);
@@ -748,19 +764,6 @@ const ModelSettingsPage: React.FC = () => {
     resetRemoteModelDiscovery();
     return () => coordinator.reset();
   }, [modelDiscoverySurface, resetRemoteModelDiscovery]);
-
-  const getOpenCodePlanLabel = useCallback((plan: OpenCodePlan): string => (
-    plan === 'go'
-      ? t('subscriptionAuth.openCodePlans.go.label')
-      : t('subscriptionAuth.openCodePlans.zen.label')
-  ), [t]);
-
-  const getOpenCodePlanDescription = useCallback((plan: OpenCodePlan): string => (
-    plan === 'go'
-      ? t('subscriptionAuth.openCodePlans.go.description')
-      : t('subscriptionAuth.openCodePlans.zen.description')
-  ), [t]);
-
   const syncSelectedModelDrafts = (
     modelNames: string[],
     baseConfig?: Partial<AIModelConfigType>,
@@ -1001,13 +1004,11 @@ const ModelSettingsPage: React.FC = () => {
     let succeeded = false;
     try {
       let remoteModels: RemoteModelOption[];
-      if (discoveryConfig.auth?.type === 'subscription' && discoveryConfig.auth.provider === 'opencode') {
+      if (isOpenCodeZenOAuth(discoveryConfig)) {
         const account = await aiApi.refreshSubscriptionAccount('opencode');
         if (!scope.isCurrent() || !coordinator.isCurrent(operation)) return;
         setSubscriptionAccounts(current => current.map(item => item.provider === 'opencode' ? account : item));
-        remoteModels = openCodeOfferingModels(
-          account.api_offerings ?? [], discoveryConfig.auth.plan,
-        ).map(model => ({ id: model.id, display_name: model.display_name || undefined }));
+        remoteModels = openCodeZenModels(account.api_offerings ?? []);
       } else {
         remoteModels = await aiApi.listModelsByConfig(discoveryConfig);
       }
@@ -1077,9 +1078,8 @@ const ModelSettingsPage: React.FC = () => {
 
   const handleImportFromSubscription = useCallback((
     account: SubscriptionAccount,
-    plan?: OpenCodePlan,
   ) => {
-    const targetKey = `new-provider:subscription:${account.provider}:${plan || 'default'}`;
+    const targetKey = `new-provider:subscription:${account.provider}:default`;
     requestEditorOpen(targetKey, () => {
       resetRemoteModelDiscovery();
       setManualModelInput('');
@@ -1087,9 +1087,9 @@ const ModelSettingsPage: React.FC = () => {
       setSelectedProviderId(null);
       setEditingTargetKey(targetKey);
       setEditingConfig({
-        name: plan ? getOpenCodePlanLabel(plan) : account.display_label,
+        name: account.display_label,
         provider: account.suggested_format,
-        base_url: plan === 'go' ? 'https://opencode.ai/zen/go/v1' : account.suggested_base_url,
+        base_url: account.provider === 'opencode' ? 'https://opencode.ai/zen/v1' : account.suggested_base_url,
         // Leave request_url + model_name empty so the user must pick a model
         // from the live list. We never inject a hard-coded default slug.
         request_url: '',
@@ -1105,7 +1105,6 @@ const ModelSettingsPage: React.FC = () => {
         auth: {
           type: 'subscription',
           provider: account.provider,
-          ...(plan ? { plan } : {}),
         },
       });
       setSelectedModelDrafts([]);
@@ -1114,7 +1113,7 @@ const ModelSettingsPage: React.FC = () => {
       setCreationMode('form');
       setIsEditing(true);
     });
-  }, [getOpenCodePlanLabel, requestEditorOpen, resetRemoteModelDiscovery]);
+  }, [requestEditorOpen, resetRemoteModelDiscovery]);
 
   const loginCoordinatorRef = React.useRef(new SubscriptionLoginCoordinator());
   const subscriptionLoginMountedRef = React.useRef(true);
@@ -1427,12 +1426,25 @@ const ModelSettingsPage: React.FC = () => {
   }, [notification, refreshSubscriptionAccounts, subscriptionLogoutRequest, t]);
 
   const handleSubscriptionRefresh = useCallback(async (provider: SubscriptionProvider) => {
+    if (subscriptionRefreshesRef.current.has(provider)) return;
+    subscriptionRefreshesRef.current.add(provider);
+    setRefreshingSubscriptionProviders(new Set(subscriptionRefreshesRef.current));
+    const scope = getActiveSurfaceScope();
     try {
       await aiApi.refreshSubscriptionAccount(provider);
+      if (!scope.isCurrent() || !subscriptionLoginMountedRef.current) return;
       await refreshSubscriptionAccounts();
+      if (!scope.isCurrent() || !subscriptionLoginMountedRef.current) return;
       notification.success(t('subscriptionAuth.refreshSuccess'));
     } catch (e) {
-      notification.error(t('subscriptionAuth.refreshFailed', { error: String(e) }));
+      if (scope.isCurrent() && subscriptionLoginMountedRef.current) {
+        notification.error(t('subscriptionAuth.refreshFailed', { error: String(e) }));
+      }
+    } finally {
+      subscriptionRefreshesRef.current.delete(provider);
+      if (subscriptionLoginMountedRef.current) {
+        setRefreshingSubscriptionProviders(new Set(subscriptionRefreshesRef.current));
+      }
     }
   }, [notification, refreshSubscriptionAccounts, t]);
 
@@ -1637,25 +1649,27 @@ const ModelSettingsPage: React.FC = () => {
   const handleSave = async (): Promise<boolean> => {
     if (editorSavingRef.current) return false;
     
-    if (!editingConfig || !editingConfig.name || !editingConfig.base_url) {
-      notification.warning(t('messages.fillRequired'));
-      return false;
-    }
-    
-    if (selectedModelDrafts.length === 0) {
-      notification.warning(t('messages.fillModelName'));
+    if (!editingConfig) return false;
+    setShowModelValidation(true);
+    const missingFields = [
+      missingModelFields.name && t('form.configName'),
+      missingModelFields.baseUrl && t('form.baseUrl'),
+      missingModelFields.apiKey && t('form.apiKey'),
+      missingModelFields.model && t('form.modelName'),
+    ].filter((field): field is string => typeof field === 'string');
+    if (missingFields.length > 0) {
+      const fields = missingFields.length > 1
+        ? `${missingFields.slice(0, -1).join(t('messages.fieldSeparator'))}${t('messages.lastFieldSeparator')}${missingFields.at(-1)}`
+        : missingFields[0];
+      notification.warning(t('messages.missingFields', { fields }));
       return false;
     }
 
     editorSavingRef.current = true;
     setIsEditorSaving(true);
     try {
-      const providerName = editingConfig.name.trim();
-      const baseUrl = editingConfig.base_url.trim();
-      if (!providerName || !baseUrl) {
-        notification.warning(t('messages.fillRequired'));
-        return false;
-      }
+      const providerName = editingConfig.name?.trim() || '';
+      const baseUrl = editingConfig.base_url?.trim() || '';
       if (!hasHttpUrlScheme(baseUrl)) {
         notification.warning(t('messages.invalidBaseUrlScheme'));
         return false;
@@ -1692,26 +1706,45 @@ const ModelSettingsPage: React.FC = () => {
           .map(model => model.id?.trim())
           .filter((id): id is string => Boolean(id))
       );
+      let apiKeyModels = remoteModelOptions;
+      const zenOAuth = isOpenCodeZenOAuth(editingConfig);
+      const routeConfig = editingConfig;
+      if (zenOAuth && apiKeyModels.length === 0) {
+        const scope = getActiveSurfaceScope();
+        const account = await aiApi.refreshSubscriptionAccount('opencode');
+        if (!scope.isCurrent()) return false;
+        apiKeyModels = openCodeZenModels(account.api_offerings ?? []);
+      }
+      if (isOpenCodeApiKeyConfig(editingConfig) && apiKeyModels.length === 0) {
+        const scope = getActiveSurfaceScope();
+        const discoveryConfig = buildModelDiscoveryConfig(editingConfig);
+        if (!discoveryConfig) throw new Error(t('providerSelection.fillApiKeyBeforeFetch'));
+        apiKeyModels = await aiApi.listModelsByConfig(discoveryConfig);
+        if (!scope.isCurrent()) return false;
+      }
       const configsToSave: AIModelConfigType[] = draftsToSave.map((draft) => {
         const id = editingConfig.id
           || draft.configId
           || allocateModelConfigId(draft.modelName, allocatedConfigIds);
         allocatedConfigIds.add(id);
-
-        const auth = editingConfig.auth;
-        const offering = auth?.type === 'subscription' && auth.provider === 'opencode'
-          ? openCodeModelOffering(
-              subscriptionAccounts.find(account => account.provider === 'opencode')?.api_offerings ?? [],
-              auth.plan, draft.modelName, editingConfig.provider,
-            )
+        const apiKeyRoute = resolveOpenCodeModelRoute(routeConfig, draft.modelName, apiKeyModels);
+        if ((zenOAuth || isOpenCodeApiKeyConfig(routeConfig)) && !apiKeyRoute
+          && apiKeyModels.some(model => model.id === draft.modelName.trim())) {
+          throw new Error(t('providerSelection.modelRoutingUnavailable'));
+        }
+        const existingModel = isOpenCodeApiKeyConfig(editingConfig)
+          ? aiModels.find(model => model.id === (draft.configId || editingConfig.id)
+            && model.model_name === draft.modelName && model.base_url === baseUrl)
           : undefined;
-        const format = offering?.format || editingConfig.provider || 'openai';
-        const modelBaseUrl = offering?.base_url || baseUrl;
+        const format = apiKeyRoute?.format
+          || (isOpenCodeApiKeyConfig(routeConfig) ? draft.manualRequestFormat : undefined)
+          || existingModel?.provider || editingConfig.provider || 'openai';
+        const modelBaseUrl = apiKeyRoute?.base_url || baseUrl;
         return {
           id,
           name: providerName,
           base_url: modelBaseUrl,
-          request_url: resolveRequestUrl(
+          request_url: apiKeyRoute?.request_url || resolveRequestUrl(
             modelBaseUrl,
             format,
             draft.modelName
@@ -1746,9 +1779,7 @@ const ModelSettingsPage: React.FC = () => {
           skip_ssl_verify: editingConfig.skip_ssl_verify ?? false,
           custom_request_body: editingConfig.custom_request_body,
           custom_request_body_mode: editingConfig.custom_request_body_mode,
-          auth: offering && auth?.type === 'subscription'
-            ? { ...auth, plan: offering.plan }
-            : editingConfig.auth || { type: 'api_key' },
+          auth: editingConfig.auth || { type: 'api_key' },
         };
       });
       let previousModelsBeforeSave: AIModelConfigType[] = [];
@@ -2326,6 +2357,9 @@ const ModelSettingsPage: React.FC = () => {
   const renderEditingForm = () => {
     if (!isEditing || !editingConfig) return null;
     const isFromTemplate = !editingConfig.id && !!currentTemplate;
+    const zenOAuth = isOpenCodeZenOAuth(editingConfig);
+    const routeConfig = editingConfig;
+    const automaticOpenCodeRouting = zenOAuth || isOpenCodeApiKeyConfig(routeConfig);
     const isProviderScopedEditing = !editingConfig.id;
     const catalogProvider = selectedProviderId
       ? modelCatalog?.provider_catalog?.providers.find(provider => provider.id === selectedProviderId)
@@ -2483,6 +2517,17 @@ const ModelSettingsPage: React.FC = () => {
             const canToggleExpand = selectedModelDrafts.length > 1;
             const modelDisplayName = draft.modelName;
             const reasoningProjection = resolveDraftReasoningProjection(draft);
+            const catalogHasModel = remoteModelOptions.some(model => model.id === draft.modelName.trim());
+            const canEditManualRoute = remoteModelOptions.length > 0 && !catalogHasModel && !isFetchingRemoteModels;
+            const savedModelId = draft.configId || editingConfig.id;
+            const savedModel = aiModels.find(model => model.id === savedModelId);
+            const modelRoute = resolveOpenCodeModelRoute(routeConfig, draft.modelName, remoteModelOptions)
+              || (!catalogHasModel && !canEditManualRoute ? savedOpenCodeApiKeyRoute(
+                { ...routeConfig, id: savedModelId },
+                draft.modelName,
+                savedModel,
+              ) : undefined);
+            const manualFormat = draft.manualRequestFormat || editingConfig.provider || 'openai';
 
             return (
               <div
@@ -2567,7 +2612,25 @@ const ModelSettingsPage: React.FC = () => {
                   )}
                 </div>
                 {isExpanded && (
-                  <div className="openbitfun-model-settings__selected-model-grid">
+                  <div className={`openbitfun-model-settings__selected-model-grid${automaticOpenCodeRouting ? ' openbitfun-model-settings__selected-model-grid--with-format' : ''}`}>
+                    {automaticOpenCodeRouting && (
+                      <>
+                        <Field className="openbitfun-model-settings__selected-model-field" label={t('form.provider')} controlWidth="fill">
+                          {modelRoute ? (
+                            <span>{requestFormatLabelMap[modelRoute.format] || modelRoute.format}</span>
+                          ) : canEditManualRoute ? (
+                            <Select
+                              value={manualFormat}
+                              onValueChange={value => updateModelDraft(draft.modelName, { manualRequestFormat: String(value) })}
+                              options={requestFormatOptions.filter(option => ['openai', 'responses', 'anthropic'].includes(String(option.value)))}
+                              size="sm"
+                            />
+                          ) : (
+                            <span>{t(catalogHasModel ? 'providerSelection.modelRoutingUnavailable' : 'providerSelection.modelRoutingPending')}</span>
+                          )}
+                        </Field>
+                      </>
+                    )}
                     <Field className="openbitfun-model-settings__selected-model-field" label={t('category.label')} controlWidth="fill">
                       <Combobox
                         value={draft.category}
@@ -2595,6 +2658,7 @@ const ModelSettingsPage: React.FC = () => {
                       <NumberInput
                         className="openbitfun-model-settings__selected-model-context-input"
                         value={draft.contextWindow}
+                        formatValue={(value) => i18nService.formatNumber(value, { useGrouping: true, maximumFractionDigits: 0 })}
                         onValueChange={(value) => updateModelDraft(draft.modelName, { contextWindow: value })}
                         min={32000}
                         max={2000000}
@@ -2603,6 +2667,13 @@ const ModelSettingsPage: React.FC = () => {
                         disableWheel
                       />
                     </Field>
+                    {automaticOpenCodeRouting && (modelRoute || canEditManualRoute) && (
+                      <Field className="openbitfun-model-settings__selected-model-field openbitfun-model-settings__selected-model-route" label={t('form.resolvedUrlLabel')} controlWidth="fill">
+                        <span className="openbitfun-model-settings__resolved-url-value">
+                          {modelRoute?.request_url || resolveRequestUrl(editingConfig.base_url || '', manualFormat, draft.modelName)}
+                        </span>
+                      </Field>
+                    )}
                     {draft.contextWindow > LONG_CONTEXT_WARNING_THRESHOLD_TOKENS && (
                       <div className="openbitfun-model-settings__warning-inline openbitfun-model-settings__context-window-warning">
                         <AlertTriangle size={14} />
@@ -2647,25 +2718,17 @@ const ModelSettingsPage: React.FC = () => {
     const authIsSubscription = authType === 'subscription';
     const selectedSubscriptionProvider: SubscriptionProvider | undefined =
       editingConfig.auth?.type === 'subscription' ? editingConfig.auth.provider : undefined;
-    const selectedOpenCodePlan: OpenCodePlan | undefined =
-      editingConfig.auth?.type === 'subscription'
-      && editingConfig.auth.provider === 'opencode'
-        ? editingConfig.auth.plan || 'zen'
-        : undefined;
-    const authSelectValue = authIsSubscription
-      ? selectedSubscriptionProvider === 'opencode'
-        ? `subscription:opencode:${selectedOpenCodePlan || 'zen'}`
-        : `subscription:${selectedSubscriptionProvider || 'codex'}`
-      : 'api_key';
+    const legacyOpenCode = selectedSubscriptionProvider === 'opencode' && !zenOAuth;
+    const authSelectValue = legacyOpenCode ? 'subscription:opencode:go' : authIsSubscription ? `subscription:${selectedSubscriptionProvider || 'codex'}` : 'api_key';
     const authOptions: ComboboxOption[] = [
       { value: 'api_key', label: t('subscriptionAuth.options.apiKey') },
       { value: 'subscription:codex', label: t('subscriptionAuth.options.codex') },
       { value: 'subscription:antigravity', label: t('subscriptionAuth.options.antigravity') },
       { value: 'subscription:grok', label: t('subscriptionAuth.options.grok') },
       { value: 'subscription:hermes', label: t('subscriptionAuth.options.hermes') },
-      { value: 'subscription:opencode:zen', label: t('subscriptionAuth.options.opencodeZen') },
-      { value: 'subscription:opencode:go', label: t('subscriptionAuth.options.opencodeGo') },
+      { value: 'subscription:opencode', label: t('subscriptionAuth.options.opencode') },
     ];
+    if (legacyOpenCode) authOptions.push({ value: 'subscription:opencode:go', label: t('subscriptionAuth.openCodeRemoved') });
     const matchedSubscription = selectedSubscriptionProvider
       ? subscriptionAccounts.find((account) => account.provider === selectedSubscriptionProvider)
       : undefined;
@@ -2678,41 +2741,24 @@ const ModelSettingsPage: React.FC = () => {
             onValueChange={(value) => {
               const next = String(value);
               if (next === 'api_key') {
-                setEditingConfig((prev) => ({ ...prev, auth: { type: 'api_key' } }));
+                setEditingConfig(prev => prev ? ({
+                  ...prev,
+                  api_key: legacyOpenCode ? '' : prev.api_key,
+                  auth: { type: 'api_key' },
+                }) : prev);
                 return;
               }
-              const [, providerValue, planValue] = next.split(':');
-              const provider = providerValue as SubscriptionProvider;
-              const plan = provider === 'opencode'
-                ? (planValue || 'zen') as OpenCodePlan
-                : undefined;
+              const provider = next.split(':')[1] as SubscriptionProvider;
+              if (next === 'subscription:opencode:go') return;
               resetRemoteModelDiscovery();
               const account = subscriptionAccounts.find(item => item.provider === provider);
-              setEditingConfig((prev) => {
-                if (!prev) return prev;
-                if (provider !== 'opencode') {
-                  return {
-                    ...prev,
-                    provider: account?.suggested_format || prev.provider,
-                    base_url: account?.suggested_base_url || prev.base_url,
-                    request_url: '',
-                    auth: { type: 'subscription', provider },
-                  };
-                }
-                const format = ['openai', 'responses', 'anthropic'].includes(prev.provider || '')
-                  ? prev.provider || 'openai'
-                  : 'openai';
-                const baseUrl = plan === 'go'
-                  ? 'https://opencode.ai/zen/go/v1'
-                  : 'https://opencode.ai/zen/v1';
-                return {
-                  ...prev,
-                  provider: format,
-                  base_url: baseUrl,
-                  request_url: resolveRequestUrl(baseUrl, format, prev.model_name || ''),
-                  auth: { type: 'subscription', provider, plan },
-                };
-              });
+              setEditingConfig(prev => prev ? ({
+                ...prev,
+                provider: account?.suggested_format || prev.provider,
+                base_url: provider === 'opencode' ? 'https://opencode.ai/zen/v1' : account?.suggested_base_url || prev.base_url,
+                request_url: '',
+                auth: { type: 'subscription', provider },
+              }) : prev);
             }}
             options={authOptions}
             size="sm"
@@ -2722,7 +2768,7 @@ const ModelSettingsPage: React.FC = () => {
               ? 'resolved-url__hint openbitfun-model-settings__cli-auth-hint'
               : 'resolved-url__hint openbitfun-model-settings__cli-auth-hint openbitfun-model-settings__json-status--error'}
             >
-              {matchedSubscription?.connected
+              {legacyOpenCode ? t('subscriptionAuth.openCodeRemoved') : matchedSubscription?.connected
                 ? t('subscriptionAuth.detected', {
                     label: matchedSubscription.display_label,
                     account: matchedSubscription.account || t('subscriptionAuth.unknownAccount'),
@@ -2740,6 +2786,7 @@ const ModelSettingsPage: React.FC = () => {
       <ConfigPageRow label={label} required align="center" wide>
         <Input
           data-testid="settings-model-api-key-input"
+          invalid={showModelValidation && missingModelFields.apiKey}
           required
           type={showApiKey ? 'text' : 'password'}
           value={editingConfig.api_key || ''}
@@ -2768,6 +2815,7 @@ const ModelSettingsPage: React.FC = () => {
                 <ConfigPageRow label={t('form.configName')} required align="center" wide>
                   <Input
                     data-testid="settings-model-provider-name-input"
+                    invalid={showModelValidation && missingModelFields.name}
                     required
                     value={editingConfig.name || ''}
                     onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))}
@@ -2779,10 +2827,11 @@ const ModelSettingsPage: React.FC = () => {
                 {!authIsSubscription && renderApiKeyRow(t('form.apiKey'))}
                 {!authIsSubscription && (
                   <>
-                    <ConfigPageRow label={t('form.baseUrl')} align="center" wide>
+                    <ConfigPageRow label={t('form.baseUrl')} required align="center" wide>
                       <div className="openbitfun-model-settings__control-stack">
                         {currentTemplate?.baseUrlOptions && currentTemplate.baseUrlOptions.length > 0 && (
                           <Combobox
+                            invalid={showModelValidation && missingModelFields.baseUrl}
                             value={currentTemplate.baseUrlOptions.some(opt => opt.url === editingConfig.base_url) ? editingConfig.base_url : ''}
                             onValueChange={(value) => {
                               const selectedOption = currentTemplate.baseUrlOptions!.find(opt => opt.url === value);
@@ -2802,6 +2851,8 @@ const ModelSettingsPage: React.FC = () => {
                         )}
                         <Input
                           data-testid="settings-model-base-url-input"
+                          invalid={showModelValidation && missingModelFields.baseUrl}
+                          required
                           type="url"
                           value={editingConfig.base_url || ''}
                           onChange={(e) => {
@@ -2816,7 +2867,7 @@ const ModelSettingsPage: React.FC = () => {
                           placeholder={currentTemplate?.baseUrl}
                           size="sm"
                         />
-                        {editingConfig.base_url && (
+                        {editingConfig.base_url && !automaticOpenCodeRouting && (
                           <div className="openbitfun-model-settings__resolved-url">
                             <span className="openbitfun-model-settings__resolved-url-label">{t('form.resolvedUrlLabel')}</span>
                               <span className="openbitfun-model-settings__resolved-url-value">{previewRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}</span>
@@ -2824,6 +2875,7 @@ const ModelSettingsPage: React.FC = () => {
                         )}
                       </div>
                     </ConfigPageRow>
+                    {!automaticOpenCodeRouting && (
                     <ConfigPageRow label={t('form.provider')} align="center" wide>
                       <Select
                         data-testid="settings-model-request-format-select"
@@ -2842,6 +2894,7 @@ const ModelSettingsPage: React.FC = () => {
                         size="sm"
                       />
                     </ConfigPageRow>
+                    )}
                   </>
                 )}
                 <ConfigPageRow label={t('form.modelSelection')} required multiline className="openbitfun-model-settings__model-selection-row">
@@ -2850,6 +2903,7 @@ const ModelSettingsPage: React.FC = () => {
                       <MultiSelect
                         aria-required="true"
                         data-testid="settings-model-select"
+                        invalid={showModelValidation && missingModelFields.model}
                         value={selectedModelValues}
                         onValueChange={(value) => {
                           const nextModelNames = value.map(item => String(item));
@@ -2862,6 +2916,15 @@ const ModelSettingsPage: React.FC = () => {
                         size="sm"
                         onOpenChange={handleModelSelectionOpenChange}
                       />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="settings-model-refresh-btn"
+                        disabled={isFetchingRemoteModels}
+                        onClick={() => void fetchRemoteModels(editingConfig, true)}
+                      >
+                        {t('providerSelection.refreshModels')}
+                      </Button>
                     </div>
                     <div className="openbitfun-model-settings__manual-model-entry">
                       <Input
@@ -2886,15 +2949,6 @@ const ModelSettingsPage: React.FC = () => {
                         {modelFetchHint}
                       </small>
                     )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      data-testid="settings-model-refresh-btn"
-                      disabled={isFetchingRemoteModels}
-                      onClick={() => void fetchRemoteModels(editingConfig, true)}
-                    >
-                      {t('providerSelection.refreshModels')}
-                    </Button>
                     {renderSelectedModelRows()}
                   </div>
                 </ConfigPageRow>
@@ -2906,6 +2960,7 @@ const ModelSettingsPage: React.FC = () => {
                     <ConfigPageRow label={t('form.configName')} required align="center" wide>
                       <Input
                         data-testid="settings-model-provider-name-input"
+                        invalid={showModelValidation && missingModelFields.name}
                         required
                         value={editingConfig.name || ''}
                         onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))}
@@ -2921,6 +2976,7 @@ const ModelSettingsPage: React.FC = () => {
                           <div className="openbitfun-model-settings__control-stack">
                             <Input
                               data-testid="settings-model-base-url-input"
+                              invalid={showModelValidation && missingModelFields.baseUrl}
                               required
                               type="url"
                               value={editingConfig.base_url || ''}
@@ -2936,7 +2992,7 @@ const ModelSettingsPage: React.FC = () => {
                               placeholder={'https://open.bigmodel.cn/api/paas/v4/chat/completions'}
                               size="sm"
                             />
-                            {editingConfig.base_url && (
+                            {editingConfig.base_url && !automaticOpenCodeRouting && (
                               <div className="openbitfun-model-settings__resolved-url">
                                 <span className="openbitfun-model-settings__resolved-url-label">{t('form.resolvedUrlLabel')}</span>
                               <span className="openbitfun-model-settings__resolved-url-value">{previewRequestUrl(editingConfig.base_url, editingConfig.provider || 'openai')}</span>
@@ -2944,6 +3000,7 @@ const ModelSettingsPage: React.FC = () => {
                             )}
                           </div>
                         </ConfigPageRow>
+                        {!automaticOpenCodeRouting && (
                         <ConfigPageRow label={t('form.provider')} align="center" wide>
                           <Select data-testid="settings-model-request-format-select" value={editingConfig.provider || 'openai'} onValueChange={(value) => {
                             const provider = value as string;
@@ -2955,6 +3012,7 @@ const ModelSettingsPage: React.FC = () => {
                             }));
                           }} placeholder={t('form.providerPlaceholder')} options={requestFormatOptions} size="sm" />
                         </ConfigPageRow>
+                        )}
                       </>
                     )}
                   </>
@@ -2971,6 +3029,7 @@ const ModelSettingsPage: React.FC = () => {
                         <Combobox
                           aria-required="true"
                           data-testid="settings-model-select"
+                          invalid={showModelValidation && missingModelFields.model}
                           value={selectedModelValues[0] || ''}
                           onValueChange={(value) => {
                             syncSelectedModelDrafts([String(value)], editingConfig, true);
@@ -2986,6 +3045,7 @@ const ModelSettingsPage: React.FC = () => {
                         <MultiSelect
                           aria-required="true"
                           data-testid="settings-model-select"
+                          invalid={showModelValidation && missingModelFields.model}
                           value={selectedModelValues}
                           onValueChange={(value) => {
                             syncSelectedModelDrafts(value.map(item => String(item)), editingConfig, false);
@@ -2998,6 +3058,15 @@ const ModelSettingsPage: React.FC = () => {
                           onOpenChange={handleModelSelectionOpenChange}
                         />
                       )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="settings-model-refresh-btn"
+                        disabled={isFetchingRemoteModels}
+                        onClick={() => void fetchRemoteModels(editingConfig, true)}
+                      >
+                        {t('providerSelection.refreshModels')}
+                      </Button>
                     </div>
                     <div className="openbitfun-model-settings__manual-model-entry">
                       <Input
@@ -3022,15 +3091,6 @@ const ModelSettingsPage: React.FC = () => {
                         {modelFetchHint}
                       </small>
                     )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      data-testid="settings-model-refresh-btn"
-                      disabled={isFetchingRemoteModels}
-                      onClick={() => void fetchRemoteModels(editingConfig, true)}
-                    >
-                      {t('providerSelection.refreshModels')}
-                    </Button>
                     {renderSelectedModelRows()}
                   </div>
                 </ConfigPageRow>
@@ -3539,6 +3599,7 @@ const ModelSettingsPage: React.FC = () => {
               } else {
                 descriptionParts.push(t('subscriptionAuth.notSignedIn'));
               }
+              const isRefreshing = refreshingSubscriptionProviders.has(account.provider);
               const isLoggingIn = loggingInProvider === account.provider;
               const anyLoginInProgress = loggingInProvider !== null;
               const loginPanel = subscriptionLoginPanel?.provider === account.provider
@@ -3548,8 +3609,6 @@ const ModelSettingsPage: React.FC = () => {
                 ? Math.max(0, Math.ceil((loginPanel.deadlineMs - subscriptionLoginClock) / 1000))
                 : 0;
               const countdown = `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
-              const openCodePlanRows = account.provider === 'opencode' ? ['zen', 'go'] as const : [];
-              const hasOpenCodeOfferings = openCodePlanRows.length > 0;
               return (
                 <React.Fragment key={account.provider}>
                   <ConfigPageRow
@@ -3571,7 +3630,8 @@ const ModelSettingsPage: React.FC = () => {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={anyLoginInProgress}
+                            loading={isRefreshing}
+                            disabled={anyLoginInProgress || isRefreshing}
                             onClick={() => void handleSubscriptionRefresh(account.provider)}
                           >
                             {t('subscriptionAuth.refresh')}
@@ -3584,7 +3644,7 @@ const ModelSettingsPage: React.FC = () => {
                           >
                             {t('subscriptionAuth.logout')}
                           </Button>
-                          {(account.provider !== 'opencode' || !hasOpenCodeOfferings) && (
+                          {(
                             <Button
                               size="sm"
                               variant="primary"
@@ -3599,7 +3659,8 @@ const ModelSettingsPage: React.FC = () => {
                         <Button
                           size="sm"
                           variant="outline"
-                          disabled={anyLoginInProgress}
+                          loading={isRefreshing}
+                          disabled={anyLoginInProgress || isRefreshing}
                           onClick={() => void handleSubscriptionRefresh(account.provider)}
                         >
                           {t('subscriptionAuth.retryVault')}
@@ -3629,27 +3690,6 @@ const ModelSettingsPage: React.FC = () => {
                       )}
                     </div>
                   </ConfigPageRow>
-
-                  {account.connected && openCodePlanRows.map((plan) => (
-                    <ConfigPageRow
-                      key={`${account.provider}:${plan}`}
-                      label={getOpenCodePlanLabel(plan)}
-                      description={getOpenCodePlanDescription(plan)}
-                      className="openbitfun-model-settings__opencode-plan"
-                      align="center"
-                    >
-                      <div className="openbitfun-model-settings__cli-actions openbitfun-model-settings__opencode-plan-actions">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={anyLoginInProgress}
-                          onClick={() => handleImportFromSubscription(account, plan)}
-                        >
-                          {t('subscriptionAuth.import')}
-                        </Button>
-                      </div>
-                    </ConfigPageRow>
-                  ))}
 
                   {loginPanel && (
                     <div

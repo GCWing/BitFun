@@ -28,8 +28,8 @@ pub use ai::{
     ReasoningCapabilityStatus, ReasoningCatalogBinding, ReasoningCatalogProjection,
     ReasoningCatalogProjectionRequest, ReasoningConfig, ReasoningContentKind, ReasoningPreset,
     ReasoningPresetAction, ReasoningPresetDescriptor, ReasoningPresetSource, RemoteModelInfo,
-    ToolCall, ToolCallConfirmationDetails, ToolCallRequestInfo, ToolCallResponseInfo,
-    ToolDefinition,
+    RemoteModelRouting, ToolCall, ToolCallConfirmationDetails, ToolCallRequestInfo,
+    ToolCallResponseInfo, ToolDefinition,
 };
 pub use errors::{AiErrorDetail, ErrorCategory};
 pub use model::{

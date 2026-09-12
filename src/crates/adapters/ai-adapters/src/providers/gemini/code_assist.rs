@@ -737,6 +737,7 @@ async fn list_antigravity_models(
                 .models
                 .into_iter()
                 .map(|(id, model)| RemoteModelInfo {
+                    routing: None,
                     // Map keys are wire IDs. Display names and quota state must
                     // never rename or hide newly published/account-specific IDs.
                     id,
@@ -843,6 +844,7 @@ pub(crate) async fn list_models(client: &AIClient) -> Result<Vec<RemoteModelInfo
             read_gemini_settings_model(&gemini_home).or_else(|| read_gemini_env_model(&gemini_home))
         {
             models.push(RemoteModelInfo {
+                routing: None,
                 id: model,
                 display_name: None,
             });
@@ -851,6 +853,7 @@ pub(crate) async fn list_models(client: &AIClient) -> Result<Vec<RemoteModelInfo
 
     for (id, display_name) in DEFAULT_CODE_ASSIST_MODELS {
         models.push(RemoteModelInfo {
+            routing: None,
             id: (*id).to_string(),
             display_name: Some((*display_name).to_string()),
         });

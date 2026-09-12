@@ -37,6 +37,8 @@ const LOGIN_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// OpenCode release whose built-in subscription protocols these adapters mirror.
 pub(crate) const OPENCODE_COMPAT_VERSION: &str = "1.18.29";
 
+pub const OPENCODE_GO_REQUIRES_API_KEY: &str = "OpenCode Console OAuth supports Zen only. Edit this model to use the OpenCode Go API-key preset. Existing configuration and credentials have been preserved.";
+
 /// One of the subscription providers OpenBitFun can sign in to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -112,7 +114,7 @@ impl SubscriptionProvider {
         match self {
             Self::Codex => "Codex (ChatGPT)",
             Self::Antigravity => "Antigravity (Google)",
-            Self::Opencode => "OpenCode (Go/Zen)",
+            Self::Opencode => "OpenCode Console (Zen)",
             Self::Grok => "xAI (SuperGrok)",
             Self::Hermes => "Hermes (Nous Portal)",
         }
@@ -169,8 +171,8 @@ pub fn runtime_model_override(
 
 /// Billing/API product selected for an OpenCode-backed model.
 ///
-/// The OAuth identity is shared by both plans; this value only chooses the
-/// trusted API namespace used for model discovery and inference.
+/// Console OAuth supports Zen only. Go remains readable for legacy config
+/// compatibility and is rejected before credential resolution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OpenCodePlan {
@@ -285,6 +287,7 @@ impl ResolvedCredential {
                 "chatgpt-account-id",
                 "x-openai-internal-codex-residency",
                 "x-org-id",
+                "x-opencode-org-id",
                 "session-id",
                 "session_id",
                 "x-client-request-id",
@@ -1061,6 +1064,75 @@ mod tests {
     use super::store::{self, StoredCredential};
     use super::*;
 
+    #[tokio::test]
+    async fn opencode_console_routes_zen_and_preserves_rejected_go_credentials() {
+        let _guard = test_lock().lock().await;
+        store::set_store_path_for_test(temp_store_path());
+        let old = serde_json::json!({
+            "type":"oauth", "access":"synthetic-access", "refresh":"synthetic-refresh",
+            "expires":chrono::Utc::now().timestamp_millis() + 3_600_000,
+            "metadata":{"org_id":"fixture-org", "console_routes_v1":{"fixture":{
+                "base_url":"https://opencode.ai/inference/openai/v1",
+                "request_url":"https://opencode.ai/inference/openai/v1/responses",
+                "format":"responses","headers":{"x-opencode-org-id":"fixture-org"}
+            }}, "api_offerings":[
+                {"plan":"zen","format":"responses","base_url":"https://opencode.ai/inference/openai/v1","suggested_model":"fixture","models":[{"id":"fixture"}]},
+                {"plan":"go","format":"anthropic","base_url":"https://opencode.ai/zen/go/v1","suggested_model":"go-fixture","models":[{"id":"go-fixture"}]}
+            ]}
+        });
+        store::upsert("opencode", serde_json::from_value(old).unwrap())
+            .await
+            .unwrap();
+        let before = store::load_entry_with_revision("opencode").await.unwrap();
+        let resolved = resolve_opencode_model_with_options(
+            None,
+            "openai",
+            "fixture",
+            &SubscriptionHttpOptions::default(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            resolved.request_url.as_deref(),
+            Some("https://opencode.ai/inference/openai/v1/responses")
+        );
+        assert_eq!(
+            resolved
+                .extra_headers
+                .get("x-opencode-org-id")
+                .map(String::as_str),
+            Some("fixture-org")
+        );
+        assert_eq!(
+            resolve_opencode_model_with_options(
+                Some(OpenCodePlan::Go),
+                "anthropic",
+                "go-fixture",
+                &SubscriptionHttpOptions::default()
+            )
+            .await
+            .unwrap_err()
+            .to_string(),
+            OPENCODE_GO_REQUIRES_API_KEY
+        );
+        let after = store::load_entry_with_revision("opencode").await.unwrap();
+        assert_eq!(before.revision, after.revision);
+        assert_eq!(
+            serde_json::to_value(before.credential).unwrap(),
+            serde_json::to_value(&after.credential).unwrap()
+        );
+        let account = build_account(
+            SubscriptionProvider::Opencode,
+            after.credential.as_ref(),
+            false,
+            false,
+        );
+        assert!(account
+            .api_offerings
+            .iter()
+            .all(|offering| offering.plan == OpenCodePlan::Zen));
+    }
+
     const STALE_LOGIN_CHILD_METADATA_ENV: &str = "OPENBITFUN_SUBAUTH_CAS_CHILD_METADATA";
     const STALE_LOGIN_CHILD_LOADED_ENV: &str = "OPENBITFUN_SUBAUTH_CAS_CHILD_LOADED";
     const STALE_LOGIN_CHILD_RESUME_ENV: &str = "OPENBITFUN_SUBAUTH_CAS_CHILD_RESUME";
@@ -1146,7 +1218,7 @@ mod tests {
         for (format, url, headers, auth_header) in [
             ("responses", "https://chatgpt.com/backend-api/codex/responses", vec![("originator", "openbitfun"), ("User-Agent", "OpenBitFun/test"), ("ChatGPT-Account-ID", "current-account")], "authorization"),
             ("responses", "https://api.x.ai/v1/responses", vec![("User-Agent", "opencode/test")], "authorization"),
-            ("openai", "https://opencode.ai/zen/go/v1/chat/completions", vec![("x-org-id", "current-org"), ("User-Agent", "OpenBitFun/test")], "authorization"),
+            ("openai", "https://opencode.ai/zen/v1/chat/completions", vec![("x-org-id", "current-org"), ("User-Agent", "OpenBitFun/test")], "authorization"),
             ("anthropic", "https://opencode.ai/zen/v1/messages", vec![("x-org-id", "current-org"), ("User-Agent", "OpenBitFun/test")], "x-api-key"),
             ("openai", "https://inference-api.nousresearch.com/v1/chat/completions", vec![], "authorization"),
             ("anthropic", "https://inference-api.nousresearch.com/v1/messages", vec![], "authorization"),

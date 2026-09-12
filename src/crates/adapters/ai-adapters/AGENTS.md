@@ -36,19 +36,26 @@ Compared on 2026-09-08 against [OpenCode v1.18.29](https://github.com/anomalyco/
 (`hermes_cli/auth_nous.py`, `hermes_cli/providers.py`, `agent/codex_headers.py`,
 `agent/opencode_affinity.py`, and `agent/transports/codex.py`).
 
-- OpenCode's account catalog chooses each model's protocol within its plan;
-  users select a plan/model, not a wire format. Preserve unknown legacy/manual
-  routes, and pin catalog-derived endpoints to OpenCode's production origin.
+- OpenCode Console OAuth supports Zen only. The Go preset uses an API key.
+  Keep legacy Go OAuth configurations readable, but reject their requests with
+  an explicit API-key migration error before accessing credentials or network.
+  The released baseline supports Zen and Go through OAuth, without built-in
+  Zen/Go API-key presets. Preserve old Zen credentials and model configs; do not
+  convert Go OAuth tokens into API keys or delete/reset model or vault data.
+  Unreleased preset/removal changes are not a separate migration baseline.
 - Hermes currently defaults even `anthropic/*` to Chat Completions while the
   Portal native Messages cache issue is unresolved. Preserve the Nous bearer
   and `x-nous-refresh-token` refresh contract, including rotated-token storage.
 - Subscription credentials own authentication and account headers regardless
-  of saved replace mode or header casing. Use OpenBitFun attribution for Codex
-  and OpenCode; retain provider-required compatibility headers for xAI and
-  Antigravity. Public API-key configurations retain their existing behavior.
+  of saved replace mode or header casing. Use OpenBitFun attribution for Codex;
+  retain provider-required compatibility headers for xAI and
+  Antigravity. Public API-key configurations retain their authentication policy.
 - Additional subscription request policy is enabled only by an explicit runtime
   subscription identity attached after resolving AuthConfig::Subscription; URLs
-  and model names never opt ordinary API-key clients into it.
+  and model names never opt ordinary API-key clients into it. Separately,
+  API-key calls to the six official HTTPS Zen/Go Chat Completions, Responses,
+  and Messages routes require `x-opencode-session` without activating any
+  subscription authentication or account-header policy.
 - Request affinity comes from `ModelRequestContext` on each call, never from a
   random ID on a cached client. Standalone OpenCode calls without runtime context
   still require `x-opencode-session`: generate one opaque identity per logical
@@ -59,10 +66,20 @@ Compared on 2026-09-08 against [OpenCode v1.18.29](https://github.com/anomalyco/
 
 ## Verification
 
-Subscription model discovery must use the authenticated account catalog.
+OpenCode API-key discovery uses `https://models.opencode.ai/api.json` with a
+one-hour public-only memory cache and no account headers. Preserve per-model
+Chat Completions, Responses, and Messages routes and unknown manual IDs.
+OpenCode Console discovery merges the public base catalog with authenticated
+account overrides and filters to Zen. OAuth routes preserve Console-owned HTTPS
+`opencode.ai/inference/` addresses and `x-opencode-org-id`; bind only the Console
+token reference to the current OAuth credential. Never send OAuth tokens to
+public Zen/Go API-key routes. Legacy accounts lazily refresh missing routing
+metadata with credential revision checks, preserving their tokens and models.
+A failed account request (including 404) must not fall back to public OAuth
+inference. Account route metadata must not contain keys or token material.
 Antigravity uses `v1internal:fetchAvailableModels`; preserve returned wire IDs
 and restrict alias translation to known legacy names. Codex's `supported_in_api`
-flag describes the public API, not subscription availability. OpenCode catalog
+flag describes the public API, not subscription availability. OpenCode public catalog
 models must stay grouped by plan and wire format. Never mask a failed account
 lookup with a static catalog or another application's local model cache.
 
@@ -73,7 +90,10 @@ test clock and synthetic tokens; they do not authorize real accounts.
 ```bash
 cargo test -p openbitfun-agent-stream
 cargo test -p openbitfun-ai-adapters
+cargo test -p openbitfun-ai-adapters --lib opencode_catalog
 cargo test -p openbitfun-ai-adapters --features subscription-auth subscription_auth
+cargo test -p openbitfun-ai-adapters --lib providers::shared::tests
+cargo test -p openbitfun-ai-adapters --features subscription-auth --lib providers::shared::tests
 ```
 
 If stream behavior affects core integration, also run the relevant tests in

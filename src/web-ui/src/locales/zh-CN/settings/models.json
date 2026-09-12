@@ -34,7 +34,7 @@
   },
   "subscriptionAuth": {
     "sectionTitle": "订阅账号",
-    "sectionDescription": "连接 Codex、Antigravity、OpenCode、xAI 或 Hermes 订阅",
+    "sectionDescription": "连接 Codex、Antigravity、OpenCode Console（Zen）、xAI 或 Hermes 账号",
     "rescan": "刷新状态",
     "import": "导入使用",
     "login": "登录",
@@ -59,28 +59,12 @@
     "notSignedIn": "未登录",
     "label": "认证方式",
     "options": {
+      "opencode": "OpenCode Console（Zen）",
       "apiKey": "API Key",
       "codex": "Codex（ChatGPT 订阅）",
       "antigravity": "Antigravity（Google 订阅）",
       "grok": "xAI（SuperGrok 订阅）",
-      "hermes": "Hermes（Nous Portal 订阅）",
-      "opencodeZen": "OpenCode 账号 · Zen API",
-      "opencodeGo": "OpenCode 账号 · Go API"
-    },
-    "openCodePlans": {
-      "zen": {
-        "label": "OpenCode Zen",
-        "description": "使用该 OpenCode 账号可用的 Zen 按量计费与免费模型"
-      },
-      "go": {
-        "label": "OpenCode Go",
-        "description": "使用该 OpenCode 账号的 Go 订阅额度请求模型"
-      }
-    },
-    "openCodeFormats": {
-      "chatCompletions": "Chat Completions",
-      "responses": "Responses",
-      "messages": "Messages"
+      "hermes": "Hermes（Nous Portal 订阅）"
     },
     "useFormat": "使用 {{format}}",
     "useFormatWithCount": "使用 {{format}}（{{modelCount}} 个模型）",
@@ -108,9 +92,12 @@
     "logoutAffectedModels": "退出后，当前使用该账号的 {{count}} 个模型配置将无法请求模型：",
     "logoutNoAffectedModels": "当前没有模型配置使用此订阅账号。",
     "logoutConsequence": "模型配置不会被删除；重新登录同一订阅账号后可以继续使用。",
-    "confirmLogout": "确认退出"
+    "confirmLogout": "确认退出",
+    "openCodeRemoved": "OpenCode Console OAuth 仅支持 Zen。Go 模型请选择 API key 并填写密钥，已有模型配置保留。"
   },
   "providerSelection": {
+    "modelRoutingPending": "刷新模型列表后显示协议和端点；目录外模型可手动配置。",
+    "modelRoutingUnavailable": "主机未返回此模型的有效接口信息，请更新主机后刷新模型列表。",
     "title": "选择模型提供商",
     "subtitle": "选择一个预设提供商快速配置，或选择自定义完全手动配置",
     "or": "或者",
@@ -153,6 +140,10 @@
     "formatHint": "已根据提供商自动选择，通常无需修改"
   },
   "providers": {
+    "opencode-go": {
+      "name": "OpenCode Go",
+      "description": "OpenCode 推出的模型订阅套餐。"
+    },
     "openbitfun": {
       "name": "OpenBitFun 服务",
       "description": "OpenBitFun 大模型平台",
@@ -504,6 +495,9 @@
     "retry": "重新加载",
     "unsaved": "未保存",
     "fillRequired": "请填写必要字段",
+    "missingFields": "请补全以下信息：{{fields}}。",
+    "fieldSeparator": "、",
+    "lastFieldSeparator": "和",
     "fillModelName": "请填写模型名称",
     "duplicateModelNameUnderProvider": "该服务商下已有同名模型，请改用其他名称或编辑已有条目",
     "invalidBaseUrlScheme": "API地址必须以 http:// 或 https:// 开头",
@@ -541,7 +535,11 @@
     "viewDetails": "查看 models.dev 目录详情",
     "description": "用于推理预设供应商和模型绑定的目录状态。打开模型设置时会自动检查更新",
     "activeSource": "当前来源",
-    "source": { "cache": "缓存", "bundle": "内置快照", "empty": "不可用" },
+    "source": {
+      "cache": "缓存",
+      "bundle": "内置快照",
+      "empty": "不可用"
+    },
     "catalogSize": "目录规模",
     "catalogSizeValue": "{{providers}} 个供应商 · {{models}} 个推理模型",
     "cacheUpdatedAt": "缓存写入时间",

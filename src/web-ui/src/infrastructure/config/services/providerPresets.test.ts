@@ -80,7 +80,8 @@ describe('provider presets', () => {
     const regionless = Object.values(PROVIDER_TEMPLATES)
       .filter(template => template.region !== 'cn' && template.region !== 'global')
       .map(template => template.id);
-    expect(regionless, 'these providers need a "region" in the shared overlay').toEqual(['openbitfun']);
+    expect(regionless, 'only explicitly neutral providers may omit a home market').toEqual(['openbitfun', 'opencode-go']);
+    for (const id of regionless) expect(PROVIDER_TEMPLATES[id].region).toBe('any');
   });
 
   it('shapes base URLs so the adapter appends the right suffix', async () => {

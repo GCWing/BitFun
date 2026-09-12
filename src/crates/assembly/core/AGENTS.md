@@ -190,6 +190,12 @@ Narrower local guides already exist for some subtrees:
 
 ## Verification
 
+AI client construction and subscription credential compatibility:
+
+```bash
+cargo test -p openbitfun-core --no-default-features --features ai-adapter-runtime,subscription-auth --lib infrastructure::ai::client_factory::tests
+```
+
 This guide owns Core verification. Select one command pattern that matches the
 change; do not run every feature variant:
 

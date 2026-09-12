@@ -34,7 +34,7 @@
   },
   "subscriptionAuth": {
     "sectionTitle": "Subscription accounts",
-    "sectionDescription": "Connect Codex, Antigravity, OpenCode, xAI, or Hermes subscriptions",
+    "sectionDescription": "Connect Codex, Antigravity, OpenCode Console (Zen), xAI, or Hermes accounts",
     "rescan": "Refresh status",
     "import": "Use as model",
     "login": "Sign in",
@@ -59,28 +59,12 @@
     "notSignedIn": "Not signed in",
     "label": "Authentication",
     "options": {
+      "opencode": "OpenCode Console (Zen)",
       "apiKey": "API Key",
       "codex": "Codex (ChatGPT subscription)",
       "antigravity": "Antigravity (Google subscription)",
       "grok": "xAI (SuperGrok subscription)",
-      "hermes": "Hermes (Nous Portal subscription)",
-      "opencodeZen": "OpenCode account · Zen API",
-      "opencodeGo": "OpenCode account · Go API"
-    },
-    "openCodePlans": {
-      "zen": {
-        "label": "OpenCode Zen",
-        "description": "Pay-as-you-go and free Zen models available to this OpenCode account"
-      },
-      "go": {
-        "label": "OpenCode Go",
-        "description": "Models billed against the Go subscription on this OpenCode account"
-      }
-    },
-    "openCodeFormats": {
-      "chatCompletions": "Chat Completions",
-      "responses": "Responses",
-      "messages": "Messages"
+      "hermes": "Hermes (Nous Portal subscription)"
     },
     "useFormat": "Use {{format}}",
     "useFormatWithCount": "Use {{format}} ({{modelCount}})",
@@ -108,9 +92,12 @@
     "logoutAffectedModels": "After signing out, {{count}} model configurations using this account cannot make model requests:",
     "logoutNoAffectedModels": "No model configuration currently uses this subscription account.",
     "logoutConsequence": "Model configurations will not be deleted. Sign in to the same subscription account again to resume using them.",
-    "confirmLogout": "Sign out"
+    "confirmLogout": "Sign out",
+    "openCodeRemoved": "OpenCode Console OAuth supports Zen only. Select API key and enter a Go key. Your existing model configuration is preserved."
   },
   "providerSelection": {
+    "modelRoutingPending": "Refresh the model list to show protocols and endpoints. Models outside the catalog can be configured manually.",
+    "modelRoutingUnavailable": "The host did not return a valid route for this model. Update the host and refresh the model list.",
     "title": "Select Model Provider",
     "subtitle": "Choose a preset provider for quick setup, or select custom for full manual configuration",
     "or": "or",
@@ -153,6 +140,10 @@
     "formatHint": "Automatically selected based on provider, usually no need to change"
   },
   "providers": {
+    "opencode-go": {
+      "name": "OpenCode Go",
+      "description": "A model subscription plan from OpenCode."
+    },
     "openbitfun": {
       "name": "OpenBitFun Service",
       "description": "OpenBitFun Model Platform",
@@ -504,6 +495,9 @@
     "retry": "Reload",
     "unsaved": "Unsaved",
     "fillRequired": "Please fill in required fields",
+    "missingFields": "Please complete the following: {{fields}}.",
+    "fieldSeparator": ", ",
+    "lastFieldSeparator": " and ",
     "fillModelName": "Please fill in model name",
     "duplicateModelNameUnderProvider": "This provider already has a model with this name. Use a different name or edit the existing entry.",
     "invalidBaseUrlScheme": "API URL must start with http:// or https://",
@@ -541,7 +535,11 @@
     "viewDetails": "View models.dev catalog details",
     "description": "Catalog status used for reasoning preset provider and model bindings. It is checked automatically when model settings open.",
     "activeSource": "Active source",
-    "source": { "cache": "Cache", "bundle": "Built-in snapshot", "empty": "Unavailable" },
+    "source": {
+      "cache": "Cache",
+      "bundle": "Built-in snapshot",
+      "empty": "Unavailable"
+    },
     "catalogSize": "Catalog size",
     "catalogSizeValue": "{{providers}} providers · {{models}} reasoning models",
     "cacheUpdatedAt": "Cache write time",

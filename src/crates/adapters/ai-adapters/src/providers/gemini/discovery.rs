@@ -64,6 +64,7 @@ pub(crate) async fn list_models(client: &AIClient) -> Result<Vec<RemoteModelInfo
                     .unwrap_or(&model.name)
                     .to_string();
                 RemoteModelInfo {
+                    routing: None,
                     id,
                     display_name: model.display_name,
                 }

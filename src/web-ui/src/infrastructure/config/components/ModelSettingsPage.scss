@@ -1150,12 +1150,11 @@
   }
 
   &__model-picker-row {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: subgrid;
     gap: var(--openbitfun-space-2);
     width: 100%;
-    align-items: stretch;
-
+    align-items: start;
   }
 
   &__model-picker-value {
@@ -1182,7 +1181,7 @@
 
   &__manual-model-entry {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: subgrid;
     gap: var(--openbitfun-space-2);
     width: 100%;
     align-items: start;
@@ -1303,6 +1302,14 @@
     border-top: var(--openbitfun-border-width-default) solid var(--openbitfun-color-border-subtle);
   }
 
+  &__selected-model-grid--with-format {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  &__selected-model-route {
+    grid-column: 1 / -1;
+  }
+
   &__selected-model-field {
     min-width: 0;
     align-content: start;
@@ -1382,7 +1389,14 @@
   }
 
   &__model-selection-row > .openbitfun-config-page-row__control > .openbitfun-model-settings__control-stack {
-    gap: var(--openbitfun-space-3);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    gap: var(--openbitfun-space-3) var(--openbitfun-space-2);
+
+    > * {
+      grid-column: 1 / -1;
+      min-width: 0;
+    }
   }
 
   &__resolved-url {
@@ -2002,8 +2016,6 @@
       padding-top: var(--openbitfun-space-3);
     }
 
-    &__model-picker-row,
-    &__manual-model-entry,
     &__selected-model-grid {
       grid-template-columns: 1fr;
     }
@@ -2072,16 +2084,6 @@
       white-space: nowrap;
       flex-shrink: 0;
     }
-  }
-
-  &__opencode-plan {
-    margin-left: var(--openbitfun-space-4);
-    padding-left: var(--openbitfun-space-3);
-    border-left: 2px solid var(--openbitfun-color-action-secondary-hover);
-  }
-
-  &__opencode-plan-actions {
-    flex-wrap: wrap;
   }
 
   &__subscription-login-panel {
@@ -2192,10 +2194,6 @@
       flex-wrap: wrap;
     }
 
-    &__opencode-plan {
-      margin-left: 0;
-    }
-
     &__subscription-login-actions {
       justify-content: flex-start;
     }
@@ -2252,7 +2250,7 @@
 
 @media (max-width: 640px) {
   .openbitfun-model-settings__selected-model-grid,
-  .openbitfun-model-settings__manual-model-entry {
+  .openbitfun-model-settings__model-selection-row > .openbitfun-config-page-row__control > .openbitfun-model-settings__control-stack {
     grid-template-columns: minmax(0, 1fr);
   }
 }
