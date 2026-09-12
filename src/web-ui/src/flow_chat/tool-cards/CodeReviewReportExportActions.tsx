@@ -1,4 +1,4 @@
-import { Button } from '@openbitfun/ui';
+import { Button, IconButton } from '@openbitfun/ui';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -202,39 +202,36 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
     <div className="code-review-report-actions" onClick={(event) => event.stopPropagation()}>
       {visibleActions.has('copy') && (
         <Tooltip content={t('toolCards.codeReview.export.copyMarkdown')} placement="top">
-          <button
+          <IconButton
             type="button"
             className="code-review-report-actions__button"
             onClick={handleCopy}
             aria-label={t('toolCards.codeReview.export.copyMarkdown')}
-          >
-            {copied ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
-          </button>
+            icon={copied ? <Icon name="check-line" size="sm" /> : <Icon name="duplicate" size="sm" />}
+          />
         </Tooltip>
       )}
       {visibleActions.has('open') && (
         <Tooltip content={t('toolCards.codeReview.export.openMarkdown')} placement="top">
-          <button
+          <IconButton
             type="button"
             className="code-review-report-actions__button"
             onClick={handleOpenInEditor}
             aria-label={t('toolCards.codeReview.export.openMarkdown')}
-          >
-            <Icon name="edit" size="sm" />
-          </button>
+            icon={<Icon name="edit" size="sm" />}
+          />
         </Tooltip>
       )}
       {visibleActions.has('save') && (
         <Tooltip content={t('toolCards.codeReview.export.saveMarkdown')} placement="top">
-          <button
+          <IconButton
             type="button"
             className="code-review-report-actions__button"
             onClick={handleSave}
             disabled={saving}
             aria-label={t('toolCards.codeReview.export.saveMarkdown')}
-          >
-            {saving ? <Loader2 className="animate-spin" size={14} /> : <Icon name="arrow-down" size="sm" />}
-          </button>
+            icon={saving ? <Loader2 className="animate-spin" size={14} /> : <Icon name="arrow-down" size="sm" />}
+          />
         </Tooltip>
       )}
     </div>

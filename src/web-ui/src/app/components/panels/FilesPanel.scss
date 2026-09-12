@@ -274,6 +274,7 @@
   }
 
   &__search-option {
+    flex-shrink: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -289,6 +290,23 @@
       background-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+
+    // Active and responsive states remain owned by this search toolbar.
+    &::before { content: none; }
+
+    > [data-openbitfun-part='icon'] {
+      display: contents;
+    }
+
+    > :where([data-openbitfun-part='icon']) > :where(svg) {
+      inline-size: 14px;
+      block-size: 14px;
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
+      outline-offset: 2px;
+    }
 
     &:hover {
       background: var(--openbitfun-color-action-quiet-hover);

@@ -44,12 +44,6 @@ vi.mock('@openbitfun/ui', async importOriginal => ({
   }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button type="button" {...props}>{children}</button>
   ),
-  IconButton: ({
-    children,
-    ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button type="button" {...props}>{children}</button>
-  ),
   Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
   Switch: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input type="checkbox" {...props} />,
   Combobox: (props: SelectSpyProps) => {

@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState, memo } from 'react';
-import { Button, Icon } from '@openbitfun/ui';
+import { Button, Icon, IconButton } from '@openbitfun/ui';
 import { useI18n } from '@/infrastructure/i18n';
 import { AlertCircle } from 'lucide-react';
 import Terminal, { TerminalRef, type TerminalOptions } from './Terminal';
@@ -506,22 +506,22 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
             </span>
           </div>
           <div className="openbitfun-terminal__toolbar-right">
-            <button
+            <IconButton
               className="openbitfun-terminal__toolbar-btn"
               onClick={handleSendCtrlC}
               title="Send Ctrl+C"
+              aria-label="Send Ctrl+C"
               data-testid="shell-command-rerun"
-            >
-              <span style={{ fontSize: 'var(--openbitfun-type-micro-font-size)', fontWeight: 'var(--openbitfun-type-heading-page-font-weight)' }}>^C</span>
-            </button>
-            <button
+              icon={<span style={{ fontSize: 'var(--openbitfun-type-micro-font-size)', fontWeight: 'var(--openbitfun-type-heading-page-font-weight)' }}>^C</span>}
+            />
+            <IconButton
               className={`openbitfun-terminal__toolbar-btn${closeBehavior === 'terminate' ? ' openbitfun-terminal__toolbar-btn--danger' : ''}`}
               onClick={handleClose}
               title={closeBehavior === 'detach' ? t('actions.closeView') : t('actions.stopTerminal')}
+              aria-label={closeBehavior === 'detach' ? t('actions.closeView') : t('actions.stopTerminal')}
               data-testid="shell-panel-close"
-            >
-              {closeBehavior === 'detach' ? <Icon name="xmark" size="sm" /> : <Icon name="delete" size="sm" />}
-            </button>
+              icon={closeBehavior === 'detach' ? <Icon name="xmark" size="sm" /> : <Icon name="delete" size="sm" />}
+            />
           </div>
         </div>
       )}

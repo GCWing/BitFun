@@ -201,6 +201,26 @@
   
   &__remove-btn {
     @extend .openbitfun-context-card__action-btn;
+
+    flex-shrink: 1;
+
+    // Keep the remove action's existing danger feedback on its root.
+    &::before { content: none; }
+
+    > [data-openbitfun-part='icon'] {
+      --openbitfun-opacity-icon-artwork: inherit;
+      display: contents;
+    }
+
+    > :where([data-openbitfun-part='icon']) > :where([data-openbitfun-component='icon']) {
+      inline-size: var(--openbitfun-control-icon-size-sm);
+      block-size: var(--openbitfun-control-icon-size-sm);
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
+      outline-offset: 2px;
+    }
     
     &:hover {
       background: var(--openbitfun-color-status-danger-surface);
