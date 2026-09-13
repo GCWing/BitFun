@@ -1072,31 +1072,31 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
               </div>
               <div className="openbitfun-files-panel__search-options">
                 <Tooltip content={t('options.caseSensitive')}>
-                  <button
+                  <IconButton
                     type="button"
                     className={`openbitfun-files-panel__search-option ${searchOptions.caseSensitive ? 'active' : ''}`}
                     onClick={() => setSearchOptions(prev => ({ ...prev, caseSensitive: !prev.caseSensitive }))}
-                  >
-                    <CaseSensitive size={14} />
-                  </button>
+                    aria-label={t('options.caseSensitive')}
+                    icon={<CaseSensitive size={14} />}
+                  />
                 </Tooltip>
                 <Tooltip content={t('options.wholeWord')}>
-                  <button
+                  <IconButton
                     type="button"
                     className={`openbitfun-files-panel__search-option ${searchOptions.wholeWord ? 'active' : ''}`}
                     onClick={() => setSearchOptions(prev => ({ ...prev, wholeWord: !prev.wholeWord }))}
-                  >
-                    <WholeWord size={14} />
-                  </button>
+                    aria-label={t('options.wholeWord')}
+                    icon={<WholeWord size={14} />}
+                  />
                 </Tooltip>
                 <Tooltip content={t('options.useRegex')}>
-                  <button
+                  <IconButton
                     type="button"
                     className={`openbitfun-files-panel__search-option ${searchOptions.useRegex ? 'active' : ''}`}
                     onClick={() => setSearchOptions(prev => ({ ...prev, useRegex: !prev.useRegex }))}
-                  >
-                    <Regex size={14} />
-                  </button>
+                    aria-label={t('options.useRegex')}
+                    icon={<Regex size={14} />}
+                  />
                 </Tooltip>
               </div>
             </div>

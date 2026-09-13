@@ -103,6 +103,8 @@
   }
 
   &__controls .code-review-report-actions__button {
+    display: inline-block;
+    flex-shrink: 1;
     width: 28px;
     height: 28px;
     padding: 0;
@@ -112,6 +114,31 @@
     color: var(--openbitfun-color-content-muted);
     cursor: pointer;
     transition: background 0.2s, color 0.2s;
+
+    // The header has its own 28px actions, separate from the report card.
+    &::before { content: none; }
+
+    > [data-openbitfun-part='icon'] {
+      --openbitfun-opacity-icon-artwork: inherit;
+      display: contents;
+    }
+
+    > :where([data-openbitfun-part='icon']) > :where(svg) {
+      display: inline-block;
+      inline-size: 14px;
+      block-size: 14px;
+    }
+
+    > :where([data-openbitfun-part='icon']) > :where([data-openbitfun-component='icon']) {
+      display: inline-block;
+      inline-size: var(--openbitfun-control-icon-size-sm);
+      block-size: var(--openbitfun-control-icon-size-sm);
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
+      outline-offset: 2px;
+    }
 
     &:hover:not(:disabled) {
       background: var(--openbitfun-color-action-quiet-hover);

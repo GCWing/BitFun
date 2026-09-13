@@ -96,6 +96,8 @@ $_diff-error-max-width: 400px;
   }
 
   &__btn {
+    inline-size: auto;
+    flex-shrink: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -115,6 +117,13 @@ $_diff-error-max-width: 400px;
       border-color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       color var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard),
       box-shadow var(--openbitfun-motion-duration-fast) var(--openbitfun-motion-easing-standard);
+
+    // Keep the original text glyph metrics and root-owned hover/press effects.
+    &::before { content: none; }
+
+    > [data-openbitfun-part='icon'] {
+      display: contents;
+    }
 
     &:hover:not(:disabled) {
       background: var(--openbitfun-color-action-neutral-surface-hover);

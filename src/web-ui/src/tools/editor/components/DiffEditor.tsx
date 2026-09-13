@@ -8,7 +8,7 @@ import { monacoAppearanceAdapter } from '@/infrastructure/appearance/adapters/Mo
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { EditorConfig as EditorConfigType } from '@/infrastructure/config/types';
 import { getMonacoLanguage } from '@/infrastructure/language-detection';
-import { OverflowText, LoadingState } from '@openbitfun/ui';
+import { IconButton, OverflowText, LoadingState } from '@openbitfun/ui';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { useI18n } from '@/infrastructure/i18n';
@@ -523,33 +523,33 @@ export const DiffEditor: React.FC<DiffEditorProps> = ({
         
         <div className="diff-editor-toolbar__actions" data-openbitfun-component="diff-editor" data-openbitfun-part="toolbarActions">
           <Tooltip content={t('editor.diffEditor.prevChange')} placement="top">
-            <button
+            <IconButton
               className="diff-editor-toolbar__btn"
               onClick={navigateToPrevChange}
               disabled={changes.length === 0}
-            >
-              ↑
-            </button>
+              aria-label={t('editor.diffEditor.prevChange')}
+              icon="↑"
+            />
           </Tooltip>
           <Tooltip content={t('editor.diffEditor.nextChange')} placement="top">
-            <button
+            <IconButton
               className="diff-editor-toolbar__btn"
               onClick={navigateToNextChange}
               disabled={changes.length === 0}
-            >
-              ↓
-            </button>
+              aria-label={t('editor.diffEditor.nextChange')}
+              icon="↓"
+            />
           </Tooltip>
           <Tooltip
             content={renderSideBySide ? t('editor.diffEditor.switchToInline') : t('editor.diffEditor.switchToSideBySide')}
             placement="top"
           >
-            <button
+            <IconButton
               className="diff-editor-toolbar__btn"
               onClick={toggleViewMode}
-            >
-              {renderSideBySide ? '⊟' : '⊞'}
-            </button>
+              aria-label={renderSideBySide ? t('editor.diffEditor.switchToInline') : t('editor.diffEditor.switchToSideBySide')}
+              icon={renderSideBySide ? '⊟' : '⊞'}
+            />
           </Tooltip>
         </div>
       </div>

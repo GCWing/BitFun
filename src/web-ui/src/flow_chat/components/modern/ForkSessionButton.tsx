@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Icon, Tooltip } from '@openbitfun/ui';
+import { Icon, IconButton, Tooltip } from '@openbitfun/ui';
 import { flowChatManager } from '../../services/FlowChatManager';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { resolveSessionRelationship } from '../../utils/sessionMetadata';
@@ -53,15 +53,15 @@ export const ForkSessionButton: React.FC<ForkSessionButtonProps> = ({
       content={t('modelRound.forkDialog')}
       placement="top"
     >
-      <button
+      <IconButton
         className="model-round-item__action-btn model-round-item__fork-btn"
         onClick={handleFork}
         disabled={isForking}
-      >
-        {isForking
+        aria-label={t('modelRound.forkDialog')}
+        icon={isForking
           ? <Icon name="progress-25" size="sm" className="spinning" />
           : <Icon name="git" size="sm" />}
-      </button>
+      />
     </Tooltip>
   );
 };

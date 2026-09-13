@@ -1,7 +1,7 @@
  
 
 import React, { useMemo } from 'react';
-import { OverflowText, Icon } from '@openbitfun/ui';
+import { OverflowText, Icon, IconButton } from '@openbitfun/ui';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { ContextItem } from '../../../types/context';
 import { contextRegistry } from '../../../services/ContextRegistry';
@@ -124,13 +124,13 @@ export const ContextCard: React.FC<ContextCardProps> = ({
           
           
           {onRemove && (
-            <button
+            <IconButton
               className="openbitfun-context-card__remove-btn"
               onClick={handleRemove}
               title={t('contextSystem.contextCard.removeContext')}
-            >
-              <Icon name="xmark" size="sm" />
-            </button>
+              aria-label={t('contextSystem.contextCard.removeContext')}
+              icon={<Icon name="xmark" size="sm" />}
+            />
           )}
         </div>
       )}

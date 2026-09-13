@@ -22,6 +22,7 @@
   }
 
   .code-review-report-actions__button {
+    flex-shrink: 1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -36,6 +37,29 @@
     transition:
       background 160ms ease,
       color 160ms ease;
+
+    // Preserve the report actions' feedback and the existing save spinner.
+    &::before { content: none; }
+
+    > [data-openbitfun-part='icon'] {
+      --openbitfun-opacity-icon-artwork: inherit;
+      display: contents;
+    }
+
+    > :where([data-openbitfun-part='icon']) > :where(svg) {
+      inline-size: 14px;
+      block-size: 14px;
+    }
+
+    > :where([data-openbitfun-part='icon']) > :where([data-openbitfun-component='icon']) {
+      inline-size: var(--openbitfun-control-icon-size-sm);
+      block-size: var(--openbitfun-control-icon-size-sm);
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
+      outline-offset: 2px;
+    }
 
     &:hover:not(:disabled) {
       background: var(--openbitfun-color-action-neutral-surface-hover);

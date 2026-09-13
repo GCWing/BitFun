@@ -288,6 +288,21 @@
 }
 
 .model-round-item__fork-btn {
+  flex-shrink: 1;
+
+  // Do not change sibling actions or replace this action's original spinner.
+  &::before { content: none; }
+
+  > [data-openbitfun-part='icon'] {
+    --openbitfun-opacity-icon-artwork: inherit;
+    display: contents;
+  }
+
+  > :where([data-openbitfun-part='icon']) > :where([data-openbitfun-component='icon']) {
+    inline-size: var(--openbitfun-control-icon-size-sm);
+    block-size: var(--openbitfun-control-icon-size-sm);
+  }
+
   .spinning {
     animation: model-round-item-spin 1s linear infinite;
   }

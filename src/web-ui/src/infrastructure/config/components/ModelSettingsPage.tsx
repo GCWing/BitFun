@@ -2449,15 +2449,14 @@ const ModelSettingsPage: React.FC = () => {
     const selectedModelValues = selectedModelDrafts.map(draft => draft.modelName);
     const apiKeyVisibilityLabel = showApiKey ? tComponents('hide') : tComponents('show');
     const apiKeySuffix = (
-      <button
+      <IconButton
         type="button"
         className="openbitfun-model-settings__input-visibility-toggle"
         onClick={() => setShowApiKey(prev => !prev)}
         aria-label={apiKeyVisibilityLabel}
         title={apiKeyVisibilityLabel}
-      >
-        {showApiKey ? <EyeOff size={14} /> : <Icon name="eye" size="sm" />}
-      </button>
+        icon={showApiKey ? <EyeOff size={14} /> : <Icon name="eye" size="sm" />}
+      />
     );
 
     const formatReasoningSummary = (

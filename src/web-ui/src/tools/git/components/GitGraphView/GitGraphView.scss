@@ -101,6 +101,7 @@
   }
 
   &__search-nav-btn {
+    flex-shrink: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -116,6 +117,24 @@
       transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
       background-color 140ms ease,
       color 140ms ease;
+
+    // The existing root owns feedback; do not paint a second hover surface.
+    &::before { content: none; }
+
+    > [data-openbitfun-part='icon'] {
+      --openbitfun-opacity-icon-artwork: inherit;
+      display: contents;
+    }
+
+    > :where([data-openbitfun-part='icon']) > :where([data-openbitfun-component='icon']) {
+      inline-size: var(--openbitfun-control-icon-size-sm);
+      block-size: var(--openbitfun-control-icon-size-sm);
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, var(--openbitfun-color-accent-default) 40%, transparent);
+      outline-offset: 2px;
+    }
 
     &:hover:not(:disabled) {
       background: var(--openbitfun-color-action-neutral-surface-hover);

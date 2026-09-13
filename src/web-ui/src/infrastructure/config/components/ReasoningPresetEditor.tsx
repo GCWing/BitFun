@@ -608,15 +608,14 @@ export const ReasoningPresetEditor: React.FC<ReasoningPresetEditorProps> = ({
                     data-openbitfun-component="reasoning-preset-editor"
                     data-openbitfun-part="presetSummary"
                   >
-                    <button
+                    <IconButton
                       type="button"
                       className="openbitfun-reasoning-preset-editor__row-toggle"
                       onClick={() => setExpandedPresetIndex(expanded ? null : presetIndex)}
                       aria-expanded={expanded}
                       aria-label={preset.label?.trim() || preset.id}
-                    >
-                      {expanded ? <Icon name="chevron-down" size="sm" /> : <Icon name="chevron-right" size="sm" />}
-                    </button>
+                      icon={expanded ? <Icon name="chevron-down" size="sm" /> : <Icon name="chevron-right" size="sm" />}
+                    />
                     <div className="openbitfun-reasoning-preset-editor__row-content">
                       {expanded ? (
                         <div className="openbitfun-reasoning-preset-editor__row-name-editor">

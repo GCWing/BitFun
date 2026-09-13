@@ -2,7 +2,7 @@
 /** Git commit graph view (branch graph). */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Button, Icon, SearchField, ScrollArea } from '@openbitfun/ui';
+import { Button, Icon, IconButton, SearchField, ScrollArea } from '@openbitfun/ui';
 import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -327,22 +327,22 @@ export const GitGraphView: React.FC<GitGraphViewProps> = ({
                   <span className="git-graph-view__search-count">
                     {currentSearchIndex + 1} / {searchFilter.totalMatches}
                   </span>
-                  <button
+                  <IconButton
                     className="git-graph-view__search-nav-btn"
                     onClick={goToPreviousMatch}
                     title={t('graph.searchPrevious')}
+                    aria-label={t('graph.searchPrevious')}
                     disabled={searchFilter.totalMatches === 0}
-                  >
-                    <Icon name="chevron-up" size="sm" />
-                  </button>
-                  <button
+                    icon={<Icon name="chevron-up" size="sm" />}
+                  />
+                  <IconButton
                     className="git-graph-view__search-nav-btn"
                     onClick={goToNextMatch}
                     title={t('graph.searchNext')}
+                    aria-label={t('graph.searchNext')}
                     disabled={searchFilter.totalMatches === 0}
-                  >
-                    <Icon name="chevron-down" size="sm" />
-                  </button>
+                    icon={<Icon name="chevron-down" size="sm" />}
+                  />
                 </div>
               ) : searchFilter && debouncedSearchQuery && searchFilter.totalMatches === 0 ? (
                 <span className="git-graph-view__search-count git-graph-view__search-count--no-results">

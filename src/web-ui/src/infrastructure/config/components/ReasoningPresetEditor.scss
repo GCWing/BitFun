@@ -288,6 +288,8 @@
   }
 
   &__row-toggle {
+    inline-size: auto;
+    block-size: auto;
     display: flex;
     flex: 0 0 auto;
     align-items: center;
@@ -298,13 +300,27 @@
     text-align: left;
     cursor: pointer;
 
+    // The disclosure retains its padding-sized target and existing focus style.
+    &::before { content: none; }
+
+    > [data-openbitfun-part='icon'] {
+      --openbitfun-opacity-icon-artwork: inherit;
+      display: contents;
+    }
+
+    > :where([data-openbitfun-part='icon']) > :where([data-openbitfun-component='icon']) {
+      inline-size: var(--openbitfun-control-icon-size-sm);
+      block-size: var(--openbitfun-control-icon-size-sm);
+    }
+
     &:focus-visible {
       outline: 2px solid var(--openbitfun-color-accent-default);
       outline-offset: 1px;
       border-radius: var(--openbitfun-radius-sm);
     }
 
-    > svg {
+    > svg,
+    > [data-openbitfun-part='icon'] > svg {
       flex-shrink: 0;
       color: var(--openbitfun-color-content-muted);
     }
