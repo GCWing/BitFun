@@ -1,3 +1,5 @@
+import { BuiltinMiniAppHost } from '../../services/BuiltinMiniAppHost';
+import { MiniAppViewModel } from '../viewmodel/MiniAppViewModel';
 import { SidebarConnectionActionPolicy } from '../policy/SidebarConnectionActionPolicy';
 import { accountDeviceLink } from '../../services/AccountDeviceLink';
 import {
@@ -140,6 +142,7 @@ export abstract class AppRootRuntimeComposition {
   abstract toggleVoiceInput(): Promise<void>;
 
   readonly sessionManager: RemoteSessionManager = new RemoteSessionManager();
+  readonly miniAppViewModel: MiniAppViewModel = new MiniAppViewModel(new BuiltinMiniAppHost((): Context => this.host.context()));
   readonly taskCompletionNotificationPort: HarmonyTaskCompletionNotificationPort =
     new HarmonyTaskCompletionNotificationPort((): Context => this.host.context());
   readonly taskCompletionNotificationController: TaskCompletionNotificationController =
@@ -758,6 +761,7 @@ export abstract class AppRootRuntimeComposition {
     onCompactLayoutEntered: (): void => this.enterCompactLayout(),
     onLayoutModeChanged: (wideLayout: boolean): void => this.appShellState.setWideLayout(wideLayout),
     onRemoteHome: {
+      openMiniApps: (): void => { this.closeAppSidebar(); this.miniAppViewModel.actions.open(); },
       openSidebar: (): void => this.openAppSidebar(),
       connectWorkspace: (): void => this.openConnectSheet(),
       addConnection: (): void => this.openConnectSheet(),
@@ -827,8 +831,10 @@ export abstract class AppRootRuntimeComposition {
         setTimeout(() => this.appShellState.openSettings('account'), 180);
       },
       openSession: (session: RemoteSession): void => {
+        // The shell supplies the horizontal motion; do not stack a second
+        // NavDestination push animation on top of the closing drawer.
         this.closeAppSidebar();
-        this.conversationController.openHomeSession(session);
+        this.conversationController.openHomeSession(session, true);
       },
       deleteSession: (session: RemoteSession): void => { this.conversationController.deleteHomeSession(session); }
     },
